@@ -6,7 +6,6 @@ namespace E2e4.SlidingBlock.Logic;
 public readonly struct NPuzzleState : IEquatable<NPuzzleState>
 {
     public const int Size = 4;
-    public const ulong Solved = 0xFEDCBA9876543210UL;
     private const ulong Ones = 0x1111111111111111UL;
     private const ulong Highs = 0x8888888888888888UL;
 
@@ -45,21 +44,6 @@ public readonly struct NPuzzleState : IEquatable<NPuzzleState>
         }
     }
 
-    public int ManhattanDistance
-    {
-        get
-        {
-            int sum = 0;
-            for (int s = 0; s < 16; s++)
-            {
-                int t = TileAt(s);
-                if (t == 0) continue;
-                sum += Math.Abs((s >> 2) - (t >> 2)) + Math.Abs((s & 3) - (t & 3));
-            }
-            return sum;
-        }
-    }
-
     public bool Equals(NPuzzleState other) => PackedNibbles == other.PackedNibbles;
     public override bool Equals(object? obj) => obj is NPuzzleState s && Equals(s);
     public static bool operator ==(NPuzzleState left, NPuzzleState right) => left.Equals(right);
@@ -71,14 +55,45 @@ public readonly struct NPuzzleState : IEquatable<NPuzzleState>
 /// <summary>A tile on <see cref="From"/> slides into the blank on <see cref="To"/>.</summary>
 public readonly record struct NPuzzleMove(byte From, byte To);
 
+/// <summary>
+/// Move rules for the 4x4 sliding-tile board. The goal position is supplied by the puzzle that uses the domain (the engine does not
+/// know where the blank or any tile belongs); <see cref="ManhattanDistance"/> is measured against that goal.
+/// </summary>
 public sealed class NPuzzleDomain : ISlidingBlockDomain<NPuzzleState, NPuzzleMove>
 {
-    public NPuzzleDomain(NPuzzleState initial) => InitialState = initial;
+    private readonly byte[] _goalRow = new byte[16], _goalCol = new byte[16];
+
+    public NPuzzleDomain(NPuzzleState initial, NPuzzleState goal)
+    {
+        InitialState = initial;
+        Goal = goal;
+        ulong inverse = goal.InverseMap;
+        for (int tile = 0; tile < 16; tile++)
+        {
+            int square = (int)((inverse >> (tile << 2)) & 0xF);
+            _goalRow[tile] = (byte)(square >> 2);
+            _goalCol[tile] = (byte)(square & 3);
+        }
+    }
 
     public NPuzzleState InitialState { get; }
+    public NPuzzleState Goal { get; }
     public int MaxMoves => 4;
 
-    public bool IsGoal(in NPuzzleState state) => state.PackedNibbles == NPuzzleState.Solved;
+    public bool IsGoal(in NPuzzleState state) => state.PackedNibbles == Goal.PackedNibbles;
+
+    /// <summary>Sum over tiles of the row and column distance to the tile's square in <see cref="Goal"/> (the blank is ignored). Admissible.</summary>
+    public int ManhattanDistance(NPuzzleState state)
+    {
+        int sum = 0;
+        for (int s = 0; s < 16; s++)
+        {
+            int t = state.TileAt(s);
+            if (t == 0) continue;
+            sum += Math.Abs((s >> 2) - _goalRow[t]) + Math.Abs((s & 3) - _goalCol[t]);
+        }
+        return sum;
+    }
 
     public int GenerateMoves(in NPuzzleState state, Span<NPuzzleMove> moveBuffer)
     {
@@ -93,24 +108,4 @@ public sealed class NPuzzleDomain : ISlidingBlockDomain<NPuzzleState, NPuzzleMov
     public NPuzzleState ApplyMove(in NPuzzleState state, in NPuzzleMove move) => state.SlideTileIntoBlank(move.From);
 
     public ulong GetHashCode64(in NPuzzleState state) => state.PackedNibbles * 0x9E3779B97F4A7C15UL;
-
-    public static int Manhattan(NPuzzleState s) => s.ManhattanDistance;
-
-    /// <summary>Random walk from the solved board (always solvable); avoids immediately undoing a move.</summary>
-    public static NPuzzleState Scramble(int moves, Random rng)
-    {
-        var domain = new NPuzzleDomain(new NPuzzleState(NPuzzleState.Solved));
-        var state = domain.InitialState;
-        Span<NPuzzleMove> buf = stackalloc NPuzzleMove[4];
-        int lastFrom = -1;
-        for (int i = 0; i < moves; i++)
-        {
-            int n = domain.GenerateMoves(state, buf);
-            NPuzzleMove m;
-            do { m = buf[rng.Next(n)]; } while (n > 1 && m.From == lastFrom);
-            lastFrom = m.To;
-            state = domain.ApplyMove(state, m);
-        }
-        return state;
-    }
 }

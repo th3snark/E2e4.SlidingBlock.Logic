@@ -10,19 +10,23 @@ Every puzzle is an `ISlidingBlockDomain<TState, TMove>` (initial state, goal tes
 and `PuzzleSolver` solves any of them with BFS, A* or IDA*.
 
 ```csharp
-var start = NPuzzleDomain.Scramble(25, new Random(3));
-var domain = new NPuzzleDomain(start);
+// The engine does not know where the blank belongs: the puzzle supplies its goal position.
+var goal = new NPuzzleState(0xFEDCBA9876543210UL);
+var domain = new NPuzzleDomain(goal, goal);
+var start = PuzzleWalk.RandomWalk(domain, goal, 25, new Random(3));
 
-SolveResult<NPuzzleMove>? result = new PuzzleSolver().SolveIdaStar(domain, start, NPuzzleDomain.Manhattan);
+SolveResult<NPuzzleMove>? result = new PuzzleSolver().SolveIdaStar(domain, start, domain.ManhattanDistance);
 Console.WriteLine(result?.Moves.Count);
 
-var rushHour = RushHourDomain.CreateDefault();
+// Rush Hour: the topology is parsed from an ASCII map, the puzzle says which vehicle has to reach which offset.
+var topology = RushHourTopology.FromAsciiMap(rows, leadingLabels: "X");
+var rushHour = new RushHourDomain(topology, goalVehicle: topology.IndexOf('X'), goalOffset: 4);
 Console.WriteLine(new PuzzleSolver().SolveBfs(rushHour, rushHour.InitialState)?.Moves.Count);
 ```
 
 ## What is in it
 
-- `NPuzzleState`: the 4x4 sliding tile puzzle packed into 16 nibbles of a `ulong`, with a branchless XOR tile swap and Manhattan distance.
+- `NPuzzleState`: the 4x4 sliding tile puzzle packed into 16 nibbles of a `ulong`, with a branchless XOR tile swap. The goal position is a constructor argument, and the Manhattan distance is measured against it.
 - `KlotskiState` and `KlotskiDomain`: Klotski with a canonical shape key, so interchangeable pieces are the same position.
 - `RushHourState` and `RushHourDomain`: vehicles as lane offsets packed into a `ulong`.
 - `PolyominoState` and `PolyominoDomain`: non-rectangular pieces (L, T, J, S, Z, U) on a bitboard, with multi-step corner-hook slides and a
@@ -30,6 +34,11 @@ Console.WriteLine(new PuzzleSolver().SolveBfs(rushHour, rushHour.InitialState)?.
 - `PuzzleTopology` and `PuzzleTopologyBuilder`: build a board from an ASCII map or relative cell lists, with LSB normalisation and precomputed
   valid-anchor masks.
 - `PuzzleSolver`: generic BFS, A* and IDA*.
+- `PuzzleWalk` and `PlaySession<TState, TMove>`: a generic random walk (for solvable shuffles) and the undo / reset / cached-hint bookkeeping
+  every interactive puzzle needs.
+
+The engine contains no puzzle: no layouts, no goal positions, no colours. A puzzle (the sibling `E2e4.SlidingBlock.Puzzles` app, or the
+Labs) defines its layout and goal and hands them to the domain as data.
 
 `E2e4.SlidingBlock.Logic.Labs.Wpf` in the repository is a WPF application with two laboratories that show the bitboards and the solvers
 working. It is not part of the package.

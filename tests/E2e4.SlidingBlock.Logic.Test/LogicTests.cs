@@ -1,5 +1,6 @@
 using System.Numerics;
 using E2e4.SlidingBlock.Logic;
+using E2e4.SlidingBlock.Logic.Labs;
 
 namespace E2e4.SlidingBlock.Logic.Test;
 
@@ -55,7 +56,7 @@ public class LsbNormalizationTests
     [Fact]
     public void AnchorIsTopStemNotBoundingBoxCorner()
     {
-        var d = PolyominoDomain.CreateLab2();
+        var d = LabPuzzles.CreateLab2();
         var s = d.InitialState;
         Assert.Equal(16, BitOperations.TrailingZeroCount(d.Topology.PieceMask(1, s.AnchorOf(1))));
         Assert.Equal(4, BitOperations.TrailingZeroCount(d.Topology.PieceMask(2, s.AnchorOf(2))));
@@ -67,7 +68,7 @@ public class ValidAnchorsTests
     [Fact]
     public void TAndJCannotAnchorInColumnZero()
     {
-        var topo = PolyominoDomain.CreateLab2().Topology;
+        var topo = LabPuzzles.CreateLab2().Topology;
         foreach (int g in new[] { 1, 2 })
             for (int r = 0; r < 5; r++)
                 Assert.False(((topo.Groups[g].ValidAnchorsMask >> (r * 5)) & 1UL) != 0, $"group {g} row {r}");
@@ -76,7 +77,7 @@ public class ValidAnchorsTests
     [Fact]
     public void ValidAnchorsMatchTwoDimensionalGroundTruthAndNeverWrap()
     {
-        var topo = PolyominoDomain.CreateLab2().Topology;
+        var topo = LabPuzzles.CreateLab2().Topology;
         foreach (var g in topo.Groups)
             for (int s = 0; s < 25; s++)
             {
@@ -144,7 +145,7 @@ public class ReachableAnchorsTests
     [Fact]
     public void MultiCellPieceHooksAroundObstaclesOnLabBoard()
     {
-        var d = PolyominoDomain.CreateLab2();
+        var d = LabPuzzles.CreateLab2();
         var s = d.InitialState;
         for (int p = 0; p < 5; p++)
         {
@@ -175,7 +176,7 @@ public class SymmetryTests
     [Fact]
     public void SwappingIdenticalPiecesKeepsGroupAnchorsAndHash()
     {
-        var d = PolyominoDomain.CreateLab2();
+        var d = LabPuzzles.CreateLab2();
         var s = d.InitialState;
         int a = s.AnchorOf(3), b = s.AnchorOf(4);
         // Swap via two moves through a temporary state: set A->B's square is occupied, so rebuild directly.
@@ -193,7 +194,7 @@ public class SymmetryTests
     [Fact]
     public void IncrementalZobristMatchesFullRecompute()
     {
-        var d = PolyominoDomain.CreateLab2();
+        var d = LabPuzzles.CreateLab2();
         var s = d.InitialState;
         var buf = new PolyominoMove[d.MaxMoves];
         var rng = new Random(7);
@@ -215,9 +216,29 @@ public class SymmetryTests
     [Fact]
     public void ZobristTableIsDeterministic()
     {
-        var a = PolyominoDomain.CreateLab2().Topology.ZobristTable;
-        var b = PolyominoDomain.CreateLab2().Topology.ZobristTable;
+        var a = LabPuzzles.CreateLab2().Topology.ZobristTable;
+        var b = LabPuzzles.CreateLab2().Topology.ZobristTable;
         Assert.Equal(a.Cast<ulong>(), b.Cast<ulong>());
+    }
+}
+
+/// <summary>Layouts only the engine tests need (the Lab layouts come from <see cref="LabPuzzles"/>).</summary>
+internal static class TestPuzzles
+{
+    private static readonly string[] RushHourDefaultMap =
+    [
+        "BBB..C",
+        "..D..C",
+        "XXD.EC",
+        "F...E.",
+        "F.GGG.",
+        "HHH...",
+    ];
+
+    public static RushHourDomain RushHourDefault()
+    {
+        var topo = RushHourTopology.FromAsciiMap(RushHourDefaultMap, leadingLabels: "X");
+        return new RushHourDomain(topo, topo.IndexOf('X'), RushHourTopology.Size - 2);
     }
 }
 
@@ -226,22 +247,49 @@ public class DomainTests
     [Fact]
     public void NPuzzleSlideIsNibbleXorSwap()
     {
-        var s = new NPuzzleState(NPuzzleState.Solved);
+        var domain = LabPuzzles.CreatePuzzle15();
+        var s = domain.InitialState;
         Assert.Equal(0, s.BlankIndex);
         var m = s.SlideTileIntoBlank(1);
         Assert.Equal(1, m.BlankIndex);
         Assert.Equal(1, m.TileAt(0));
         Assert.Equal(s, m.SlideTileIntoBlank(0));
-        Assert.Equal(0, s.ManhattanDistance);
-        Assert.Equal(1, m.ManhattanDistance);
+        Assert.Equal(0, domain.ManhattanDistance(s));
+        Assert.Equal(1, domain.ManhattanDistance(m));
+    }
+
+    [Fact]
+    public void NPuzzleGoalIsSuppliedByTheCaller()
+    {
+        // Same board, goal with the blank in the bottom-right corner: the engine has no opinion on where the blank belongs.
+        var goal = new NPuzzleState(0x0FEDCBA987654321UL);
+        var domain = new NPuzzleDomain(goal, goal);
+        Assert.Equal(15, goal.BlankIndex);
+        Assert.True(domain.IsGoal(goal));
+        Assert.False(domain.IsGoal(LabPuzzles.Puzzle15Solved));
+        Assert.Equal(0, domain.ManhattanDistance(goal));
+        var oneAway = goal.SlideTileIntoBlank(14);
+        Assert.Equal(1, domain.ManhattanDistance(oneAway));
+    }
+
+    [Fact]
+    public void RandomWalkStaysReachableAndIsDeterministicPerSeed()
+    {
+        var domain = LabPuzzles.CreatePuzzle15();
+        var a = PuzzleWalk.RandomWalk(domain, domain.Goal, 40, new Random(9));
+        var b = PuzzleWalk.RandomWalk(domain, domain.Goal, 40, new Random(9));
+        Assert.Equal(a, b);
+        Assert.NotEqual(domain.Goal, a);
+        Assert.Equal(domain.Goal, PuzzleWalk.RandomWalk(domain, domain.Goal, 0, new Random(9)));
     }
 
     [Fact]
     public void NPuzzleIdaStarSolvesScramble()
     {
-        var start = NPuzzleDomain.Scramble(25, new Random(3));
-        var domain = new NPuzzleDomain(start);
-        var result = new PuzzleSolver().SolveIdaStar(domain, start, NPuzzleDomain.Manhattan);
+        var solved = LabPuzzles.CreatePuzzle15();
+        var start = PuzzleWalk.RandomWalk(solved, solved.Goal, 25, new Random(3));
+        var domain = new NPuzzleDomain(start, solved.Goal);
+        var result = new PuzzleSolver().SolveIdaStar(domain, start, domain.ManhattanDistance);
         Assert.NotNull(result);
         var s = start;
         foreach (var mv in result!.Moves) s = domain.ApplyMove(s, mv);
@@ -251,7 +299,7 @@ public class DomainTests
     [Fact]
     public void RushHourDefaultIsSolvableAndOccupancyConsistent()
     {
-        var d = RushHourDomain.CreateDefault();
+        var d = TestPuzzles.RushHourDefault();
         var result = new PuzzleSolver().SolveBfs(d, d.InitialState);
         Assert.NotNull(result);
         var s = d.InitialState;
@@ -267,7 +315,7 @@ public class DomainTests
     [Fact]
     public void KlotskiClassicHasOptimalSolutionOf116SingleSteps()
     {
-        var d = KlotskiDomain.CreateClassic();
+        var d = LabPuzzles.CreateKlotski();
         Assert.Equal(20 - 2, BitOperations.PopCount(d.InitialState.OccupancyMask));
         var result = new PuzzleSolver().SolveBfs(d, d.InitialState);
         Assert.NotNull(result);
@@ -277,7 +325,7 @@ public class DomainTests
     [Fact]
     public void KlotskiSwapOfIdenticalPiecesIsSameState()
     {
-        var d = KlotskiDomain.CreateClassic();
+        var d = LabPuzzles.CreateKlotski();
         // Pieces 'e' and 'f' are the two adjacent singles in row 3.
         int e = d.Topology.Pieces.First(p => p.Label == "e").PieceId, f = d.Topology.Pieces.First(p => p.Label == "f").PieceId;
         Assert.Equal(d.Topology.Groups[d.Topology.Pieces[e].GroupId], d.Topology.Groups[d.Topology.Pieces[f].GroupId]);
@@ -292,7 +340,7 @@ public class DomainTests
     [Fact]
     public void PolyominoLab2GoalIsSolvable()
     {
-        var d = PolyominoDomain.CreateLab2();
+        var d = LabPuzzles.CreateLab2();
         var result = new PuzzleSolver().SolveBfs(d, d.InitialState);
         Assert.NotNull(result);
         var s = d.InitialState;
@@ -306,7 +354,7 @@ public class LabSpecTests
     [Fact]
     public void Lab1RushHourLayoutMatchesTheBrief()
     {
-        var d = RushHourDomain.CreateLab1();
+        var d = LabPuzzles.CreateRushHour();
         var t = d.Topology;
         Assert.Equal(8, t.VehicleCount);
         (int lane, int offset, int length, bool horizontal)[] expected =
@@ -327,7 +375,7 @@ public class LabSpecTests
     [Fact]
     public void KlotskiShapeClassesFollowTheBrief()
     {
-        var d = KlotskiDomain.CreateClassic();
+        var d = LabPuzzles.CreateKlotski();
         Assert.Equal(0x9FFFFUL, d.InitialState.OccupancyMask);
         ulong key = d.InitialState.CanonicalShapeKey;
         int Code(int cell) => (int)((key >> (3 * cell)) & 7);
@@ -361,7 +409,7 @@ public class LabSpecTests
     [Fact]
     public void HookDemoPresetNeedsAFourStepHookAroundTheWall()
     {
-        var d = PolyominoDomain.CreateLab2();
+        var d = LabPuzzles.CreateLab2();
         var t = d.Topology;
         int a = t.Pieces.First(p => p.Label == "A").PieceId, j = t.Pieces.First(p => p.Label == "J").PieceId;
         var s = d.InitialState.WithPieceMoved(t, a, 7).WithPieceMoved(t, j, 19);
@@ -376,7 +424,71 @@ public class LabSpecTests
     [Fact]
     public void LabGroupNamesMatchTheBrief()
     {
-        var names = PolyominoDomain.CreateLab2().Topology.Groups.Select(g => g.Name).ToArray();
+        var names = LabPuzzles.CreateLab2().Topology.Groups.Select(g => g.Name).ToArray();
         Assert.Equal(["L-Tromino", "Upward T", "J-Tromino", "1x1 Single"], names);
+    }
+}
+
+public class PlaySessionTests
+{
+    private static PlaySession<NPuzzleState, NPuzzleMove> NewSession(out NPuzzleDomain domain)
+    {
+        domain = LabPuzzles.CreatePuzzle15();
+        return new PlaySession<NPuzzleState, NPuzzleMove>(domain, PuzzleWalk.RandomWalk(domain, domain.Goal, 12, new Random(5)));
+    }
+
+    [Fact]
+    public void ApplyUndoAndResetTrackTheHistory()
+    {
+        var play = NewSession(out var domain);
+        var start = play.State;
+        Span<NPuzzleMove> buf = stackalloc NPuzzleMove[domain.MaxMoves];
+        domain.GenerateMoves(play.State, buf);
+        play.Apply(buf[0]);
+        Assert.Equal(1, play.MoveCount);
+        Assert.True(play.CanUndo);
+        Assert.True(play.Undo());
+        Assert.Equal(start, play.State);
+        Assert.False(play.Undo());
+        play.Apply(buf[0]);
+        play.Reset();
+        Assert.Equal(start, play.State);
+        Assert.Equal(0, play.MoveCount);
+    }
+
+    [Fact]
+    public async Task HintPlanIsCachedWhileFollowedAndDroppedOtherwise()
+    {
+        var play = NewSession(out var domain);
+        int searches = 0;
+        SolveResult<NPuzzleMove>? Solve(NPuzzleState s, CancellationToken ct)
+        {
+            searches++;
+            return new PuzzleSolver().SolveIdaStar(domain, s, domain.ManhattanDistance, ct);
+        }
+
+        var first = await play.HintAsync(Solve);
+        Assert.NotNull(first);
+        play.Apply(first.Value);
+        var second = await play.HintAsync(Solve);
+        Assert.NotNull(second);
+        Assert.Equal(1, searches);
+
+        // Playing something other than the hinted move invalidates the plan.
+        Span<NPuzzleMove> buf = stackalloc NPuzzleMove[domain.MaxMoves];
+        int n = domain.GenerateMoves(play.State, buf);
+        var other = buf[..n].ToArray().First(m => !m.Equals(second.Value));
+        play.Apply(other);
+        await play.HintAsync(Solve);
+        Assert.Equal(2, searches);
+    }
+
+    [Fact]
+    public async Task HintIsNullWhenSolved()
+    {
+        var domain = LabPuzzles.CreatePuzzle15();
+        var play = new PlaySession<NPuzzleState, NPuzzleMove>(domain, domain.Goal);
+        Assert.True(play.IsSolved);
+        Assert.Null(await play.HintAsync((_, _) => null));
     }
 }

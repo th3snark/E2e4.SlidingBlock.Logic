@@ -7,7 +7,6 @@ public sealed class RushHourTopology
 {
     public const int Size = 6;
     public const int MaxVehicles = 16;
-    public const int GoalOffset = Size - 2;
 
     private RushHourTopology(IReadOnlyList<Vehicle> vehicles)
     {
@@ -36,8 +35,15 @@ public sealed class RushHourTopology
 
     private static ulong Bit(Vehicle v, int along) => 1UL << (v.IsHorizontal ? v.Lane * Size + along : along * Size + v.Lane);
 
-    /// <summary>Parses six 6-character rows; 'X' is the red car (row 2), '.' empty, other letters vehicles.</summary>
-    public static RushHourTopology FromAsciiMap(IReadOnlyList<string> rows)
+    /// <summary>Index of the vehicle drawn with <paramref name="label"/>.</summary>
+    public int IndexOf(char label) => Vehicles.First(v => v.Label == label).Index;
+
+    /// <summary>
+    /// Parses six 6-character rows; '.' is empty, every other character is one vehicle. Vehicles are indexed in label order, except that
+    /// the labels in <paramref name="leadingLabels"/> come first, in that order. Which vehicle must reach which offset is the puzzle's
+    /// business (see <see cref="RushHourDomain"/>).
+    /// </summary>
+    public static RushHourTopology FromAsciiMap(IReadOnlyList<string> rows, string leadingLabels = "")
     {
         var cells = new SortedDictionary<char, List<(int r, int c)>>();
         for (int r = 0; r < Size; r++)
@@ -48,7 +54,7 @@ public sealed class RushHourTopology
                     l.Add((r, c));
                 }
         var vehicles = new List<Vehicle>();
-        foreach (char ch in cells.Keys.OrderBy(k => k == 'X' ? 0 : 1).ThenBy(k => k))
+        foreach (char ch in cells.Keys.OrderBy(k => { int i = leadingLabels.IndexOf(k, StringComparison.Ordinal); return i < 0 ? int.MaxValue : i; }).ThenBy(k => k))
         {
             var l = cells[ch];
             bool horizontal = l.All(x => x.r == l[0].r);
@@ -57,7 +63,7 @@ public sealed class RushHourTopology
             vehicles.Add(new Vehicle(vehicles.Count, ch, l.Count, horizontal, lane, off));
         }
         if (vehicles.Count > MaxVehicles) throw new ArgumentException("Too many vehicles.");
-        if (vehicles.Count == 0 || vehicles[0].Label != 'X' || !vehicles[0].IsHorizontal) throw new ArgumentException("Missing horizontal red car X.");
+        if (vehicles.Count == 0) throw new ArgumentException("No vehicles.");
         return new RushHourTopology(vehicles);
     }
 
@@ -100,42 +106,24 @@ public readonly record struct RushHourMove(byte Vehicle, sbyte Delta);
 
 public sealed class RushHourDomain : ISlidingBlockDomain<RushHourState, RushHourMove>
 {
-    public static readonly string[] DefaultMap =
-    [
-        "BBB..C",
-        "..D..C",
-        "XXD.EC",
-        "F...E.",
-        "F.GGG.",
-        "HHH...",
-    ];
-
-    public RushHourDomain(RushHourTopology topology)
+    /// <summary>The puzzle is solved when vehicle <paramref name="goalVehicle"/> reaches <paramref name="goalOffset"/> along its lane.</summary>
+    public RushHourDomain(RushHourTopology topology, int goalVehicle, int goalOffset)
     {
+        if (goalVehicle < 0 || goalVehicle >= topology.VehicleCount) throw new ArgumentOutOfRangeException(nameof(goalVehicle));
+        if (goalOffset < 0 || goalOffset > RushHourTopology.Size - topology.Vehicles[goalVehicle].Length) throw new ArgumentOutOfRangeException(nameof(goalOffset));
         Topology = topology;
+        GoalVehicle = goalVehicle;
+        GoalOffset = goalOffset;
         InitialState = topology.InitialState();
     }
 
-    /// <summary>The 8-vehicle layout from the Lab 1 brief (vehicles v0..v7 are X, B..H).</summary>
-    public static readonly string[] Lab1Map =
-    [
-        "CCH..F",
-        "..HB.F",
-        ".XXB..",
-        "D..B..",
-        "DGG...",
-        "..EEE.",
-    ];
-
-    public static RushHourDomain CreateDefault() => new(RushHourTopology.FromAsciiMap(DefaultMap));
-
-    public static RushHourDomain CreateLab1() => new(RushHourTopology.FromAsciiMap(Lab1Map));
-
     public RushHourTopology Topology { get; }
+    public int GoalVehicle { get; }
+    public int GoalOffset { get; }
     public RushHourState InitialState { get; }
     public int MaxMoves => Topology.VehicleCount * 2;
 
-    public bool IsGoal(in RushHourState state) => state.OffsetOf(0) == RushHourTopology.GoalOffset;
+    public bool IsGoal(in RushHourState state) => state.OffsetOf(GoalVehicle) == GoalOffset;
 
     public int GenerateMoves(in RushHourState state, Span<RushHourMove> moveBuffer)
     {

@@ -17,7 +17,7 @@ public partial class Lab2View : UserControl
     private const double Cell = 88;
     private const int N = 5;
 
-    private readonly PolyominoDomain _d = PolyominoDomain.CreateLab2();
+    private readonly PolyominoDomain _d = LabPuzzles.CreateLab2();
     private readonly Dictionary<int, Canvas> _visuals = [];
     private PuzzleTopology _t = null!;
     private PolyominoState _state;
@@ -50,7 +50,7 @@ public partial class Lab2View : UserControl
 
     private static Point Pos(int anchor) => new(anchor % N * Cell, anchor / N * Cell);
     private static Point Center(int anchor) => new(anchor % N * Cell + Cell / 2, anchor / N * Cell + Cell / 2);
-    private Color GroupColor(int g) => DrawHelpers.Hex(_t.Groups[g].ColorHex);
+    private Color GroupColor(int g) => DrawHelpers.Hex(LabPuzzles.Lab2Colors[_t.Groups[g].Name]);
 
     // ---- static board ---------------------------------------------------------------------------------------
 

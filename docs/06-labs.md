@@ -1,7 +1,7 @@
 # 6. The WPF laboratories
 
 `E2e4.SlidingBlock.Logic.Labs.Wpf` is a private, unpacked desktop app (Windows, `net10.0-windows`) that makes the bitboards
-visible. It uses the library only through its public types.
+visible. It uses the library only through its public types. The puzzle layouts, goals and group colours it plays are defined in the Lab itself (`LabPuzzles.cs`), not in the library.
 
 ## Lab 1: standard architectures
 
@@ -11,10 +11,10 @@ A mode selector switches between three puzzles, each with an interactive board, 
 |------|----------------|-------|
 | 15-puzzle | 16 nibbles of the `ulong` | starts from a 30-move scramble; hints use IDA* + Manhattan |
 | Klotski | 20 three-bit shape codes (the canonical key) | classic 4x5 layout; hints use BFS |
-| Rush Hour | one 3-bit offset per vehicle | the 8-vehicle layout from the brief (`RushHourDomain.CreateLab1`), red car must reach offset 4; hints use BFS |
+| Rush Hour | one 3-bit offset per vehicle | the 8-vehicle layout from the brief (`LabPuzzles.CreateRushHour`), red car must reach offset 4; hints use BFS |
 
 The Klotski register uses the shape classes `1 = 1x1`, `2 = 1x2 vertical`, `3 = 2x1 horizontal`, `4 = 2x2` (the legend order in
-`KlotskiDomain.CreateClassic`).
+`LabPuzzles.CreateKlotski`).
 
 The inspector has these parts:
 

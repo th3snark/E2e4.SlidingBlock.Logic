@@ -91,21 +91,20 @@ public abstract class PuzzleSession<TState, TMove> : PuzzleSession
     where TMove : struct, IEquatable<TMove>
 {
     private readonly ISlidingBlockDomain<TState, TMove> _domain;
+    private readonly PlaySession<TState, TMove> _play;
     private readonly TMove[] _buffer;
     private int _legalCount;
-    private readonly Queue<TMove> _hint = new();
-    private readonly Stack<TState> _history = new();
     private IReadOnlyList<MoveView> _legalViews = [];
     private IReadOnlyList<PieceView> _pieces = [];
 
     protected PuzzleSession(ISlidingBlockDomain<TState, TMove> domain)
     {
         _domain = domain;
+        _play = new PlaySession<TState, TMove>(domain, domain.InitialState);
         _buffer = new TMove[domain.MaxMoves];
-        State = domain.InitialState;
     }
 
-    protected TState State { get; private set; }
+    protected TState State => _play.State;
     protected ISlidingBlockDomain<TState, TMove> Domain => _domain;
 
     protected abstract IReadOnlyList<PieceView> BuildPieces(TState state);
@@ -137,23 +136,19 @@ public abstract class PuzzleSession<TState, TMove> : PuzzleSession
     {
         TState before = State;
         TMove move = _buffer[moveIndex];
-        _history.Push(before);
-        State = _domain.ApplyMove(before, move);
-        MoveCount++;
-        if (_hint.Count > 0 && _hint.Peek().Equals(move)) _hint.Dequeue(); else _hint.Clear();
+        _play.Apply(move);
+        MoveCount = _play.MoveCount;
         Trace = BuildTrace(before, move, State);
         Refresh(true, RegisterOf(before) ^ RegisterOf(State));
     }
 
-    public override bool CanUndo => _history.Count > 0;
+    public override bool CanUndo => _play.CanUndo;
 
     public override void Undo()
     {
-        if (_history.Count == 0) return;
         TState undone = State;
-        State = _history.Pop();
-        MoveCount--;
-        _hint.Clear();
+        if (!_play.Undo()) return;
+        MoveCount = _play.MoveCount;
         Trace = $"Undo: register restored from 0x{RegisterOf(undone):X16} to 0x{RegisterOf(State):X16}\nxor delta = 0x{RegisterOf(undone) ^ RegisterOf(State):X16}";
         Refresh(true, RegisterOf(undone) ^ RegisterOf(State));
     }
@@ -167,51 +162,29 @@ public abstract class PuzzleSession<TState, TMove> : PuzzleSession
     /// <summary>Random walk from the initial state: always reachable, hence solvable.</summary>
     public override void Scramble()
     {
-        var state = _domain.InitialState;
-        var buf = new TMove[_domain.MaxMoves];
-        for (int i = 0; i < 80; i++)
-        {
-            int n = _domain.GenerateMoves(state, buf);
-            if (n == 0) break;
-            state = _domain.ApplyMove(state, buf[Random.Shared.Next(n)]);
-        }
         Trace = "Scrambled by an 80-move random walk from the initial state (always solvable).";
-        ResetTo(state);
+        ResetTo(PuzzleWalk.RandomWalk(_domain, _domain.InitialState, 80, Random.Shared));
     }
 
     public override void Reset()
     {
-        State = _domain.InitialState;
-        MoveCount = 0;
-        _history.Clear();
-        _hint.Clear();
         Trace = "State reset. Click a block or an arrow.";
-        Refresh(false, 0);
+        ResetTo(_domain.InitialState);
     }
 
     protected void ResetTo(TState state)
     {
-        State = state;
+        _play.Begin(state);
         MoveCount = 0;
-        _history.Clear();
-        _hint.Clear();
         Refresh(false, 0);
     }
 
     public override async Task<bool> HintStepAsync(CancellationToken ct)
     {
-        if (IsSolved) return false;
-        if (_hint.Count == 0)
-        {
-            var start = State;
-            var result = await Task.Run(() => Solve(start, ct), ct);
-            if (result is null || result.Moves.Count == 0) return false;
-            foreach (var m in result.Moves) _hint.Enqueue(m);
-        }
-        TMove next = _hint.Peek();
+        TMove? next = await _play.HintAsync(Solve, ct);
+        if (next is null) return false;
         for (int i = 0; i < _legalCount; i++)
-            if (_buffer[i].Equals(next)) { Apply(i); return true; }
-        _hint.Clear();
+            if (_buffer[i].Equals(next.Value)) { Apply(i); return true; }
         return false;
     }
 
@@ -221,13 +194,17 @@ public abstract class PuzzleSession<TState, TMove> : PuzzleSession
 // ---------------------------------------------------------------------------------------------------------------
 public sealed class NPuzzleSession : PuzzleSession<NPuzzleState, NPuzzleMove>
 {
-    public NPuzzleSession() : base(new NPuzzleDomain(new NPuzzleState(NPuzzleState.Solved)))
+    private readonly NPuzzleDomain _n;
+    private NPuzzleState scrambled;
+
+    private NPuzzleSession(NPuzzleDomain d) : base(d)
     {
-        scrambled = NPuzzleDomain.Scramble(30, new Random(15));
+        _n = d;
+        scrambled = PuzzleWalk.RandomWalk(d, d.Goal, 30, new Random(15));
         ResetTo(scrambled);
     }
 
-    private NPuzzleState scrambled;
+    public NPuzzleSession() : this(LabPuzzles.CreatePuzzle15()) { }
 
     public override string Title => "15-Puzzle";
     public override string Representation => "16 squares x 4 bits = one ulong. Nibble i holds the tile on square i (0 = blank). Sliding a tile is a branchless XOR swap.";
@@ -240,7 +217,7 @@ public sealed class NPuzzleSession : PuzzleSession<NPuzzleState, NPuzzleMove>
 
     public override void Scramble()
     {
-        scrambled = NPuzzleDomain.Scramble(60, Random.Shared);
+        scrambled = PuzzleWalk.RandomWalk(_n, _n.Goal, 60, Random.Shared);
         Trace = "New solvable scramble (60-move random walk from the solved board).";
         ResetTo(scrambled);
     }
@@ -306,13 +283,13 @@ public sealed class NPuzzleSession : PuzzleSession<NPuzzleState, NPuzzleMove>
         ulong hz = (after.PackedNibbles - 0x1111111111111111UL) & ~after.PackedNibbles & 0x8888888888888888UL;
         sb.Append(Row("haszero(v')", $"0x{hz:X16}"));
         sb.Append(Row("blank = tzcnt(haszero) >> 2", $"{BitOperations.TrailingZeroCount(hz) >> 2}"));
-        sb.Append(Row("Manhattan(v')", $"{after.ManhattanDistance}"));
+        sb.Append(Row("Manhattan(v')", $"{_n.ManhattanDistance(after)}"));
         sb.Append(Row("inverse map (tile->square)", $"0x{after.InverseMap:X16}"));
         return sb.ToString();
     }
 
     protected override SolveResult<NPuzzleMove>? Solve(NPuzzleState start, CancellationToken ct) =>
-        new PuzzleSolver { MaxNodes = 60_000_000 }.SolveIdaStar(Domain, start, NPuzzleDomain.Manhattan, ct);
+        new PuzzleSolver { MaxNodes = 60_000_000 }.SolveIdaStar(Domain, start, _n.ManhattanDistance, ct);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -326,7 +303,7 @@ public sealed class KlotskiSession : PuzzleSession<KlotskiState, KlotskiMove>
         Reset();
     }
 
-    public KlotskiSession() : this(KlotskiDomain.CreateClassic()) { }
+    public KlotskiSession() : this(LabPuzzles.CreateKlotski()) { }
 
     public override string Title => "Klotski";
     public override string Representation => "4x5 board = 20-bit occupancy. A 60-bit canonical shape key (3 bits per cell, class 0..4) identifies a position independent of which identical piece is where.";
@@ -346,7 +323,7 @@ public sealed class KlotskiSession : PuzzleSession<KlotskiState, KlotskiMove>
         Color c = cls switch
         {
             0 => Color.FromRgb(0x47, 0x55, 0x69),
-            _ => DrawHelpers.Hex(_k.Topology.Groups[cls - 1].ColorHex),
+            _ => DrawHelpers.Hex(LabPuzzles.KlotskiColors[_k.Topology.Groups[cls - 1].Name]),
         };
         string name = ShapeNames[cls];
         return new GroupInfo(c, $"{group}:{(cls == 0 ? "--" : name)}", "",
@@ -362,7 +339,7 @@ public sealed class KlotskiSession : PuzzleSession<KlotskiState, KlotskiMove>
             var g = t.Groups[p.GroupId];
             int a = s.AnchorOf(p.PieceId);
             var cells = g.RelativeCells.Select(x => (a / t.Width + x.dRow, a % t.Width + x.dCol)).ToArray();
-            list.Add(new PieceView(p.PieceId, g.Name.StartsWith("Master", StringComparison.Ordinal) ? "2x2" : "", DrawHelpers.Hex(g.ColorHex), cells));
+            list.Add(new PieceView(p.PieceId, p.PieceId == _k.MasterPieceId ? "2x2" : "", DrawHelpers.Hex(LabPuzzles.KlotskiColors[g.Name]), cells));
         }
         return list;
     }
@@ -421,7 +398,7 @@ public sealed class RushHourSession : PuzzleSession<RushHourState, RushHourMove>
         Reset();
     }
 
-    public RushHourSession() : this(RushHourDomain.CreateLab1()) { }
+    public RushHourSession() : this(LabPuzzles.CreateRushHour()) { }
 
     public override string Title => "Rush Hour";
     public override string Representation => "Each vehicle has one degree of freedom: a 3-bit offset along its lane. Occupancy is rebuilt from VehicleMasks[v, offset]; legality tests one FrontNeighborBit.";
@@ -430,7 +407,7 @@ public sealed class RushHourSession : PuzzleSession<RushHourState, RushHourMove>
     public override RegisterSpec RegisterLayout => new(3, _r.Topology.VehicleCount, 8, "3-bit offset per vehicle");
     public override string OccupancyCaption => "occupied cells (36-bit)";
 
-    private Color VehicleColor(int v) => v == 0 ? Color.FromRgb(0xEF, 0x44, 0x44) : PuzzleSession.Hue(v * 47 + 20, 0.5, 0.85);
+    private Color VehicleColor(int v) => v == _r.GoalVehicle ? Color.FromRgb(0xEF, 0x44, 0x44) : PuzzleSession.Hue(v * 47 + 20, 0.5, 0.85);
 
     public override ulong CellsOfGroup(int group) => _r.Topology.VehicleMasks[group, State.OffsetOf(group)];
     public override string PieceMaskName(int pieceId) => $"VehicleMasks[{pieceId},{State.OffsetOf(pieceId)}]";

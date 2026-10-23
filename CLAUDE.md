@@ -10,8 +10,8 @@ for the N-puzzle, Klotski, Rush Hour and polyominoes. `PROMPT.md` is the origina
 ## Layout
 
 - `src/E2e4.SlidingBlock.Logic/` — the library (`net10.0`): `ISlidingBlockDomain` (`Abstractions.cs`), the per-puzzle state and domain types
-  (`NPuzzle.cs`, `Klotski.cs`, `RushHour.cs`, `Polyomino.cs`), `PuzzleTopology`, `PuzzleSolver` and `BitboardExtensions`.
-- `src/E2e4.SlidingBlock.Logic.Labs.Wpf/` — WPF application with the two laboratories (`Lab1`, `Lab2`). Private, not packed; it sets
+  (`NPuzzle.cs`, `Klotski.cs`, `RushHour.cs`, `Polyomino.cs`), `PuzzleTopology`, `PuzzleSolver`, `PuzzleWalk`, `PlaySession` and `BitboardExtensions`.
+- `src/E2e4.SlidingBlock.Logic.Labs.Wpf/` — WPF application with the two laboratories (`Lab1`, `Lab2`). `LabPuzzles.cs` holds the layouts, goals and colours they play (plain C#, linked into the test project). Private, not packed; it sets
   `EnableWindowsTargeting` so the Linux CI runners can build it.
 - `tests/E2e4.SlidingBlock.Logic.Test/` — xUnit tests (net10.0).
 - `docs/` — markdown research notes and design explanations with Mermaid diagrams (start at `docs/README.md`); keep them in step with\r\n  the code when the object model changes.\r\n- `assets/icon.png` / `icon.svg` — the package icon: the E2e4 frame, a Klotski board and the Logic badge shared with E2e4.Chess.Logic.
@@ -19,6 +19,8 @@ for the N-puzzle, Klotski, Rush Hour and polyominoes. `PROMPT.md` is the origina
 
 ## Rules
 
+- The library knows how pieces move and how to search, never which puzzle is being played: no layouts or ASCII maps, no goal positions,
+  no goal-relative heuristics, no colours. Goals are constructor data of the domains; each puzzle (the Puzzles app, the Labs) owns its definition.
 - No dependencies, no WPF/WinForms in the library, no I/O. CI fails if the library gains a package dependency.
 - State types are structs on purpose and move generation writes into caller-supplied `Span<TMove>` buffers: keep the hot paths allocation-free.
 - Nullable is on and warnings are errors: the tree must build with 0 warnings. File-scoped namespaces and `int`/`string` keywords are enforced

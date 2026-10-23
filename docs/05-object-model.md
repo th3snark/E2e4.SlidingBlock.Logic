@@ -22,6 +22,13 @@ classDiagram
         +SolveAStar()
         +SolveIdaStar()
     }
+    class PuzzleWalk {
+        +RandomWalk()
+    }
+    class PlaySession~TState,TMove~ {
+        +Apply() Undo() Reset()
+        +HintAsync()
+    }
     class PuzzleTopology {
         +Width, Height
         +StaticWallsMask
@@ -53,6 +60,8 @@ classDiagram
     PuzzleTopology o-- EquivalenceGroup
     PuzzleTopology o-- PieceTemplate
     PuzzleSolver ..> ISlidingBlockDomain : solves any
+    PuzzleWalk ..> ISlidingBlockDomain : walks any
+    PlaySession ..> ISlidingBlockDomain : plays any
     ISlidingBlockDomain <|.. NPuzzleDomain
     ISlidingBlockDomain <|.. KlotskiDomain
     ISlidingBlockDomain <|.. RushHourDomain
@@ -61,6 +70,14 @@ classDiagram
     PolyominoDomain --> PuzzleTopology
     RushHourDomain --> RushHourTopology
 ```
+
+## 5.1a What the engine does not know
+
+Goals are data. `NPuzzleDomain(initial, goal)`, `KlotskiDomain(topology, masterPieceId, goalAnchor)`, `RushHourDomain(topology, goalVehicle, goalOffset)`
+and `PolyominoDomain(topology, goalGroupId, goalAnchor)` receive the answer from the puzzle that uses them. The engine has no layouts
+(the classic Klotski map, the Rush Hour boards), no notion of where the blank belongs, no goal-relative heuristic baked into a state
+(`NPuzzleDomain.ManhattanDistance` is measured against the goal it was given) and no colours. Layouts and goals live in the puzzle
+definitions of the consumers (`E2e4.SlidingBlock.Puzzles.Core`; `LabPuzzles` in the Labs).
 
 ## 5.2 Topology types
 
@@ -73,7 +90,7 @@ classDiagram
 | `PuzzleTopologyBuilder` | Builds a topology from relative cell lists; validates anchors and overlaps; computes the masks |
 | `RushHourTopology` | Vehicles plus `VehicleMasks`, `FrontNeighborBit`, `BackNeighborBit` |
 
-ASCII maps use `#` for a wall, `.` for empty, and any other character for one piece; a legend maps characters to a `PieceStyle`.
+ASCII maps use `#` for a wall, `.` for empty, and any other character for one piece; a legend maps characters to a `PieceKind` (name, directions and an opaque key; appearance such as colour is the consumer's business).
 Pieces whose normalised shape, directions and role match join the same group.
 
 ## 5.3 State types

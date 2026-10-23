@@ -16,7 +16,6 @@ public enum AllowedDirections : byte
 public sealed record EquivalenceGroup(
     int GroupId,
     string Name,
-    string ColorHex,
     ulong BaseMask,
     ulong ValidAnchorsMask,
     AllowedDirections Directions,
@@ -24,7 +23,12 @@ public sealed record EquivalenceGroup(
 
 public sealed record PieceTemplate(int PieceId, int GroupId, string Label, int InitialAnchor);
 
-public sealed record PieceStyle(string Name, string ColorHex, AllowedDirections Directions = AllowedDirections.Both, string Role = "");
+/// <summary>
+/// What a map symbol means to the engine. Pieces with the same normalized shape, <see cref="Directions"/> and <see cref="Key"/> share
+/// an equivalence group; <see cref="Key"/> is opaque to the engine and lets a puzzle keep otherwise identical shapes apart.
+/// Appearance (colours, labels) is the consumer's business.
+/// </summary>
+public sealed record PieceKind(string Name, AllowedDirections Directions = AllowedDirections.Both, string Key = "");
 
 public interface ISlidingBlockDomain<TState, TMove> where TState : struct, IEquatable<TState>
 {

@@ -31,10 +31,10 @@ public sealed class PuzzleTopology
 
     /// <summary>
     /// Builds a topology from an ASCII map. '#' is a wall, '.' is empty, every other character is one piece.
-    /// Pieces with the same normalized shape, directions and role share an equivalence group; groups are
+    /// Pieces with the same normalized shape, directions and key share an equivalence group; groups are
     /// ordered by the legend order.
     /// </summary>
-    public static PuzzleTopology FromAsciiMap(IReadOnlyList<string> rows, IReadOnlyList<(char Symbol, PieceStyle Style)> legend)
+    public static PuzzleTopology FromAsciiMap(IReadOnlyList<string> rows, IReadOnlyList<(char Symbol, PieceKind Kind)> legend)
     {
         int height = rows.Count, width = rows[0].Length;
         var builder = new PuzzleTopologyBuilder(width, height);
@@ -52,22 +52,22 @@ public sealed class PuzzleTopology
 
         var groupKeys = new Dictionary<(ulong, AllowedDirections, string), int>();
         // Pass 1: create groups in legend order so group ids are predictable.
-        foreach (var (symbol, style) in legend)
+        foreach (var (symbol, kind) in legend)
         {
             if (!cellsBySymbol.TryGetValue(symbol, out var cells)) continue;
             var (baseMask, _) = PuzzleTopologyBuilder.Normalize(cells, width);
-            var key = (baseMask, style.Directions, style.Role);
+            var key = (baseMask, kind.Directions, kind.Key);
             if (!groupKeys.ContainsKey(key))
-                groupKeys[key] = builder.AddGroup(style.Name, style.ColorHex, cells, style.Directions);
+                groupKeys[key] = builder.AddGroup(kind.Name, cells, kind.Directions);
         }
         // Pass 2: pieces in row-major order of first appearance.
         foreach (char ch in order)
         {
             var cells = cellsBySymbol[ch];
-            var style = legend.First(l => l.Symbol == ch).Style;
+            var kind = legend.First(l => l.Symbol == ch).Kind;
             var (baseMask, _) = PuzzleTopologyBuilder.Normalize(cells, width);
             int anchor = cells.Min(x => x.r * width + x.c);
-            builder.AddPiece(groupKeys[(baseMask, style.Directions, style.Role)], ch.ToString(), anchor);
+            builder.AddPiece(groupKeys[(baseMask, kind.Directions, kind.Key)], ch.ToString(), anchor);
         }
         return builder.Build();
     }
@@ -93,7 +93,7 @@ public sealed class PuzzleTopologyBuilder
 {
     private readonly int _width, _height;
     private ulong _walls;
-    private readonly List<(string Name, string Color, IReadOnlyList<(int dRow, int dCol)> Cells, ulong Base, AllowedDirections Dirs)> _groups = [];
+    private readonly List<(string Name, IReadOnlyList<(int dRow, int dCol)> Cells, ulong Base, AllowedDirections Dirs)> _groups = [];
     private readonly List<PieceTemplate> _pieces = [];
 
     public PuzzleTopologyBuilder(int width, int height)
@@ -109,10 +109,10 @@ public sealed class PuzzleTopologyBuilder
         return this;
     }
 
-    public int AddGroup(string name, string colorHex, IEnumerable<(int dRow, int dCol)> cells, AllowedDirections directions = AllowedDirections.Both)
+    public int AddGroup(string name, IEnumerable<(int dRow, int dCol)> cells, AllowedDirections directions = AllowedDirections.Both)
     {
         var (baseMask, rel) = Normalize(cells, _width);
-        _groups.Add((name, colorHex, rel, baseMask, directions));
+        _groups.Add((name, rel, baseMask, directions));
         return _groups.Count - 1;
     }
 
@@ -127,8 +127,8 @@ public sealed class PuzzleTopologyBuilder
         var groups = new List<EquivalenceGroup>();
         for (int g = 0; g < _groups.Count; g++)
         {
-            var (name, color, rel, baseMask, dirs) = _groups[g];
-            groups.Add(new EquivalenceGroup(g, name, color, baseMask, ComputeValidAnchors(rel), dirs, rel));
+            var (name, rel, baseMask, dirs) = _groups[g];
+            groups.Add(new EquivalenceGroup(g, name, baseMask, ComputeValidAnchors(rel), dirs, rel));
         }
 
         ulong occupied = _walls;

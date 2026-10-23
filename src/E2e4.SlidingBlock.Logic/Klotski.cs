@@ -84,42 +84,13 @@ public readonly record struct KlotskiMove(byte Piece, byte From, byte To);
 
 public sealed class KlotskiDomain : ISlidingBlockDomain<KlotskiState, KlotskiMove>
 {
-    public static readonly string[] ClassicMap =
-    [
-        "aMMb",
-        "aMMb",
-        "cHHd",
-        "cefd",
-        "g..h",
-    ];
-
+    /// <summary>The puzzle is solved when piece <paramref name="masterPieceId"/> sits on <paramref name="goalAnchor"/>.</summary>
     public KlotskiDomain(PuzzleTopology topology, int masterPieceId, int goalAnchor)
     {
         Topology = topology;
         MasterPieceId = masterPieceId;
         GoalAnchor = goalAnchor;
         InitialState = new KlotskiState(topology);
-    }
-
-    /// <summary>The classic 4x5 layout: one 2x2, four 1x2 vertical, one 2x1 horizontal, four 1x1.</summary>
-    public static KlotskiDomain CreateClassic()
-    {
-        var topo = PuzzleTopology.FromAsciiMap(ClassicMap,
-        [
-            // Legend order fixes the shape class: 1 = 1x1, 2 = 1x2 vertical, 3 = 2x1 horizontal, 4 = 2x2.
-            ('e', new PieceStyle("Single 1x1", "#10B981", Role: "single")),
-            ('f', new PieceStyle("Single 1x1", "#10B981", Role: "single")),
-            ('g', new PieceStyle("Single 1x1", "#10B981", Role: "single")),
-            ('h', new PieceStyle("Single 1x1", "#10B981", Role: "single")),
-            ('a', new PieceStyle("Vertical 1x2", "#3B82F6", Role: "vertical")),
-            ('b', new PieceStyle("Vertical 1x2", "#3B82F6", Role: "vertical")),
-            ('c', new PieceStyle("Vertical 1x2", "#3B82F6", Role: "vertical")),
-            ('d', new PieceStyle("Vertical 1x2", "#3B82F6", Role: "vertical")),
-            ('H', new PieceStyle("Horizontal 2x1", "#F59E0B", Role: "horizontal")),
-            ('M', new PieceStyle("Master 2x2", "#EF4444", Role: "master")),
-        ]);
-        int master = topo.Pieces.First(p => p.Label == "M").PieceId;
-        return new KlotskiDomain(topo, master, 13);
     }
 
     public PuzzleTopology Topology { get; }

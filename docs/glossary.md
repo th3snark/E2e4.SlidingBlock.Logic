@@ -23,6 +23,7 @@ Terms and acronyms used in this repository, in alphabetical order. Where a term 
 | **Flood fill** | Spreading outwards from a start until nothing new is reached; here, over anchors, to find every reachable destination. |
 | **Frontier** | The set of newly reached anchors that the flood fill expands next. |
 | **GroupAnchors** | One bitboard per equivalence group; bit `s` is set when some piece of the group is anchored on square `s`. See [Zobrist and GroupAnchors](04-zobrist-and-group-anchors.md). |
+| **Goal** | The position (or condition) that solves a puzzle. Owned by the puzzle that uses the engine and passed to the domain as data. |
 | **Heuristic** | An estimate of the remaining cost to the goal, such as Manhattan distance. |
 | **Hook move** | See *Corner hook*. |
 | **IDA\* (iterative-deepening A\*)** | A\* run as repeated depth-first searches with a growing cost bound. Uses little memory, so it suits the 15-puzzle. `PuzzleSolver.SolveIdaStar`. |

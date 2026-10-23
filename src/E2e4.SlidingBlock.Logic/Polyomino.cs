@@ -214,31 +214,13 @@ public readonly record struct PolyominoMove(byte PieceId, byte TargetAnchor);
 
 public sealed class PolyominoDomain : ISlidingBlockDomain<PolyominoState, PolyominoMove>
 {
+    /// <summary>The puzzle is solved when group <paramref name="goalGroupId"/> has exactly one piece, on <paramref name="goalAnchor"/>.</summary>
     public PolyominoDomain(PuzzleTopology topology, int goalGroupId, int goalAnchor)
     {
         Topology = topology;
         GoalGroupId = goalGroupId;
         GoalAnchor = goalAnchor;
         InitialState = PolyominoState.FromTopology(topology);
-    }
-
-    public const int LabWidth = 5;
-
-    /// <summary>The 5x5 Lab 2 board: L-tromino, upward T, J-tromino, two identical 1x1 blocks, wall at index 12.</summary>
-    public static PolyominoDomain CreateLab2()
-    {
-        var b = PuzzleTopology.CreateBuilder(5, 5);
-        b.AddWall(2, 2);
-        int l = b.AddGroup("L-Tromino", "#F5B301", [(0, 0), (1, 0), (1, 1)]);
-        int t = b.AddGroup("Upward T", "#22D3EE", [(0, 0), (1, -1), (1, 0), (1, 1)]);
-        int j = b.AddGroup("J-Tromino", "#A855F7", [(0, 0), (1, -1), (1, 0)]);
-        int s = b.AddGroup("1x1 Single", "#10B981", [(0, 0)]);
-        b.AddPiece(l, "L", 0);
-        b.AddPiece(t, "T", 16);
-        b.AddPiece(j, "J", 4);
-        b.AddPiece(s, "A", 2);
-        b.AddPiece(s, "B", 14);
-        return new PolyominoDomain(b.Build(), goalGroupId: 0, goalAnchor: 16);
     }
 
     public PuzzleTopology Topology { get; }
