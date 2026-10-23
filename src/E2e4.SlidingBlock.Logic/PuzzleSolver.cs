@@ -78,7 +78,7 @@ public sealed class PuzzleSolver
         return null;
     }
 
-    /// <summary>Iterative-deepening A*; memory-light, suited to the 15-puzzle with a Manhattan heuristic.</summary>
+    /// <summary>Iterative-deepening A*; memory-light, suited to large state spaces with a strong heuristic.</summary>
     public SolveResult<TMove>? SolveIdaStar<TState, TMove>(ISlidingBlockDomain<TState, TMove> domain, TState start, Func<TState, int> heuristic, CancellationToken ct = default)
         where TState : struct, IEquatable<TState>
     {

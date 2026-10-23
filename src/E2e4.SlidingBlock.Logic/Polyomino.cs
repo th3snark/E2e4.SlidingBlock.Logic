@@ -12,9 +12,12 @@ public struct GroupAnchorBuffer
     private ulong _element0;
 }
 
-[InlineArray(16)]
+[InlineArray(PieceAnchorBuffer.Length)]
 public struct PieceAnchorBuffer
 {
+    /// <summary>The most pieces a <see cref="PolyominoState"/> can hold.</summary>
+    public const int Length = 16;
+
     private byte _element0;
 }
 
@@ -31,8 +34,8 @@ public struct PolyominoState : IEquatable<PolyominoState>
     public static PolyominoState FromTopology(PuzzleTopology topology)
     {
         if (topology.Groups.Count > GroupAnchorBuffer.Length) throw new ArgumentException($"At most {GroupAnchorBuffer.Length} equivalence groups.");
-        if (topology.Pieces.Count > 16) throw new ArgumentException("At most 16 pieces.");
-        var s = new PolyominoState { OccupancyMask = topology.StaticWallsMask & 0 };
+        if (topology.Pieces.Count > PieceAnchorBuffer.Length) throw new ArgumentException($"At most {PieceAnchorBuffer.Length} pieces.");
+        var s = new PolyominoState();
         foreach (var p in topology.Pieces)
         {
             s._pieceAnchors[p.PieceId] = (byte)p.InitialAnchor;
@@ -117,8 +120,7 @@ public struct PolyominoState : IEquatable<PolyominoState>
     }
 
     /// <summary>
-    /// Flood fill that also records the shortest-path tree. <paramref name="parentMap"/> (length at least 25 for the Lab 2 board, else the
-    /// cell count) is filled with the predecessor anchor of every reachable anchor (-1 elsewhere, the start points at itself).
+    /// Flood fill that also records the shortest-path tree. <paramref name="parentMap"/> (length at least the cell count) is filled with the predecessor anchor of every reachable anchor (-1 elsewhere, the start points at itself).
     /// Destinations whose shortest path keeps one axis are returned in <paramref name="straightMovesMask"/>, those that turn a corner in
     /// <paramref name="hookMovesMask"/>. The result is the union of the two.
     /// </summary>
@@ -278,6 +280,15 @@ public sealed class PolyominoDomain : ISlidingBlockDomain<PolyominoState, Polyom
         int a = state.AnchorOf(pieceId);
         ulong other = state.OccupancyMask ^ (g.BaseMask << a);
         return PolyominoState.FindReachableAnchors(a, g.BaseMask, g.ValidAnchorsMask, other, Topology.Width, g.Directions);
+    }
+
+    /// <summary>The cells a piece passes through on its shortest way to <paramref name="targetAnchor"/> (start and target included), empty if it cannot get there.</summary>
+    public IReadOnlyList<int> PathFor(in PolyominoState state, int pieceId, int targetAnchor)
+    {
+        var g = Topology.Groups[Topology.Pieces[pieceId].GroupId];
+        int a = state.AnchorOf(pieceId);
+        ulong other = state.OccupancyMask ^ (g.BaseMask << a);
+        return PolyominoState.ReconstructHookPath(a, targetAnchor, g.BaseMask, g.ValidAnchorsMask, other, Topology.Width, g.Directions);
     }
 
     public int GenerateMoves(in PolyominoState state, Span<PolyominoMove> moveBuffer)
