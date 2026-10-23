@@ -26,6 +26,7 @@
     <File Path="docs/05-object-model.md" />
     <File Path="docs/06-labs.md" />
     <File Path="docs/README.md" />
+    <File Path="docs/glossary.md" />
     <File Path="docs/references.md" />
   </Folder>
   <Folder Name="/src/">
