@@ -1,0 +1,28 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path=".gitattributes" />
+    <File Path=".github/CODEOWNERS" />
+    <File Path=".github/dependabot.yml" />
+    <File Path=".github/pull_request_template.md" />
+    <File Path=".github/workflows/ci.yml" />
+    <File Path=".github/workflows/publish.yml" />
+    <File Path=".gitignore" />
+    <File Path="CLAUDE.md" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+    <File Path="LICENSE" />
+    <File Path="NOTICE" />
+    <File Path="PROMPT.md" />
+    <File Path="README.md" />
+    <File Path="SECURITY.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/E2e4.SlidingBlock.Logic/E2e4.SlidingBlock.Logic.csproj" />
+    <Project Path="src/E2e4.SlidingBlock.Logic.Labs.Wpf/E2e4.SlidingBlock.Logic.Labs.Wpf.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/E2e4.SlidingBlock.Logic.Test/E2e4.SlidingBlock.Logic.Test.csproj" />
+  </Folder>
+</Solution>

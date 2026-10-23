@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Product>E2e4 Sliding Block Logic</Product>
+    <Description>Zero-allocation bitboard engine and solvers (BFS, A*, IDA*) for sliding block puzzles: N-puzzle, Klotski, Rush Hour and polyominoes.</Description>
+    <PackageTags>sliding-puzzle;sliding-block;n-puzzle;klotski;rush-hour;polyomino;bitboard;solver</PackageTags>
+    <PackageReleaseNotes>See https://github.com/th3snark/E2e4.SlidingBlock.Logic/releases for what changed in each version.</PackageReleaseNotes>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageProjectUrl>https://github.com/th3snark/E2e4.SlidingBlock.Logic</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/th3snark/E2e4.SlidingBlock.Logic</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\assets\icon.png" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- nuget.org drops raw HTML such as the README's <img> icon and shows it as text, so the packed README is a copy without that line (GitHub keeps it). -->
+  <Target Name="PackReadmeWithoutIcon" BeforeTargets="_GetPackageFiles;GenerateNuspec">
+    <PropertyGroup>
+      <PackedReadme>$(MSBuildProjectDirectory)/obj/nuget/README.md</PackedReadme>
+      <PackedReadmeText>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../../README.md'))</PackedReadmeText>
+      <PackedReadmeText>$([System.Text.RegularExpressions.Regex]::Replace('$(PackedReadmeText)', '(?m)^&lt;img [^\r\n]*\r?\n(\r?\n)?', ''))</PackedReadmeText>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(PackedReadme)" Lines="$([MSBuild]::Escape('$(PackedReadmeText)'))" Overwrite="true" />
+    <ItemGroup>
+      <None Include="$(PackedReadme)" Pack="true" PackagePath="\" />
+    </ItemGroup>
+  </Target>
+
+</Project>

@@ -1,0 +1,76 @@
+<UserControl x:Class="E2e4.SlidingBlock.Logic.Labs.Wpf.Lab1.Lab1View"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:w="clr-namespace:E2e4.SlidingBlock.Logic.Labs.Wpf">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+            <RadioButton x:Name="ModeNPuzzle" Style="{StaticResource Segmented}" GroupName="mode" IsChecked="True"
+                         Content="15-Puzzle  (4x4 nibble-packed uint64)" Checked="OnModeChecked"/>
+            <RadioButton x:Name="ModeKlotski" Style="{StaticResource Segmented}" GroupName="mode"
+                         Content="Klotski  (4x5 bitboards + 60-bit shape key)" Checked="OnModeChecked"/>
+            <RadioButton x:Name="ModeRush" Style="{StaticResource Segmented}" GroupName="mode"
+                         Content="Rush Hour  (6x6 lane-offset packing)" Checked="OnModeChecked"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto"><Border Style="{StaticResource Panel}" VerticalAlignment="Top">
+                <StackPanel Width="500">
+                    <TextBlock x:Name="TitleText" FontSize="18" FontWeight="SemiBold" Foreground="White"/>
+                    <TextBlock x:Name="ReprText" TextWrapping="Wrap" Foreground="{StaticResource Muted}" Margin="0,4,0,12" FontSize="12"/>
+                    <Border Background="{StaticResource Bg0}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="6"
+                            HorizontalAlignment="Center" Padding="10">
+                        <Canvas x:Name="Board" Width="460" Height="460" ClipToBounds="False"/>
+                    </Border>
+                    <WrapPanel Margin="0,14,0,0">
+                        <Button x:Name="RandomButton" Content="Random Valid Move" Click="OnRandom"/>
+                        <Button x:Name="HintButton" Content="Solve Step (BFS Hint)" Click="OnHint"/>
+                        <Button x:Name="ResetButton" Content="Reset Board" Click="OnReset"/>
+                    </WrapPanel>
+                    <TextBlock x:Name="StatusText" Foreground="{StaticResource Gold}" FontSize="13" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border></ScrollViewer>
+
+            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <Border Style="{StaticResource Panel}">
+                        <StackPanel>
+                            <TextBlock Text="64-BIT PACKED STATE REGISTER" Style="{StaticResource SectionTitle}" Margin="0,0,0,6"/>
+                            <TextBlock x:Name="RegisterHex" Style="{StaticResource MonoText}" FontSize="20" Foreground="{StaticResource Gold}"/>
+                            <TextBlock x:Name="RegisterCaption" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,2,0,8"/>
+                            <w:RegisterView x:Name="Register" HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Panel}" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="BINARY OCCUPANCY BITBOARD" Style="{StaticResource SectionTitle}" Margin="0,0,0,6"/>
+                            <StackPanel Orientation="Horizontal">
+                                <w:BitGridView x:Name="Occupancy"/>
+                                <StackPanel Margin="16,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock x:Name="OccupancyHex" Style="{StaticResource MonoText}" FontSize="16"/>
+                                    <TextBlock x:Name="OccupancyCaption" Foreground="{StaticResource Muted}" FontSize="11"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Panel}" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="LIVE BITWISE MOVE FORMULA TRACE" Style="{StaticResource SectionTitle}" Margin="0,0,0,6"/>
+                            <TextBlock x:Name="TraceText" Style="{StaticResource MonoText}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>
