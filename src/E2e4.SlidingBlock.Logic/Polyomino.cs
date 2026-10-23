@@ -223,13 +223,37 @@ public sealed class PolyominoDomain : ISlidingBlockDomain<PolyominoState, Polyom
         InitialState = PolyominoState.FromTopology(topology);
     }
 
+    /// <summary>
+    /// The puzzle is solved when the position equals <paramref name="goal"/>. Pieces of one group are interchangeable, so only which
+    /// group sits where matters (see <see cref="PolyominoState"/>). Build the goal with <see cref="PolyominoState.FromTopology"/> from a
+    /// topology that has the same groups, in the same order, as <paramref name="topology"/>.
+    /// </summary>
+    public PolyominoDomain(PuzzleTopology topology, PolyominoState goal)
+    {
+        Topology = topology;
+        GoalGroupId = GoalAnchor = -1;
+        _goal = goal;
+        _hasGoalPosition = true;
+        InitialState = PolyominoState.FromTopology(topology);
+    }
+
+    private readonly PolyominoState _goal;
+    private readonly bool _hasGoalPosition;
+
     public PuzzleTopology Topology { get; }
+
+    /// <summary>Goal of the single-group constructor; -1 when the goal is a whole position (<see cref="GoalPosition"/>).</summary>
     public int GoalGroupId { get; }
     public int GoalAnchor { get; }
+
+    /// <summary>The goal position when the domain was built with one, otherwise null.</summary>
+    public PolyominoState? GoalPosition => _hasGoalPosition ? _goal : null;
+
     public PolyominoState InitialState { get; }
     public int MaxMoves => Topology.Pieces.Count * Topology.CellCount;
 
-    public bool IsGoal(in PolyominoState state) => state.GroupAnchorsOf(GoalGroupId) == 1UL << GoalAnchor;
+    public bool IsGoal(in PolyominoState state) =>
+        _hasGoalPosition ? state.Equals(_goal) : state.GroupAnchorsOf(GoalGroupId) == 1UL << GoalAnchor;
 
     public ulong ReachableFor(in PolyominoState state, int pieceId)
     {

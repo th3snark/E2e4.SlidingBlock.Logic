@@ -74,7 +74,7 @@ classDiagram
 ## 5.1a What the engine does not know
 
 Goals are data. `NPuzzleDomain(initial, goal)`, `KlotskiDomain(topology, masterPieceId, goalAnchor)`, `RushHourDomain(topology, goalVehicle, goalOffset)`
-and `PolyominoDomain(topology, goalGroupId, goalAnchor)` receive the answer from the puzzle that uses them. The engine has no layouts
+and `PolyominoDomain(topology, goalGroupId, goalAnchor)` (or `PolyominoDomain(topology, goalPosition)` for a whole-position goal where identical pieces are interchangeable) receive the answer from the puzzle that uses them. The engine has no layouts
 (the classic Klotski map, the Rush Hour boards), no notion of where the blank belongs, no goal-relative heuristic baked into a state
 (`NPuzzleDomain.ManhattanDistance` is measured against the goal it was given) and no colours. Layouts and goals live in the puzzle
 definitions of the consumers (`E2e4.SlidingBlock.Puzzles.Core`; `LabPuzzles` in the Labs).

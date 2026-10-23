@@ -492,3 +492,24 @@ public class PlaySessionTests
         Assert.Null(await play.HintAsync((_, _) => null));
     }
 }
+
+public class PolyominoGoalPositionTests
+{
+    [Fact]
+    public void GoalCanBeAWholePositionInWhichIdenticalPiecesAreInterchangeable()
+    {
+        var lab = LabPuzzles.CreateLab2();
+        var topo = lab.Topology;
+        var domain = new PolyominoDomain(topo, lab.InitialState);
+        Assert.NotNull(domain.GoalPosition);
+        Assert.Equal(-1, domain.GoalGroupId);
+        Assert.True(domain.IsGoal(domain.InitialState));
+
+        // Swapping the two identical 1x1 blocks (pieces 3 and 4) is still the goal; moving a different piece is not.
+        int a = lab.InitialState.AnchorOf(3), b = lab.InitialState.AnchorOf(4);
+        var swapped = lab.InitialState.WithPieceMoved(topo, 3, 24).WithPieceMoved(topo, 4, a).WithPieceMoved(topo, 3, b);
+        Assert.True(domain.IsGoal(swapped));
+        Assert.False(domain.IsGoal(lab.InitialState.WithPieceMoved(topo, 3, 24)));
+        Assert.Null(lab.GoalPosition);
+    }
+}
