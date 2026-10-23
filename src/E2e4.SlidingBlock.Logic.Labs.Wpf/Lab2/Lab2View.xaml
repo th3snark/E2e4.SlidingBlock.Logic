@@ -35,7 +35,6 @@
                         <Button x:Name="SwapButton" Content="Swap Identical 1x1 Pieces (Test Symmetry)" Click="OnSwap"/>
                         <Button x:Name="PresetButton" Content="Load Hook-Move Demo Preset" Click="OnPreset"/>
                         <Button x:Name="RandomButton" Content="Random Valid Move" Click="OnRandom"/>
-                        <Button x:Name="HintButton" Content="Solve Step (BFS Hint)" Click="OnHint"/>
                         <Button x:Name="UndoButton" Content="Undo Move" Click="OnUndo"/>
                         <Button x:Name="ResetButton" Content="Reset Board" Click="OnReset"/>
                     </WrapPanel>

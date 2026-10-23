@@ -18,7 +18,6 @@ public partial class Lab1View : UserControl
     private readonly List<UIElement> _arrows = [];
     private PuzzleSession _session = null!;
     private double _cell;
-    private bool _busy;
     private int _animating;
     private ulong _hoverMask, _prevSecondary;
     private int _focusPiece = -1;
@@ -118,7 +117,7 @@ public partial class Lab1View : UserControl
         OccupancyHex.Text = _session.OccupancyHex;
         TraceText.Text = _session.Trace;
         RegisterCaption.Text = $"{_session.RegisterLayout.Caption}; groups drawn from the most significant end; 64 bits = 8 bytes (ulong)";
-        UndoButton.IsEnabled = _session.CanUndo && !_busy && _animating == 0;
+        UndoButton.IsEnabled = _session.CanUndo && _animating == 0;
         ApplyHover(0);
         StatusText.Text = _session.IsSolved ? $"Solved in {_session.MoveCount} moves!" : $"Moves: {_session.MoveCount}   |   legal moves: {_session.LegalMoves.Count}";
     }
@@ -372,7 +371,7 @@ public partial class Lab1View : UserControl
 
     private void TryApply(int index)
     {
-        if (_busy || _animating > 0) return;
+        if (_animating > 0) return;
         _focusPiece = _session.LegalMoves[index].PieceId;
         _session.Apply(index);
     }
@@ -412,7 +411,7 @@ public partial class Lab1View : UserControl
                 if (--_animating == 0)
                 {
                     BuildArrows();
-                    UndoButton.IsEnabled = _session.CanUndo && !_busy;
+                    UndoButton.IsEnabled = _session.CanUndo;
                 }
             };
             v.BeginAnimation(Canvas.LeftProperty, ax);
@@ -426,57 +425,33 @@ public partial class Lab1View : UserControl
     private void OnRandom(object sender, RoutedEventArgs e)
     {
         var moves = _session.LegalMoves;
-        if (_animating == 0 && !_busy && moves.Count > 0) TryApply(moves[Random.Shared.Next(moves.Count)].Index);
+        if (_animating == 0 && moves.Count > 0) TryApply(moves[Random.Shared.Next(moves.Count)].Index);
     }
 
     private void OnReset(object sender, RoutedEventArgs e)
     {
-        if (_busy || _animating > 0) return;
+        if (_animating > 0) return;
         _focusPiece = -1;
         _session.Reset();
     }
 
     private void OnUndo(object sender, RoutedEventArgs e)
     {
-        if (_busy || _animating > 0) return;
+        if (_animating > 0) return;
         _focusPiece = -1;
         _session.Undo();
     }
 
     private void OnScramble(object sender, RoutedEventArgs e)
     {
-        if (_busy || _animating > 0) return;
+        if (_animating > 0) return;
         _focusPiece = -1;
         _session.Scramble();
     }
 
-    private async void OnHint(object sender, RoutedEventArgs e)
-    {
-        if (_busy || _animating > 0) return;
-        _busy = true;
-        SetButtons(false);
-        var session = _session;
-        StatusText.Text = "Searching for the optimal next move...";
-        try
-        {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-            bool ok = await session.HintStepAsync(cts.Token);
-            if (!ok && ReferenceEquals(session, _session) && !session.IsSolved) StatusText.Text = "No solution found within the search limits.";
-        }
-        catch (OperationCanceledException)
-        {
-            StatusText.Text = "Solver timed out.";
-        }
-        finally
-        {
-            _busy = false;
-            SetButtons(true);
-        }
-    }
-
     private void SetButtons(bool enabled)
     {
-        RandomButton.IsEnabled = HintButton.IsEnabled = ResetButton.IsEnabled = ScrambleButton.IsEnabled = enabled;
+        RandomButton.IsEnabled = ResetButton.IsEnabled = ScrambleButton.IsEnabled = enabled;
         UndoButton.IsEnabled = enabled && _session.CanUndo;
     }
 }

@@ -559,7 +559,7 @@ public partial class Lab2View : UserControl
 
     private void SetButtons(bool on)
     {
-        SwapButton.IsEnabled = HintButton.IsEnabled = ResetButton.IsEnabled = PresetButton.IsEnabled = RandomButton.IsEnabled = on;
+        SwapButton.IsEnabled = ResetButton.IsEnabled = PresetButton.IsEnabled = RandomButton.IsEnabled = on;
         UndoButton.IsEnabled = on && _history.Count > 0;
     }
 
@@ -575,25 +575,6 @@ public partial class Lab2View : UserControl
         Banner.Visibility = Visibility.Collapsed;
         SyncPositions();
         RefreshAll();
-    }
-
-    private async void OnHint(object sender, RoutedEventArgs e)
-    {
-        if (_busy) return;
-        if (_d.IsGoal(_state)) { StatusText.Text = "Already solved."; return; }
-        _busy = true;
-        SetButtons(false);
-        StatusText.Text = "Searching...";
-        var start = _state;
-        var result = await Task.Run(() => new PuzzleSolver().SolveBfs(_d, start));
-        _busy = false;
-        SetButtons(true);
-        if (result is null || result.Moves.Count == 0) { StatusText.Text = "No solution found."; return; }
-        var m = result.Moves[0];
-        _selected = m.PieceId;
-        var (other, g, a) = Context(m.PieceId);
-        var path = PolyominoState.ReconstructHookPath(a, m.TargetAnchor, g.BaseMask, g.ValidAnchorsMask, other, N, g.Directions);
-        MoveSelected(m.TargetAnchor, path);
     }
 
     private void OnSwap(object sender, RoutedEventArgs e)

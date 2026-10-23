@@ -61,7 +61,6 @@ public abstract class PuzzleSession : ObservableObject
 
     public abstract void Apply(int moveIndex);
     public abstract void Reset();
-    public abstract Task<bool> HintStepAsync(CancellationToken ct);
 
     public void RandomMove()
     {
@@ -85,7 +84,7 @@ public abstract class PuzzleSession : ObservableObject
     }
 }
 
-/// <summary>Shared plumbing: state, legal moves, undo-free history and cached solver hints.</summary>
+/// <summary>Shared plumbing: state, legal moves and undo history.</summary>
 public abstract class PuzzleSession<TState, TMove> : PuzzleSession
     where TState : struct, IEquatable<TState>
     where TMove : struct, IEquatable<TMove>
@@ -112,7 +111,6 @@ public abstract class PuzzleSession<TState, TMove> : PuzzleSession
     protected abstract ulong RegisterOf(TState state);
     protected abstract ulong OccupancyOf(TState state);
     protected abstract string BuildTrace(TState before, TMove move, TState after);
-    protected virtual SolveResult<TMove>? Solve(TState start, CancellationToken ct) => new PuzzleSolver().SolveBfs(_domain, start, ct);
 
     public override IReadOnlyList<PieceView> Pieces => _pieces;
     public override IReadOnlyList<MoveView> LegalMoves => _legalViews;
@@ -177,15 +175,6 @@ public abstract class PuzzleSession<TState, TMove> : PuzzleSession
         _play.Begin(state);
         MoveCount = 0;
         Refresh(false, 0);
-    }
-
-    public override async Task<bool> HintStepAsync(CancellationToken ct)
-    {
-        TMove? next = await _play.HintAsync(Solve, ct);
-        if (next is null) return false;
-        for (int i = 0; i < _legalCount; i++)
-            if (_buffer[i].Equals(next.Value)) { Apply(i); return true; }
-        return false;
     }
 
     protected static string Row(string name, string value) => $"{name,-26}{value}\n";
@@ -287,9 +276,6 @@ public sealed class NPuzzleSession : PuzzleSession<NPuzzleState, NPuzzleMove>
         sb.Append(Row("inverse map (tile->square)", $"0x{after.InverseMap:X16}"));
         return sb.ToString();
     }
-
-    protected override SolveResult<NPuzzleMove>? Solve(NPuzzleState start, CancellationToken ct) =>
-        new PuzzleSolver { MaxNodes = 60_000_000 }.SolveIdaStar(Domain, start, _n.ManhattanDistance, ct);
 }
 
 // ---------------------------------------------------------------------------------------------------------------

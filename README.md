@@ -34,7 +34,7 @@ Console.WriteLine(new PuzzleSolver().SolveBfs(rushHour, rushHour.InitialState)?.
 - `PuzzleTopology` and `PuzzleTopologyBuilder`: build a board from an ASCII map or relative cell lists, with LSB normalisation and precomputed
   valid-anchor masks.
 - `PuzzleSolver`: generic BFS, A* and IDA*.
-- `PuzzleWalk` and `PlaySession<TState, TMove>`: a generic random walk (for solvable shuffles) and the undo / reset / cached-hint bookkeeping
+- `PuzzleWalk` and `PlaySession<TState, TMove>`: a generic random walk (for solvable shuffles) and the undo / reset bookkeeping
   every interactive puzzle needs.
 
 The engine contains no puzzle: no layouts, no goal positions, no colours. A puzzle (the sibling `E2e4.SlidingBlock.Puzzles` app, or the

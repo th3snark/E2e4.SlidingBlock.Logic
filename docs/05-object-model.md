@@ -27,7 +27,6 @@ classDiagram
     }
     class PlaySession~TState,TMove~ {
         +Apply() Undo() Reset()
-        +HintAsync()
     }
     class PuzzleTopology {
         +Width, Height

@@ -9,9 +9,9 @@ A mode selector switches between three puzzles, each with an interactive board, 
 
 | Mode | Register shown | Notes |
 |------|----------------|-------|
-| 15-puzzle | 16 nibbles of the `ulong` | starts from a 30-move scramble; hints use IDA* + Manhattan |
-| Klotski | 20 three-bit shape codes (the canonical key) | classic 4x5 layout; hints use BFS |
-| Rush Hour | one 3-bit offset per vehicle | the 8-vehicle layout from the brief (`LabPuzzles.CreateRushHour`), red car must reach offset 4; hints use BFS |
+| 15-puzzle | 16 nibbles of the `ulong` | starts from a 30-move scramble |
+| Klotski | 20 three-bit shape codes (the canonical key) | classic 4x5 layout |
+| Rush Hour | one 3-bit offset per vehicle | the 8-vehicle layout from the brief (`LabPuzzles.CreateRushHour`), red car must reach offset 4 |
 
 The Klotski register uses the shape classes `1 = 1x1`, `2 = 1x2 vertical`, `3 = 2x1 horizontal`, `4 = 2x2` (the legend order in
 `LabPuzzles.CreateKlotski`).
@@ -29,8 +29,7 @@ The inspector has these parts:
 Hovering a block or cell outlines its cells on the board, the matching register groups and the occupancy bits; hovering a register
 group does the reverse. Every cell is labelled with its bit index and `(row, col)`.
 
-Buttons: `Random Valid Move`, `Step Optimal (BFS Hint)` (applies the next move of an optimal solution, computed off the UI thread and
-cached), `Undo Move`, `Scramble (Solvable)` (a random walk from the initial state), `Reset Board`.
+Buttons: `Random Valid Move`, `Undo Move`, `Scramble (Solvable)` (a random walk from the initial state), `Reset Board`.
 
 ## Lab 2: polyominoes and hook moves
 
@@ -58,7 +57,7 @@ A 5x5 board (bits `0..24`) with a static wall on square 12:
 | Selected-piece breakdown | ids, `(dRow,dCol)` offsets, `BaseMask`, anchor, `PieceMask`, `ValidAnchorsMask`, `OtherOccupancy`, reachable / straight / hook masks as hex, binary and 5x5 grids (`FindReachableAnchors` with its parent map) |
 | Canonical state panel | `GroupAnchors[0..3]` with set anchors and `PopCount`, occupancy, `ZobristHash`, an incremental-versus-recomputed hash badge, and the full `Z[g,old] ^ Z[g,new]` derivation of the last action |
 
-The goal is to bring the master L to anchor 16. A BFS hint solves it in two moves, because hook moves make the board very open.
+The goal is to bring the master L to anchor 16.
 
 ## Reference tab
 

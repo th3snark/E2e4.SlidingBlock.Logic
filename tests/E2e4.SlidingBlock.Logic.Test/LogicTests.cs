@@ -455,42 +455,6 @@ public class PlaySessionTests
         Assert.Equal(start, play.State);
         Assert.Equal(0, play.MoveCount);
     }
-
-    [Fact]
-    public async Task HintPlanIsCachedWhileFollowedAndDroppedOtherwise()
-    {
-        var play = NewSession(out var domain);
-        int searches = 0;
-        SolveResult<NPuzzleMove>? Solve(NPuzzleState s, CancellationToken ct)
-        {
-            searches++;
-            return new PuzzleSolver().SolveIdaStar(domain, s, domain.ManhattanDistance, ct);
-        }
-
-        var first = await play.HintAsync(Solve);
-        Assert.NotNull(first);
-        play.Apply(first.Value);
-        var second = await play.HintAsync(Solve);
-        Assert.NotNull(second);
-        Assert.Equal(1, searches);
-
-        // Playing something other than the hinted move invalidates the plan.
-        Span<NPuzzleMove> buf = stackalloc NPuzzleMove[domain.MaxMoves];
-        int n = domain.GenerateMoves(play.State, buf);
-        var other = buf[..n].ToArray().First(m => !m.Equals(second.Value));
-        play.Apply(other);
-        await play.HintAsync(Solve);
-        Assert.Equal(2, searches);
-    }
-
-    [Fact]
-    public async Task HintIsNullWhenSolved()
-    {
-        var domain = LabPuzzles.CreatePuzzle15();
-        var play = new PlaySession<NPuzzleState, NPuzzleMove>(domain, domain.Goal);
-        Assert.True(play.IsSolved);
-        Assert.Null(await play.HintAsync((_, _) => null));
-    }
 }
 
 public class PolyominoGoalPositionTests
