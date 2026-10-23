@@ -18,6 +18,16 @@
     <File Path="README.md" />
     <File Path="SECURITY.md" />
   </Folder>
+  <Folder Name="/docs/">
+    <File Path="docs/01-representations.md" />
+    <File Path="docs/02-lsb-normalisation.md" />
+    <File Path="docs/03-valid-anchors-and-hook-moves.md" />
+    <File Path="docs/04-zobrist-and-group-anchors.md" />
+    <File Path="docs/05-object-model.md" />
+    <File Path="docs/06-labs.md" />
+    <File Path="docs/README.md" />
+    <File Path="docs/references.md" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/E2e4.SlidingBlock.Logic/E2e4.SlidingBlock.Logic.csproj" />
     <Project Path="src/E2e4.SlidingBlock.Logic.Labs.Wpf/E2e4.SlidingBlock.Logic.Labs.Wpf.csproj" />

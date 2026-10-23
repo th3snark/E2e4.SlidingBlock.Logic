@@ -34,6 +34,11 @@ Console.WriteLine(new PuzzleSolver().SolveBfs(rushHour, rushHour.InitialState)?.
 `E2e4.SlidingBlock.Logic.Labs.Wpf` in the repository is a WPF application with two laboratories that show the bitboards and the solvers
 working. It is not part of the package.
 
+## Documentation
+
+The research and design notes behind the object model (representations, LSB normalisation, valid anchors and hook moves, Zobrist
+hashing, with diagrams) are in [docs](https://github.com/th3snark/E2e4.SlidingBlock.Logic/blob/master/docs/README.md).
+
 ## Build and test
 
 ```

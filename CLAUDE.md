@@ -14,7 +14,7 @@ for the N-puzzle, Klotski, Rush Hour and polyominoes. `PROMPT.md` is the origina
 - `src/E2e4.SlidingBlock.Logic.Labs.Wpf/` — WPF application with the two laboratories (`Lab1`, `Lab2`). Private, not packed; it sets
   `EnableWindowsTargeting` so the Linux CI runners can build it.
 - `tests/E2e4.SlidingBlock.Logic.Test/` — xUnit tests (net10.0).
-- `assets/icon.png` / `icon.svg` — the package icon: the E2e4 frame, a Klotski board and the Logic badge shared with E2e4.Chess.Logic.
+- `docs/` — markdown research notes and design explanations with Mermaid diagrams (start at `docs/README.md`); keep them in step with\r\n  the code when the object model changes.\r\n- `assets/icon.png` / `icon.svg` — the package icon: the E2e4 frame, a Klotski board and the Logic badge shared with E2e4.Chess.Logic.
   `assets/Build-Icon.ps1` rasterises the SVG (Windows PowerShell, `-STA`); edit the SVG, not the PNG.
 
 ## Rules
