@@ -74,7 +74,7 @@ classDiagram
 ## 5.1a What the engine does not know
 
 Goals are data. `NPuzzleDomain(initial, goal)`, `KlotskiDomain(topology, masterPieceId, goalAnchor)`, `RushHourDomain(topology, goalVehicle, goalOffset)`
-and `PolyominoDomain(topology, goalGroupId, goalAnchor)` (or `PolyominoDomain(topology, goalPosition)` for a whole-position goal where identical pieces are interchangeable) receive the answer from the puzzle that uses them. The engine has no layouts
+and `PolyominoDomain(topology, goalGroupId, goalAnchor)` (or `PolyominoDomain(topology, goalPosition)` for a whole-position goal where identical pieces are interchangeable, optionally ignoring some groups) receive the answer from the puzzle that uses them. The engine has no layouts
 (the classic Klotski map, the Rush Hour boards), no notion of where the blank belongs, no goal-relative heuristic baked into a state
 (`NPuzzleDomain.ManhattanDistance` is measured against the goal it was given) and no colours. Layouts and goals live in the puzzle
 definitions of the consumers (`E2e4.SlidingBlock.Puzzles.Core`; `LabPuzzles` in the Labs).
@@ -100,7 +100,7 @@ Pieces whose normalised shape, directions and role match join the same group.
 | `NPuzzleState` (`readonly struct`) | 8 bytes | `PackedNibbles` |
 | `RushHourState` (`readonly struct`) | 8 bytes | `PackedOffsets` (3 bits per vehicle) |
 | `KlotskiState` (`readonly struct`) | | `[InlineArray(10)]` piece anchors, `OccupancyMask` (20 bits), `CanonicalShapeKey` (60 bits) |
-| `PolyominoState` (`struct`) | | `[InlineArray(8)]` `GroupAnchors`, `[InlineArray(16)]` piece anchors, `OccupancyMask`, `ZobristHash` |
+| `PolyominoState` (`struct`) | | `[InlineArray(16)]` `GroupAnchors`, `[InlineArray(16)]` piece anchors, `OccupancyMask`, `ZobristHash` |
 
 `[InlineArray]` gives fixed-size buffers inside the struct with no heap object. For `PolyominoState` and `KlotskiState`, equality
 deliberately ignores the per-piece anchor buffer; see [section 4](04-zobrist-and-group-anchors.md).

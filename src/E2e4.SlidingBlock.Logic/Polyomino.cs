@@ -3,9 +3,12 @@ using System.Runtime.CompilerServices;
 
 namespace E2e4.SlidingBlock.Logic;
 
-[InlineArray(8)]
+[InlineArray(GroupAnchorBuffer.Length)]
 public struct GroupAnchorBuffer
 {
+    /// <summary>The most equivalence groups a <see cref="PolyominoState"/> can hold.</summary>
+    public const int Length = 16;
+
     private ulong _element0;
 }
 
@@ -27,7 +30,7 @@ public struct PolyominoState : IEquatable<PolyominoState>
 
     public static PolyominoState FromTopology(PuzzleTopology topology)
     {
-        if (topology.Groups.Count > 8) throw new ArgumentException("At most 8 equivalence groups.");
+        if (topology.Groups.Count > GroupAnchorBuffer.Length) throw new ArgumentException($"At most {GroupAnchorBuffer.Length} equivalence groups.");
         if (topology.Pieces.Count > 16) throw new ArgumentException("At most 16 pieces.");
         var s = new PolyominoState { OccupancyMask = topology.StaticWallsMask & 0 };
         foreach (var p in topology.Pieces)
@@ -63,7 +66,7 @@ public struct PolyominoState : IEquatable<PolyominoState>
     public readonly bool Equals(PolyominoState other)
     {
         if (ZobristHash != other.ZobristHash) return false;
-        for (int g = 0; g < 8; g++)
+        for (int g = 0; g < GroupAnchorBuffer.Length; g++)
             if (_groupAnchors[g] != other._groupAnchors[g]) return false;
         return true;
     }
@@ -226,18 +229,21 @@ public sealed class PolyominoDomain : ISlidingBlockDomain<PolyominoState, Polyom
     /// <summary>
     /// The puzzle is solved when the position equals <paramref name="goal"/>. Pieces of one group are interchangeable, so only which
     /// group sits where matters (see <see cref="PolyominoState"/>). Build the goal with <see cref="PolyominoState.FromTopology"/> from a
-    /// topology that has the same groups, in the same order, as <paramref name="topology"/>.
+    /// topology that has the same groups, in the same order, as <paramref name="topology"/>. Bit g of <paramref name="matchedGroups"/>
+    /// says whether group g has to match the goal; groups left out may end up anywhere.
     /// </summary>
-    public PolyominoDomain(PuzzleTopology topology, PolyominoState goal)
+    public PolyominoDomain(PuzzleTopology topology, PolyominoState goal, ulong matchedGroups = ulong.MaxValue)
     {
         Topology = topology;
         GoalGroupId = GoalAnchor = -1;
         _goal = goal;
+        _matchedGroups = matchedGroups;
         _hasGoalPosition = true;
         InitialState = PolyominoState.FromTopology(topology);
     }
 
     private readonly PolyominoState _goal;
+    private readonly ulong _matchedGroups;
     private readonly bool _hasGoalPosition;
 
     public PuzzleTopology Topology { get; }
@@ -252,8 +258,18 @@ public sealed class PolyominoDomain : ISlidingBlockDomain<PolyominoState, Polyom
     public PolyominoState InitialState { get; }
     public int MaxMoves => Topology.Pieces.Count * Topology.CellCount;
 
-    public bool IsGoal(in PolyominoState state) =>
-        _hasGoalPosition ? state.Equals(_goal) : state.GroupAnchorsOf(GoalGroupId) == 1UL << GoalAnchor;
+    public bool IsGoal(in PolyominoState state)
+    {
+        if (!_hasGoalPosition) return state.GroupAnchorsOf(GoalGroupId) == 1UL << GoalAnchor;
+        if (_matchedGroups == ulong.MaxValue) return state.Equals(_goal);
+        for (ulong m = _matchedGroups; m != 0; m &= m - 1)
+        {
+            int g = BitOperations.TrailingZeroCount(m);
+            if (g >= GroupAnchorBuffer.Length) break;
+            if (state.GroupAnchorsOf(g) != _goal.GroupAnchorsOf(g)) return false;
+        }
+        return true;
+    }
 
     public ulong ReachableFor(in PolyominoState state, int pieceId)
     {

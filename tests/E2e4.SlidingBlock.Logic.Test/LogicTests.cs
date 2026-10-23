@@ -512,4 +512,29 @@ public class PolyominoGoalPositionTests
         Assert.False(domain.IsGoal(lab.InitialState.WithPieceMoved(topo, 3, 24)));
         Assert.Null(lab.GoalPosition);
     }
+
+    [Fact]
+    public void GroupsLeftOutOfTheMatchMaskMayEndUpAnywhere()
+    {
+        var lab = LabPuzzles.CreateLab2();
+        var topo = lab.Topology;
+        // Only group 0 (the L) has to match: moving the T (group 1) does not matter, moving the L does.
+        var domain = new PolyominoDomain(topo, lab.InitialState, matchedGroups: 1UL << 0);
+        Assert.True(domain.IsGoal(lab.InitialState));
+        Assert.True(domain.IsGoal(lab.InitialState.WithPieceMoved(topo, 1, 22)));
+        Assert.False(domain.IsGoal(lab.InitialState.WithPieceMoved(topo, 0, 22)));
+    }
+
+    [Fact]
+    public void StateHoldsSixteenGroups()
+    {
+        var b = PuzzleTopology.CreateBuilder(4, 4);
+        for (int g = 0; g < GroupAnchorBuffer.Length; g++)
+        {
+            int group = b.AddGroup($"g{g}", [(0, 0)]);
+            b.AddPiece(group, $"p{g}", g);
+        }
+        var state = PolyominoState.FromTopology(b.Build());
+        for (int g = 0; g < GroupAnchorBuffer.Length; g++) Assert.Equal(1UL << g, state.GroupAnchorsOf(g));
+    }
 }
