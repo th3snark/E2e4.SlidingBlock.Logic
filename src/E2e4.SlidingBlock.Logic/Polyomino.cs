@@ -113,6 +113,59 @@ public struct PolyominoState : IEquatable<PolyominoState>
         return reachable;
     }
 
+    /// <summary>
+    /// Flood fill that also records the shortest-path tree. <paramref name="parentMap"/> (length at least 25 for the Lab 2 board, else the
+    /// cell count) is filled with the predecessor anchor of every reachable anchor (-1 elsewhere, the start points at itself).
+    /// Destinations whose shortest path keeps one axis are returned in <paramref name="straightMovesMask"/>, those that turn a corner in
+    /// <paramref name="hookMovesMask"/>. The result is the union of the two.
+    /// </summary>
+    public static ulong FindReachableAnchors(int startAnchor, ulong baseMask, ulong validAnchorsMask, ulong otherOccupancy, int boardWidth,
+        Span<sbyte> parentMap, out ulong straightMovesMask, out ulong hookMovesMask, AllowedDirections directions = AllowedDirections.Both)
+    {
+        ulong free = FreeAnchors(startAnchor, baseMask, validAnchorsMask, otherOccupancy);
+        ulong col0 = 0;
+        for (int i = 0; i < 64; i += boardWidth) col0 |= 1UL << i;
+        ulong notCol0 = ~col0, notLastCol = ~(col0 << (boardWidth - 1));
+        bool horiz = (directions & AllowedDirections.Horizontal) != 0, vert = (directions & AllowedDirections.Vertical) != 0;
+
+        parentMap.Fill(-1);
+        parentMap[startAnchor] = (sbyte)startAnchor;
+        ulong visitedOrInvalid = ~free | (1UL << startAnchor);
+        ulong frontier = 1UL << startAnchor, reachable = 0;
+        while (frontier != 0)
+        {
+            ulong next = 0;
+            if (horiz) next |= ((frontier << 1) & notCol0) | ((frontier >> 1) & notLastCol);
+            if (vert) next |= (frontier << boardWidth) | (frontier >> boardWidth);
+            next &= ~visitedOrInvalid;
+            visitedOrInvalid |= next;
+            reachable |= next;
+            for (ulong n = next; n != 0; n &= n - 1)
+            {
+                int a = BitOperations.TrailingZeroCount(n);
+                ulong around = 0;
+                if (horiz) around |= ((1UL << a) << 1 & notCol0) | ((1UL << a) >> 1 & notLastCol);
+                if (vert) around |= ((1UL << a) << boardWidth) | ((1UL << a) >> boardWidth);
+                parentMap[a] = (sbyte)BitOperations.TrailingZeroCount(around & frontier);
+            }
+            frontier = next;
+        }
+
+        straightMovesMask = 0;
+        hookMovesMask = 0;
+        for (ulong r = reachable; r != 0; r &= r - 1)
+        {
+            int dest = BitOperations.TrailingZeroCount(r);
+            bool sawH = false, sawV = false;
+            for (int a = dest; a != startAnchor; a = parentMap[a])
+            {
+                if (Math.Abs(a - parentMap[a]) == 1) sawH = true; else sawV = true;
+            }
+            if (sawH && sawV) hookMovesMask |= 1UL << dest; else straightMovesMask |= 1UL << dest;
+        }
+        return reachable;
+    }
+
     /// <summary>Shortest step-by-step anchor trajectory (start..target inclusive) or empty if unreachable.</summary>
     public static IReadOnlyList<int> ReconstructHookPath(int startAnchor, int targetAnchor, ulong baseMask, ulong validAnchorsMask,
         ulong otherOccupancy, int boardWidth, AllowedDirections directions = AllowedDirections.Both)
@@ -176,10 +229,10 @@ public sealed class PolyominoDomain : ISlidingBlockDomain<PolyominoState, Polyom
     {
         var b = PuzzleTopology.CreateBuilder(5, 5);
         b.AddWall(2, 2);
-        int l = b.AddGroup("Master L-Tromino", "#F5B301", [(0, 0), (1, 0), (1, 1)]);
-        int t = b.AddGroup("Upward T-Tetromino", "#22D3EE", [(0, 0), (1, -1), (1, 0), (1, 1)]);
+        int l = b.AddGroup("L-Tromino", "#F5B301", [(0, 0), (1, 0), (1, 1)]);
+        int t = b.AddGroup("Upward T", "#22D3EE", [(0, 0), (1, -1), (1, 0), (1, 1)]);
         int j = b.AddGroup("J-Tromino", "#A855F7", [(0, 0), (1, -1), (1, 0)]);
-        int s = b.AddGroup("Identical 1x1 Blocks", "#10B981", [(0, 0)]);
+        int s = b.AddGroup("1x1 Single", "#10B981", [(0, 0)]);
         b.AddPiece(l, "L", 0);
         b.AddPiece(t, "T", 16);
         b.AddPiece(j, "J", 4);

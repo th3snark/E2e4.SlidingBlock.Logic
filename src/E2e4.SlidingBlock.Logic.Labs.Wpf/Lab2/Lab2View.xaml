@@ -14,13 +14,14 @@
                 <StackPanel Width="500">
                     <TextBlock Text="Polyomino &amp; Hook-Move Laboratory" FontSize="18" FontWeight="SemiBold" Foreground="White"/>
                     <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Muted}" Margin="0,4,0,10" FontSize="12"
-                               Text="5x5 board (bits 0..24). Every piece is anchored on its first occupied cell in row-major order, tzcnt(mask) - the gold star. Click a piece, then a destination: ring = 1-step slide, teal = straight multi-step slide, orange = corner hook. Goal: bring the L-tromino to anchor 16 (dashed outline)."/>
+                               Text="5x5 board (bits 0..24). Every piece is anchored on its first occupied cell in row-major order, tzcnt(mask) - the gold star. Click a piece, then a destination: ring = 1-step slide, teal = straight multi-step slide, orange = corner hook. Hover a ring to preview the ghost footprint and trajectory. Goal: bring the L-tromino to anchor 16 (dashed outline)."/>
                     <Border Background="{StaticResource Bg0}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="6"
                             HorizontalAlignment="Center" Padding="10">
                         <Canvas x:Name="Board" Width="440" Height="440" MouseLeftButtonDown="OnBoardBackgroundClick" Background="Transparent">
                             <Canvas x:Name="GridLayer" IsHitTestVisible="False"/>
-                            <Canvas x:Name="OverlayLayer" IsHitTestVisible="False"/>
+                            <Canvas x:Name="OverlayLayer"/>
                             <Canvas x:Name="PieceLayer"/>
+                            <Canvas x:Name="CoordLayer" IsHitTestVisible="False"/>
                             <Canvas x:Name="MarkerLayer"/>
                         </Canvas>
                     </Border>
@@ -28,9 +29,14 @@
                         <CheckBox x:Name="OverlayToggle" Style="{StaticResource ToggleSwitch}" Content="Show ValidAnchorsMask[g] Overlay"
                                   Checked="OnOverlayToggled" Unchecked="OnOverlayToggled"/>
                     </WrapPanel>
+                    <TextBlock x:Name="ReasonText" Foreground="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" MinHeight="48"
+                               Text="Select a piece, switch the overlay on, then hover any square to see why its anchor is valid or masked out."/>
                     <WrapPanel>
                         <Button x:Name="SwapButton" Content="Swap Identical 1x1 Pieces (Test Symmetry)" Click="OnSwap"/>
+                        <Button x:Name="PresetButton" Content="Load Hook-Move Demo Preset" Click="OnPreset"/>
+                        <Button x:Name="RandomButton" Content="Random Valid Move" Click="OnRandom"/>
                         <Button x:Name="HintButton" Content="Solve Step (BFS Hint)" Click="OnHint"/>
+                        <Button x:Name="UndoButton" Content="Undo Move" Click="OnUndo"/>
                         <Button x:Name="ResetButton" Content="Reset Board" Click="OnReset"/>
                     </WrapPanel>
                     <Border x:Name="Banner" Visibility="Collapsed" Background="#064E3B" BorderBrush="{StaticResource Good}" BorderThickness="1"
@@ -48,28 +54,48 @@
                     <StackPanel>
                         <TextBlock Text="SELECTED PIECE BITBOARD BREAKDOWN" Style="{StaticResource SectionTitle}" Margin="0,0,0,6"/>
                         <TextBlock x:Name="PieceText" Style="{StaticResource MonoText}" TextWrapping="Wrap"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0" x:Name="GridsRow" Visibility="Collapsed">
-                            <StackPanel Margin="0,0,16,0">
-                                <TextBlock Text="BaseMask &lt;&lt; anchor" Foreground="{StaticResource Muted}" FontSize="10"/>
+                        <WrapPanel Margin="0,10,0,0" x:Name="GridsRow" Visibility="Collapsed">
+                            <StackPanel Margin="0,0,16,8">
+                                <TextBlock Text="BaseMask[g]" Foreground="{StaticResource Muted}" FontSize="10"/>
+                                <w:BitGridView x:Name="BaseGrid"/>
+                            </StackPanel>
+                            <StackPanel Margin="0,0,16,8">
+                                <TextBlock Text="PieceMask = Base &lt;&lt; anchor" Foreground="{StaticResource Muted}" FontSize="10"/>
                                 <w:BitGridView x:Name="ShiftedGrid"/>
                             </StackPanel>
-                            <StackPanel Margin="0,0,16,0">
+                            <StackPanel Margin="0,0,16,8">
                                 <TextBlock Text="ValidAnchorsMask[g]" Foreground="{StaticResource Muted}" FontSize="10"/>
                                 <w:BitGridView x:Name="ValidGrid"/>
                             </StackPanel>
-                            <StackPanel>
+                            <StackPanel Margin="0,0,16,8">
+                                <TextBlock Text="OtherOccupancy" Foreground="{StaticResource Muted}" FontSize="10"/>
+                                <w:BitGridView x:Name="OtherGrid"/>
+                            </StackPanel>
+                            <StackPanel Margin="0,0,16,8">
                                 <TextBlock Text="ReachableAnchors" Foreground="{StaticResource Muted}" FontSize="10"/>
                                 <w:BitGridView x:Name="ReachGrid"/>
                             </StackPanel>
-                        </StackPanel>
-                        <TextBlock x:Name="WhyText" Foreground="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                            <StackPanel Margin="0,0,16,8">
+                                <TextBlock Text="Straight (teal) | Hook (orange)" Foreground="{StaticResource Muted}" FontSize="10"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <w:BitGridView x:Name="StraightGrid"/>
+                                    <w:BitGridView x:Name="HookGrid" Margin="8,0,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </WrapPanel>
+                        <TextBlock x:Name="WhyText" Foreground="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"/>
                     </StackPanel>
                 </Border>
                 <Border Style="{StaticResource Panel}" Margin="0,12,0,0">
                     <StackPanel>
-                        <TextBlock Text="CANONICAL EQUIVALENCE STATE  (GroupAnchors[0..3] &amp; ZOBRIST XOR TRACE)" Style="{StaticResource SectionTitle}" Margin="0,0,0,6"/>
+                        <TextBlock Text="CANONICAL EQUIVALENCE STATE  (GroupAnchors[0..3])" Style="{StaticResource SectionTitle}" Margin="0,0,0,6"/>
                         <TextBlock x:Name="CanonText" Style="{StaticResource MonoText}" TextWrapping="Wrap"/>
-                        <TextBlock Text="LAST MOVE" Style="{StaticResource SectionTitle}"/>
+                        <TextBlock Text="ZOBRIST HASH" Style="{StaticResource SectionTitle}" Margin="0,12,0,4"/>
+                        <TextBlock x:Name="HashText" Style="{StaticResource MonoText}" FontSize="16" Foreground="{StaticResource Gold}"/>
+                        <Border x:Name="HashBadge" CornerRadius="4" Padding="8,3" Margin="0,6,0,0" HorizontalAlignment="Left" Background="#064E3B">
+                            <TextBlock x:Name="HashBadgeText" Style="{StaticResource MonoText}" FontSize="11"/>
+                        </Border>
+                        <TextBlock Text="INCREMENTAL XOR DERIVATION (LAST ACTION)" Style="{StaticResource SectionTitle}" Margin="0,12,0,4"/>
                         <TextBlock x:Name="ZobristText" Style="{StaticResource MonoText}" TextWrapping="Wrap"/>
                     </StackPanel>
                 </Border>

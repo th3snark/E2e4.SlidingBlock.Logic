@@ -27,6 +27,11 @@ public partial class Lab2View : UserControl
     private string _lastMove = "No move yet.";
     private Path? _ghost;
     private Polyline? _hoverPath;
+    private string _note = "";
+    private readonly Stack<Entry> _history = new();
+
+    /// <summary>One undoable action: the state before it and the piece trajectories it animated.</summary>
+    private sealed record Entry(PolyominoState Before, int MovesBefore, List<(int piece, IReadOnlyList<int> path)> Jobs);
 
     public Lab2View()
     {
@@ -34,7 +39,10 @@ public partial class Lab2View : UserControl
         _t = _d.Topology;
         _state = _d.InitialState;
         GridsRow.Visibility = Visibility.Collapsed;
-        foreach (var g in new[] { ShiftedGrid, ValidGrid, ReachGrid }) g.Configure(N, N, 20, false);
+        foreach (var g in new[] { BaseGrid, ShiftedGrid, ValidGrid, OtherGrid, ReachGrid, StraightGrid, HookGrid }) g.Configure(N, N, 20, true);
+        StraightGrid.Accent = Color.FromRgb(0x2D, 0xD4, 0xBF);
+        HookGrid.Accent = Color.FromRgb(0xFB, 0x92, 0x3C);
+        OtherGrid.Accent = Color.FromRgb(0x94, 0xA3, 0xB8);
         BuildStaticBoard();
         BuildPieces();
         RefreshAll();
@@ -49,6 +57,7 @@ public partial class Lab2View : UserControl
     private void BuildStaticBoard()
     {
         GridLayer.Children.Clear();
+        CoordLayer.Children.Clear();
         var hatch = new DrawingBrush(new GeometryDrawing(null, new Pen(new SolidColorBrush(Color.FromRgb(0x47, 0x55, 0x69)), 1.5),
             new LineGeometry(new Point(0, 10), new Point(10, 0))))
         { TileMode = TileMode.Tile, Viewport = new Rect(0, 0, 10, 10), ViewportUnits = BrushMappingMode.Absolute };
@@ -68,14 +77,14 @@ public partial class Lab2View : UserControl
             GridLayer.Children.Add(tile);
             var idx = new TextBlock
             {
-                Text = s.ToString(CultureInfo.InvariantCulture),
+                Text = wall ? $"{s} ({s / N},{s % N}) wall" : $"{s} ({s / N},{s % N})",
                 FontSize = 10,
                 FontFamily = (FontFamily)FindResource("Mono"),
-                Foreground = new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B)),
+                Foreground = new SolidColorBrush(Color.FromArgb(0xC0, 0xCB, 0xD5, 0xE1)),
             };
-            Canvas.SetLeft(idx, s % N * Cell + Cell - 20);
+            Canvas.SetLeft(idx, s % N * Cell + 4);
             Canvas.SetTop(idx, s / N * Cell + Cell - 17);
-            GridLayer.Children.Add(idx);
+            CoordLayer.Children.Add(idx);
         }
         // Goal outline for the master L.
         var master = _t.Groups[_d.GoalGroupId];
@@ -155,13 +164,13 @@ public partial class Lab2View : UserControl
                 Fill = (Brush)FindResource("Gold"),
                 Stroke = Brushes.Black,
                 StrokeThickness = 1.2,
-                ToolTip = $"LSB anchor = tzcnt(pieceMask) = cell of this star",
+                ToolTip = $"LSB anchor = tzcnt(pieceMask) = the cell under this star (group {g.GroupId}: {g.Name})",
                 IsHitTestVisible = false,
             };
             container.Children.Add(star);
             var label = new TextBlock
             {
-                Text = p.Label,
+                Text = g.GroupId == 3 ? $"1x1 [{p.Label}]\nG{g.GroupId}" : $"{p.Label} (G{g.GroupId})",
                 FontWeight = FontWeights.Bold,
                 FontSize = 13,
                 Foreground = Brushes.White,
@@ -197,7 +206,7 @@ public partial class Lab2View : UserControl
 
     private void OnBoardBackgroundClick(object sender, MouseButtonEventArgs e)
     {
-        if (!_busy && ReferenceEquals(e.OriginalSource, Board)) Select(-1);
+        if (!_busy) Select(-1);
     }
 
     private void Select(int pieceId)
@@ -237,6 +246,36 @@ public partial class Lab2View : UserControl
         _hoverPath = null;
         if (_selected < 0 || _busy) return;
         var (other, g, a) = Context(_selected);
+        int minCol = g.RelativeCells.Min(c => c.dCol);
+        if (minCol < 0)
+        {
+            var origin = Pos(a + minCol);
+            var box = new Rectangle
+            {
+                Width = Cell - 8,
+                Height = Cell - 8,
+                Stroke = Brushes.White,
+                StrokeThickness = 2,
+                StrokeDashArray = [3, 3],
+                Opacity = 0.8,
+                IsHitTestVisible = false,
+                ToolTip = "Empty top-left corner of the bounding box (row, col - 1): tracking this corner would put the origin off the piece, or off the board.",
+            };
+            Canvas.SetLeft(box, origin.X + 4);
+            Canvas.SetTop(box, origin.Y + 4);
+            MarkerLayer.Children.Add(box);
+            var cap = new TextBlock
+            {
+                Text = $"bbox origin\n(empty) {a / N},{a % N + minCol}",
+                FontSize = 10,
+                Foreground = Brushes.White,
+                FontFamily = (FontFamily)FindResource("Mono"),
+                IsHitTestVisible = false,
+            };
+            Canvas.SetLeft(cap, origin.X + 8);
+            Canvas.SetTop(cap, origin.Y + 8);
+            MarkerLayer.Children.Add(cap);
+        }
         ulong reach = _d.ReachableFor(_state, _selected);
         for (ulong r = reach; r != 0; r &= r - 1)
         {
@@ -313,20 +352,49 @@ public partial class Lab2View : UserControl
         _hoverPath = null;
     }
 
+    private string AnchorReason(EquivalenceGroup g, int anchor)
+    {
+        int ar = anchor / N, ac = anchor % N;
+        var sb = new StringBuilder();
+        foreach (var (dr, dc) in g.RelativeCells)
+        {
+            int r = ar + dr, c = ac + dc;
+            string arm = $"arm (dRow={dr:+0;-0;0}, dCol={dc:+0;-0;0}) = bit offset {N * dr + dc}";
+            if (c < 0)
+                sb.AppendLine(CultureInfo.InvariantCulture, $"Left Overhang: {arm} would overhang left off the board (col {ac} - {-dc} < 0) and wrap around to column {N - 1} of row {r - 1}.");
+            else if (c >= N)
+                sb.AppendLine(CultureInfo.InvariantCulture, $"Right Overhang: {arm} would overhang right off the board (col {ac} + {dc} >= {N}) and wrap around to column 0 of row {r + 1}.");
+            else if (r >= N)
+                sb.AppendLine(CultureInfo.InvariantCulture, $"Bottom Overflow: {arm} would land on row {r} >= {N}, past bit {N * N - 1}.");
+            else if (((_t.StaticWallsMask >> (r * N + c)) & 1UL) != 0)
+                sb.AppendLine(CultureInfo.InvariantCulture, $"Collides with Static Wall at Bit {r * N + c}: {arm}.");
+        }
+        return sb.Length == 0
+            ? $"Valid anchor {anchor} ({ar},{ac}): BaseMask << {anchor} lies fully on the board and clears the wall - no runtime wrap check needed."
+            : $"Invalid Anchor {anchor} ({ar},{ac}):\n{sb.ToString().TrimEnd()}";
+    }
+
     private void RebuildOverlay()
     {
         OverlayLayer.Children.Clear();
+        ReasonText.Text = _selected < 0 && OverlayToggle.IsChecked == true
+            ? "Select a piece to overlay its ValidAnchorsMask[g]."
+            : "Select a piece, switch the overlay on, then hover any square to see why its anchor is valid or masked out.";
         if (OverlayToggle.IsChecked != true || _selected < 0) return;
         var g = _t.Groups[_t.Pieces[_selected].GroupId];
         for (int s = 0; s < N * N; s++)
         {
             bool ok = ((g.ValidAnchorsMask >> s) & 1UL) != 0;
+            string reason = AnchorReason(g, s);
             var tint = new Rectangle
             {
                 Width = Cell,
                 Height = Cell,
                 Fill = new SolidColorBrush(ok ? Color.FromArgb(0x26, 0x34, 0xD3, 0x99) : Color.FromArgb(0x30, 0xF8, 0x71, 0x71)),
+                ToolTip = reason,
             };
+            ToolTipService.SetInitialShowDelay(tint, 150);
+            tint.MouseEnter += (_, _) => ReasonText.Text = reason;
             Canvas.SetLeft(tint, s % N * Cell);
             Canvas.SetTop(tint, s / N * Cell);
             OverlayLayer.Children.Add(tint);
@@ -335,6 +403,7 @@ public partial class Lab2View : UserControl
                 Width = 22,
                 Height = 22,
                 CornerRadius = new CornerRadius(11),
+                IsHitTestVisible = false,
                 Background = new SolidColorBrush(ok ? Color.FromRgb(0x05, 0x96, 0x69) : Color.FromRgb(0xB9, 0x1C, 0x1C)),
                 Child = new TextBlock { Text = ok ? "✓" : "✕", Foreground = Brushes.White, FontSize = 12, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             };
@@ -352,30 +421,100 @@ public partial class Lab2View : UserControl
 
     // ---- moves & animation ------------------------------------------------------------------------------------
 
+    private IEnumerable<(int g, int anchor, bool add)> TermsFor(List<(int piece, IReadOnlyList<int> path)> jobs, bool reverse)
+    {
+        foreach (var (piece, path) in jobs)
+        {
+            int g = _t.Pieces[piece].GroupId, from = reverse ? path[^1] : path[0], to = reverse ? path[0] : path[^1];
+            yield return (g, from, false);
+            yield return (g, to, true);
+        }
+    }
+
+    private string Derivation(string title, ulong previous, IEnumerable<(int g, int anchor, bool add)> terms, ulong result)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(title);
+        sb.AppendLine(CultureInfo.InvariantCulture, $"  {"PreviousHash:",-30}  0x{previous:X16}");
+        foreach (var (g, anchor, add) in terms)
+            sb.AppendLine(CultureInfo.InvariantCulture, $"^ {$"ZobristTable[{g}, {anchor}]:",-30}  0x{_t.ZobristTable[g, anchor]:X16}  ({(add ? "Add new anchor" : "Remove old anchor")})");
+        sb.AppendLine(new string('-', 62));
+        sb.Append(CultureInfo.InvariantCulture, $"= {"New ZobristHash:",-30}  0x{result:X16}");
+        return sb.ToString();
+    }
+
+    private ulong RecomputedHash(in PolyominoState state)
+    {
+        ulong h = 0;
+        foreach (var p in _t.Pieces) h ^= _t.ZobristTable[p.GroupId, state.AnchorOf(p.PieceId)];
+        return h;
+    }
+
     private void MoveSelected(int target, IReadOnlyList<int> path)
     {
         if (_busy || _selected < 0) return;
         int piece = _selected;
         var before = _state;
-        Animate([(piece, path)], () =>
+        var jobs = new List<(int piece, IReadOnlyList<int> path)> { (piece, path) };
+        Animate(jobs, () =>
         {
-            var move = new PolyominoMove((byte)piece, (byte)target);
-            _state = _d.ApplyMove(before, move);
+            _history.Push(new Entry(before, _moves, jobs));
+            _state = _d.ApplyMove(before, new PolyominoMove((byte)piece, (byte)target));
             _moves++;
-            int g = _t.Pieces[piece].GroupId;
-            int old = before.AnchorOf(piece);
-            ulong zo = _t.ZobristTable[g, old], zn = _t.ZobristTable[g, target];
-            _lastMove = $"piece {_t.Pieces[piece].Label} (group {g}): anchor {old} -> {target}   [{Classify(path)}, {path.Count - 1} step(s)]\n"
-                + $"path: {string.Join(" -> ", path)}\n\n"
-                + $"ZobristTable[{g},{old}]  = 0x{zo:X16}\n"
-                + $"ZobristTable[{g},{target}] = 0x{zn:X16}\n"
-                + $"xor delta               = 0x{zo ^ zn:X16}\n"
-                + $"Hash  0x{before.ZobristHash:X16}\n   ^= 0x{zo ^ zn:X16}\n   -> 0x{_state.ZobristHash:X16}\n\n"
-                + $"GroupAnchors[{g}] ^= (1<<{old}) | (1<<{target})\n"
-                + $"  0x{before.GroupAnchorsOf(g):X7} -> 0x{_state.GroupAnchorsOf(g):X7}";
+            _note = "";
+            int g = _t.Pieces[piece].GroupId, old = before.AnchorOf(piece);
+            _lastMove = Derivation($"piece {_t.Pieces[piece].Label} (group {g}): anchor {old} -> {target}   [{Classify(path)}, {path.Count - 1} step(s)]   path: {string.Join(" -> ", path)}",
+                    before.ZobristHash, TermsFor(jobs, false), _state.ZobristHash)
+                + $"\n\nGroupAnchors[{g}] ^= (1<<{old}) | (1<<{target})\n  0x{before.GroupAnchorsOf(g):X7} -> 0x{_state.GroupAnchorsOf(g):X7}";
             Banner.Visibility = Visibility.Collapsed;
             RefreshAll();
         });
+    }
+
+    private void OnUndo(object sender, RoutedEventArgs e)
+    {
+        if (_busy || _history.Count == 0) return;
+        var entry = _history.Pop();
+        var reversed = entry.Jobs.Select(j => (j.piece, (IReadOnlyList<int>)j.path.Reverse().ToArray())).ToList();
+        var previous = _state;
+        _selected = -1;
+        Animate(reversed, () =>
+        {
+            _state = entry.Before;
+            _moves = entry.MovesBefore;
+            _note = "";
+            _lastMove = Derivation("Undo: previous state restored", previous.ZobristHash, TermsFor(entry.Jobs, true), _state.ZobristHash);
+            Banner.Visibility = Visibility.Collapsed;
+            RefreshAll();
+        });
+    }
+
+    private void OnRandom(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        var buf = new PolyominoMove[_d.MaxMoves];
+        int n = _d.GenerateMoves(_state, buf);
+        if (n == 0) { StatusText.Text = "No legal move."; return; }
+        var m = buf[Random.Shared.Next(n)];
+        _selected = m.PieceId;
+        var (other, g, a) = Context(m.PieceId);
+        MoveSelected(m.TargetAnchor, PolyominoState.ReconstructHookPath(a, m.TargetAnchor, g.BaseMask, g.ValidAnchorsMask, other, N, g.Directions));
+    }
+
+    /// <summary>Moves the 1x1 block A above the wall and clears the right-hand side, so reaching anchor 17 needs a 4-step hook around the wall.</summary>
+    private void OnPreset(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        int a = _t.Pieces.First(p => p.Label == "A").PieceId, j = _t.Pieces.First(p => p.Label == "J").PieceId;
+        _state = _d.InitialState.WithPieceMoved(_t, a, 7).WithPieceMoved(_t, j, 19);
+        _history.Clear();
+        _moves = 0;
+        _selected = a;
+        _note = "Hook demo: hover the orange ring on anchor 17 - block A must go round the wall at bit 12 (7 -> 8 -> 13 -> 18 -> 17).";
+        _lastMove = "Preset loaded: A at anchor 7, J moved to anchor 19.";
+        Banner.Visibility = Visibility.Collapsed;
+        SyncPositions();
+        RefreshAll();
     }
 
     private void Animate(List<(int piece, IReadOnlyList<int> path)> jobs, Action done)
@@ -418,14 +557,20 @@ public partial class Lab2View : UserControl
         }
     }
 
-    private void SetButtons(bool on) => SwapButton.IsEnabled = HintButton.IsEnabled = ResetButton.IsEnabled = on;
+    private void SetButtons(bool on)
+    {
+        SwapButton.IsEnabled = HintButton.IsEnabled = ResetButton.IsEnabled = PresetButton.IsEnabled = RandomButton.IsEnabled = on;
+        UndoButton.IsEnabled = on && _history.Count > 0;
+    }
 
     private void OnReset(object sender, RoutedEventArgs e)
     {
         if (_busy) return;
         _state = _d.InitialState;
+        _history.Clear();
         _moves = 0;
         _selected = -1;
+        _note = "";
         _lastMove = "State reset.";
         Banner.Visibility = Visibility.Collapsed;
         SyncPositions();
@@ -460,8 +605,11 @@ public partial class Lab2View : UserControl
         var before = _state;
         int a = before.AnchorOf(pa), b = before.AnchorOf(pb);
         _selected = -1;
-        Animate([(pa, [a, b]), (pb, [b, a])], () =>
+        var jobs = new List<(int piece, IReadOnlyList<int> path)> { (pa, [a, b]), (pb, [b, a]) };
+        Animate(jobs, () =>
         {
+            _history.Push(new Entry(before, _moves, jobs));
+            _note = "";
             // Route through a scratch square: every update is XOR algebra, so overlap is irrelevant.
             _state = before.WithPieceMoved(_t, pa, 24).WithPieceMoved(_t, pb, a).WithPieceMoved(_t, pa, b);
             bool sameGa = before.GroupAnchorsOf(groupId) == _state.GroupAnchorsOf(groupId);
@@ -475,12 +623,20 @@ public partial class Lab2View : UserControl
                 $"state.Equals / GetHashCode: {equal} / {before.GetHashCode() == _state.GetHashCode()}   (PieceAnchors differ: A={_state.AnchorOf(pa)}, B={_state.AnchorOf(pb)})";
             Banner.Background = new SolidColorBrush(sameGa && sameHash && equal ? Color.FromRgb(0x06, 0x4E, 0x3B) : Color.FromRgb(0x7F, 0x1D, 0x1D));
             Banner.Visibility = Visibility.Visible;
-            _lastMove = "Identical-piece swap: Hash ^= Z[3,a] ^ Z[3,b] ^ Z[3,b] ^ Z[3,a] = 0 (permutation invariant).";
+            _lastMove = Derivation("Identical-piece swap: A leaves " + a + " for " + b + ", B leaves " + b + " for " + a + ". Every term appears twice, so the hash cancels back to itself.",
+                before.ZobristHash, TermsFor(jobs, false), _state.ZobristHash);
             RefreshAll();
         });
     }
 
     // ---- inspector --------------------------------------------------------------------------------------------
+
+    private static string Indices(ulong mask)
+    {
+        var l = new List<string>();
+        for (ulong m = mask; m != 0; m &= m - 1) l.Add(BitOperations.TrailingZeroCount(m).ToString(CultureInfo.InvariantCulture));
+        return l.Count == 0 ? "-" : string.Join(",", l);
+    }
 
     private void RefreshAll()
     {
@@ -488,6 +644,7 @@ public partial class Lab2View : UserControl
         RebuildOverlay();
         foreach (var kv in _visuals)
             kv.Value.Effect = kv.Key == _selected ? new DropShadowEffect { Color = Color.FromRgb(0xF5, 0xB3, 0x01), BlurRadius = 16, ShadowDepth = 0, Opacity = 0.95 } : null;
+        UndoButton.IsEnabled = !_busy && _history.Count > 0;
 
         const int bits = 25;
         var sb = new StringBuilder();
@@ -501,43 +658,57 @@ public partial class Lab2View : UserControl
         {
             var (other, g, a) = Context(_selected);
             var piece = _t.Pieces[_selected];
-            ulong shifted = g.BaseMask << a, valid = g.ValidAnchorsMask, reach = _d.ReachableFor(_state, _selected);
-            int slides = 0, hooks = 0;
-            for (ulong r = reach; r != 0; r &= r - 1)
-            {
-                var path = PolyominoState.ReconstructHookPath(a, BitOperations.TrailingZeroCount(r), g.BaseMask, valid, other, N, g.Directions);
-                if (Classify(path) == "hook") hooks++; else slides++;
-            }
-            sb.AppendLine(CultureInfo.InvariantCulture, $"Piece                 {piece.Label}  (id {piece.PieceId})  {g.Name}");
+            ulong shifted = g.BaseMask << a, valid = g.ValidAnchorsMask;
+            var parent = new sbyte[N * N];
+            ulong reach = PolyominoState.FindReachableAnchors(a, g.BaseMask, valid, other, N, parent, out ulong straight, out ulong hook, g.Directions);
+            string offsets = string.Join("  ", g.RelativeCells.Select(c => $"({c.dRow},{c.dCol})->{N * c.dRow + c.dCol}"));
+            sb.AppendLine(CultureInfo.InvariantCulture, $"Piece                 {piece.Label}  (PieceId {piece.PieceId})  {g.Name}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"EquivalenceGroupId    {g.GroupId}");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"BaseMask[g]           0x{g.BaseMask:X7}   {g.BaseMask.ToBinary(bits)}");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"CurrentAnchor         tzcnt(mask) = {BitOperations.TrailingZeroCount(shifted)}");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"BaseMask[g] << {a,-2}      0x{shifted:X7}   {shifted.ToBinary(bits)}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"(dRow,dCol)->{N}*dRow+dCol  {offsets}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"BaseMask[g]           0x{g.BaseMask:X7}   {g.BaseMask.ToBinary(bits)}   (bit 0 is always set)");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"CurrentAnchor         tzcnt(pieceMask) = {BitOperations.TrailingZeroCount(shifted)}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"PieceMask             0x{shifted:X7}   {shifted.ToBinary(bits)}   = BaseMask << {a}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"ValidAnchorsMask[g]   0x{valid:X7}   {valid.ToBinary(bits)}");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"ReachableAnchors      0x{reach:X7}   {reach.ToBinary(bits)}");
-            sb.Append(CultureInfo.InvariantCulture, $"                      {BitOperations.PopCount(reach)} destinations: {slides} slide(s), {hooks} corner hook(s)");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"OtherOccupancy        0x{other:X7}   {other.ToBinary(bits)}   = BoardOccupancy ^ PieceMask");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"ReachableAnchors      0x{reach:X7}   {reach.ToBinary(bits)}   {BitOperations.PopCount(reach)} destination(s)");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"  StraightMovesMask   0x{straight:X7}   {BitOperations.PopCount(straight)} anchor(s): {Indices(straight)}");
+            sb.Append(CultureInfo.InvariantCulture, $"  HookMovesMask       0x{hook:X7}   {BitOperations.PopCount(hook)} anchor(s): {Indices(hook)}");
             PieceText.Text = sb.ToString();
+            BaseGrid.SetMask(g.BaseMask);
             ShiftedGrid.SetMask(shifted);
             ValidGrid.SetMask(valid);
+            OtherGrid.SetMask(other);
             ReachGrid.SetMask(reach, 1UL << a);
+            StraightGrid.SetMask(straight);
+            HookGrid.SetMask(hook);
             GridsRow.Visibility = Visibility.Visible;
             int left = -g.RelativeCells.Min(c => c.dCol), right = g.RelativeCells.Max(c => c.dCol), down = g.RelativeCells.Max(c => c.dRow);
             WhyText.Text = $"Extent from the anchor: {left} cell(s) left, {right} right, {down} down. Anchors in the first {left} column(s) are invalid because the cell at " +
                 $"dCol = -{left} on the row below would land at bit (anchor + {down}*W - {left}), i.e. wrap to the previous row's last column. " +
-                "ValidAnchorsMask removes them with one bit-test instead of sentinel columns.";
+                "ValidAnchorsMask removes them with one bit-test instead of sentinel columns."
+                + (left > 0 ? $" The dashed box on the board marks the empty bounding-box origin, {left} column(s) left of the real anchor." : "");
         }
 
         sb.Clear();
         for (int g = 0; g < _t.Groups.Count; g++)
         {
             ulong ga = _state.GroupAnchorsOf(g);
-            sb.AppendLine(CultureInfo.InvariantCulture, $"GroupAnchors[{g}] = {ga.ToBinary(bits)} = 0x{ga:X7}   {_t.Groups[g].Name}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"Group {g}: {_t.Groups[g].Name}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"  GroupAnchors[{g}] = {ga.ToBinary(bits)} = 0x{ga:X7}   PopCount {BitOperations.PopCount(ga)}   anchors {{{Indices(ga)}}}");
         }
-        sb.AppendLine(CultureInfo.InvariantCulture, $"OccupancyMask   = {_state.OccupancyMask.ToBinary(bits)} = 0x{_state.OccupancyMask:X7}");
-        sb.Append(CultureInfo.InvariantCulture, $"ZobristHash     = 0x{_state.ZobristHash:X16}");
-        CanonText.Text = sb.ToString();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"OccupancyMask   = {_state.OccupancyMask.ToBinary(bits)} = 0x{_state.OccupancyMask:X7}   (+ static wall 0x{_t.StaticWallsMask:X7})");
+        CanonText.Text = sb.ToString().TrimEnd();
+
+        ulong recomputed = RecomputedHash(_state);
+        bool match = recomputed == _state.ZobristHash;
+        HashText.Text = $"0x{_state.ZobristHash:X16}";
+        HashBadgeText.Text = match
+            ? $"IncrementalHash == RecomputedFromScratchHash  ✓   (0x{recomputed:X16})"
+            : $"MISMATCH  ✗  recomputed 0x{recomputed:X16}";
+        HashBadge.Background = new SolidColorBrush(match ? Color.FromRgb(0x06, 0x4E, 0x3B) : Color.FromRgb(0x7F, 0x1D, 0x1D));
         ZobristText.Text = _lastMove;
 
-        StatusText.Text = _d.IsGoal(_state) ? $"Solved in {_moves} move(s)!" : $"Moves: {_moves}   |   goal: master L-tromino on anchor {_d.GoalAnchor}";
+        StatusText.Text = (_d.IsGoal(_state) ? $"Solved in {_moves} move(s)!" : $"Moves: {_moves}   |   goal: master L-tromino on anchor {_d.GoalAnchor}")
+            + (_note.Length > 0 ? "\n" + _note : "");
     }
 }

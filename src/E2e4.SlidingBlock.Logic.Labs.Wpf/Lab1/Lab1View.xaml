@@ -32,9 +32,13 @@
                             HorizontalAlignment="Center" Padding="10">
                         <Canvas x:Name="Board" Width="460" Height="460" ClipToBounds="False"/>
                     </Border>
-                    <WrapPanel Margin="0,14,0,0">
+                    <TextBlock Foreground="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0"
+                               Text="Click a block, or an arrow, to slide it. Hover a block or cell to light up its bits; hover a bit group in the register to find its cell; hover an arrow to preview the formula."/>
+                    <WrapPanel Margin="0,10,0,0">
                         <Button x:Name="RandomButton" Content="Random Valid Move" Click="OnRandom"/>
-                        <Button x:Name="HintButton" Content="Solve Step (BFS Hint)" Click="OnHint"/>
+                        <Button x:Name="HintButton" Content="Step Optimal (BFS Hint)" Click="OnHint"/>
+                        <Button x:Name="UndoButton" Content="Undo Move" Click="OnUndo"/>
+                        <Button x:Name="ScrambleButton" Content="Scramble (Solvable)" Click="OnScramble"/>
                         <Button x:Name="ResetButton" Content="Reset Board" Click="OnReset"/>
                     </WrapPanel>
                     <TextBlock x:Name="StatusText" Foreground="{StaticResource Gold}" FontSize="13" TextWrapping="Wrap"/>
@@ -47,8 +51,16 @@
                         <StackPanel>
                             <TextBlock Text="64-BIT PACKED STATE REGISTER" Style="{StaticResource SectionTitle}" Margin="0,0,0,6"/>
                             <TextBlock x:Name="RegisterHex" Style="{StaticResource MonoText}" FontSize="20" Foreground="{StaticResource Gold}"/>
-                            <TextBlock x:Name="RegisterCaption" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,2,0,8"/>
+                            <TextBlock x:Name="RegisterBin" Style="{StaticResource MonoText}" FontSize="10" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            <TextBlock x:Name="RegisterCaption" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,2,0,8" TextWrapping="Wrap"/>
                             <w:RegisterView x:Name="Register" HorizontalAlignment="Left"/>
+                            <StackPanel x:Name="InversePanel" Visibility="Collapsed" Margin="0,12,0,0">
+                                <TextBlock x:Name="InverseHex" Style="{StaticResource MonoText}" FontSize="16" Foreground="{StaticResource Accent}"/>
+                                <TextBlock x:Name="InverseCaption" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,2,0,8" TextWrapping="Wrap"/>
+                                <w:RegisterView x:Name="InverseRegister" HorizontalAlignment="Left"/>
+                            </StackPanel>
+                            <TextBlock Text="MUTATION DELTA  (changed groups, before -> after)" Style="{StaticResource SectionTitle}" Margin="0,12,0,4"/>
+                            <TextBlock x:Name="DeltaText" Style="{StaticResource MonoText}" TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource Panel}" Margin="0,12,0,0">
@@ -60,6 +72,18 @@
                                     <TextBlock x:Name="OccupancyHex" Style="{StaticResource MonoText}" FontSize="16"/>
                                     <TextBlock x:Name="OccupancyCaption" Foreground="{StaticResource Muted}" FontSize="11"/>
                                 </StackPanel>
+                            </StackPanel>
+                            <TextBlock Text="HOVERED / LAST-MOVED PIECE MASK" Style="{StaticResource SectionTitle}" Margin="0,12,0,4"/>
+                            <StackPanel Orientation="Horizontal">
+                                <StackPanel Margin="0,0,16,0">
+                                    <TextBlock x:Name="PieceGridCaption" Foreground="{StaticResource Muted}" FontSize="10"/>
+                                    <w:BitGridView x:Name="PieceGrid"/>
+                                </StackPanel>
+                                <StackPanel Margin="0,0,16,0">
+                                    <TextBlock Text="otherPieces = occ ^ pieceMask" Foreground="{StaticResource Muted}" FontSize="10"/>
+                                    <w:BitGridView x:Name="OtherGrid"/>
+                                </StackPanel>
+                                <TextBlock x:Name="PieceMaskText" Style="{StaticResource MonoText}" TextWrapping="Wrap" VerticalAlignment="Center"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>

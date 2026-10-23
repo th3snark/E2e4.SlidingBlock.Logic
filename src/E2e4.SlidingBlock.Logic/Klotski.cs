@@ -106,16 +106,17 @@ public sealed class KlotskiDomain : ISlidingBlockDomain<KlotskiState, KlotskiMov
     {
         var topo = PuzzleTopology.FromAsciiMap(ClassicMap,
         [
-            ('M', new PieceStyle("Master 2x2", "#EF4444", Role: "master")),
+            // Legend order fixes the shape class: 1 = 1x1, 2 = 1x2 vertical, 3 = 2x1 horizontal, 4 = 2x2.
+            ('e', new PieceStyle("Single 1x1", "#10B981", Role: "single")),
+            ('f', new PieceStyle("Single 1x1", "#10B981", Role: "single")),
+            ('g', new PieceStyle("Single 1x1", "#10B981", Role: "single")),
+            ('h', new PieceStyle("Single 1x1", "#10B981", Role: "single")),
             ('a', new PieceStyle("Vertical 1x2", "#3B82F6", Role: "vertical")),
             ('b', new PieceStyle("Vertical 1x2", "#3B82F6", Role: "vertical")),
             ('c', new PieceStyle("Vertical 1x2", "#3B82F6", Role: "vertical")),
             ('d', new PieceStyle("Vertical 1x2", "#3B82F6", Role: "vertical")),
             ('H', new PieceStyle("Horizontal 2x1", "#F59E0B", Role: "horizontal")),
-            ('e', new PieceStyle("Single 1x1", "#10B981", Role: "single")),
-            ('f', new PieceStyle("Single 1x1", "#10B981", Role: "single")),
-            ('g', new PieceStyle("Single 1x1", "#10B981", Role: "single")),
-            ('h', new PieceStyle("Single 1x1", "#10B981", Role: "single")),
+            ('M', new PieceStyle("Master 2x2", "#EF4444", Role: "master")),
         ]);
         int master = topo.Pieces.First(p => p.Label == "M").PieceId;
         return new KlotskiDomain(topo, master, 13);

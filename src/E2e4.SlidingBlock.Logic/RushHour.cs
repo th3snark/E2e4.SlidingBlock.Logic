@@ -116,7 +116,20 @@ public sealed class RushHourDomain : ISlidingBlockDomain<RushHourState, RushHour
         InitialState = topology.InitialState();
     }
 
+    /// <summary>The 8-vehicle layout from the Lab 1 brief (vehicles v0..v7 are X, B..H).</summary>
+    public static readonly string[] Lab1Map =
+    [
+        "CCH..F",
+        "..HB.F",
+        ".XXB..",
+        "D..B..",
+        "DGG...",
+        "..EEE.",
+    ];
+
     public static RushHourDomain CreateDefault() => new(RushHourTopology.FromAsciiMap(DefaultMap));
+
+    public static RushHourDomain CreateLab1() => new(RushHourTopology.FromAsciiMap(Lab1Map));
 
     public RushHourTopology Topology { get; }
     public RushHourState InitialState { get; }

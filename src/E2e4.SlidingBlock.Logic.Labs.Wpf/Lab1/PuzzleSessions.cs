@@ -25,6 +25,23 @@ public abstract class PuzzleSession : ObservableObject
     public abstract ulong Occupancy { get; }
     public abstract GroupInfo GroupInfoFor(int group);
 
+    /// <summary>Board cells (bitboard) that register group <paramref name="group"/> describes.</summary>
+    public abstract ulong CellsOfGroup(int group);
+    public virtual string PieceMaskName(int pieceId) => "pieceMask";
+
+    /// <summary>Optional companion register (the 15-puzzle's inverse map).</summary>
+    public virtual string? SecondaryCaption => null;
+    public virtual ulong SecondaryRegister => 0;
+    public virtual RegisterSpec SecondaryLayout => new(4, 16, 8, "");
+    public virtual GroupInfo SecondaryGroupInfoFor(int group) => default;
+
+    public ulong PreviousRegister { get; protected set; }
+    public abstract bool CanUndo { get; }
+    public abstract void Undo();
+    public abstract void Scramble();
+    /// <summary>Formula trace for legal move <paramref name="moveIndex"/> without playing it.</summary>
+    public abstract string Preview(int moveIndex);
+
     public int MoveCount { get; protected set => Set(ref field, value); }
     public string Trace { get; protected set => Set(ref field, value); } = "No move yet. Click a block or an arrow.";
     public bool IsSolved { get; protected set => Set(ref field, value); }
@@ -77,6 +94,7 @@ public abstract class PuzzleSession<TState, TMove> : PuzzleSession
     private readonly TMove[] _buffer;
     private int _legalCount;
     private readonly Queue<TMove> _hint = new();
+    private readonly Stack<TState> _history = new();
     private IReadOnlyList<MoveView> _legalViews = [];
     private IReadOnlyList<PieceView> _pieces = [];
 
@@ -110,6 +128,7 @@ public abstract class PuzzleSession<TState, TMove> : PuzzleSession
         for (int i = 0; i < _legalCount; i++) views[i] = Describe(State, _buffer[i], i);
         _legalViews = views;
         ChangedBits = changed;
+        PreviousRegister = RegisterOf(State) ^ changed;
         IsSolved = _domain.IsGoal(State);
         NotifyChanged(animate);
     }
@@ -118,6 +137,7 @@ public abstract class PuzzleSession<TState, TMove> : PuzzleSession
     {
         TState before = State;
         TMove move = _buffer[moveIndex];
+        _history.Push(before);
         State = _domain.ApplyMove(before, move);
         MoveCount++;
         if (_hint.Count > 0 && _hint.Peek().Equals(move)) _hint.Dequeue(); else _hint.Clear();
@@ -125,10 +145,45 @@ public abstract class PuzzleSession<TState, TMove> : PuzzleSession
         Refresh(true, RegisterOf(before) ^ RegisterOf(State));
     }
 
+    public override bool CanUndo => _history.Count > 0;
+
+    public override void Undo()
+    {
+        if (_history.Count == 0) return;
+        TState undone = State;
+        State = _history.Pop();
+        MoveCount--;
+        _hint.Clear();
+        Trace = $"Undo: register restored from 0x{RegisterOf(undone):X16} to 0x{RegisterOf(State):X16}\nxor delta = 0x{RegisterOf(undone) ^ RegisterOf(State):X16}";
+        Refresh(true, RegisterOf(undone) ^ RegisterOf(State));
+    }
+
+    public override string Preview(int moveIndex)
+    {
+        TMove move = _buffer[moveIndex];
+        return BuildTrace(State, move, _domain.ApplyMove(State, move));
+    }
+
+    /// <summary>Random walk from the initial state: always reachable, hence solvable.</summary>
+    public override void Scramble()
+    {
+        var state = _domain.InitialState;
+        var buf = new TMove[_domain.MaxMoves];
+        for (int i = 0; i < 80; i++)
+        {
+            int n = _domain.GenerateMoves(state, buf);
+            if (n == 0) break;
+            state = _domain.ApplyMove(state, buf[Random.Shared.Next(n)]);
+        }
+        Trace = "Scrambled by an 80-move random walk from the initial state (always solvable).";
+        ResetTo(state);
+    }
+
     public override void Reset()
     {
         State = _domain.InitialState;
         MoveCount = 0;
+        _history.Clear();
         _hint.Clear();
         Trace = "State reset. Click a block or an arrow.";
         Refresh(false, 0);
@@ -138,6 +193,7 @@ public abstract class PuzzleSession<TState, TMove> : PuzzleSession
     {
         State = state;
         MoveCount = 0;
+        _history.Clear();
         _hint.Clear();
         Refresh(false, 0);
     }
@@ -167,11 +223,11 @@ public sealed class NPuzzleSession : PuzzleSession<NPuzzleState, NPuzzleMove>
 {
     public NPuzzleSession() : base(new NPuzzleDomain(new NPuzzleState(NPuzzleState.Solved)))
     {
-        ResetTo(NPuzzleDomain.Scramble(30, new Random(15)));
-        scrambled = State;
+        scrambled = NPuzzleDomain.Scramble(30, new Random(15));
+        ResetTo(scrambled);
     }
 
-    private readonly NPuzzleState scrambled;
+    private NPuzzleState scrambled;
 
     public override string Title => "15-Puzzle";
     public override string Representation => "16 squares x 4 bits = one ulong. Nibble i holds the tile on square i (0 = blank). Sliding a tile is a branchless XOR swap.";
@@ -182,10 +238,33 @@ public sealed class NPuzzleSession : PuzzleSession<NPuzzleState, NPuzzleMove>
 
     public override void Reset() => ResetTo(scrambled);
 
+    public override void Scramble()
+    {
+        scrambled = NPuzzleDomain.Scramble(60, Random.Shared);
+        Trace = "New solvable scramble (60-move random walk from the solved board).";
+        ResetTo(scrambled);
+    }
+
+    public override ulong CellsOfGroup(int group) => 1UL << group;
+    public override string PieceMaskName(int pieceId) => $"tile {pieceId} mask";
+
     public override GroupInfo GroupInfoFor(int group)
     {
         int tile = State.TileAt(group);
-        return new GroupInfo(tile == 0 ? Color.FromRgb(0x47, 0x55, 0x69) : Hue(tile * 24), $"s{group}:{tile}");
+        string name = tile == 0 ? "blank" : $"tile {tile}";
+        string bits = Convert.ToString(tile, 2).PadLeft(4, '0');
+        return new GroupInfo(tile == 0 ? Color.FromRgb(0x47, 0x55, 0x69) : Hue(tile * 24), $"cell {group}", tile == 0 ? "blank" : $"{tile} = {tile:X}",
+            $"Nibble {group} (bits {group * 4}..{group * 4 + 3})\ncell {group} ({group >> 2},{group & 3})\n0b{bits} = 0x{tile:X} -> {name}");
+    }
+
+    public override string? SecondaryCaption =>
+        $"InversePackedNibbles (nibble t = cell of tile t)   BlankCell = inverse & 0xF = {(int)(State.InverseMap & 0xF)}";
+    public override ulong SecondaryRegister => State.InverseMap;
+    public override GroupInfo SecondaryGroupInfoFor(int group)
+    {
+        int tile = group;
+        int cell = (int)((State.InverseMap >> (tile * 4)) & 0xF);
+        return new GroupInfo(tile == 0 ? Color.FromRgb(0x47, 0x55, 0x69) : Hue(tile * 24), tile == 0 ? "blank" : $"tile {tile}", $"cell {cell}");
     }
 
     protected override IReadOnlyList<PieceView> BuildPieces(NPuzzleState s)
@@ -218,10 +297,12 @@ public sealed class NPuzzleSession : PuzzleSession<NPuzzleState, NPuzzleMove>
         ulong mask = before.SlideMask(m.From);
         var sb = new StringBuilder();
         sb.Append(CultureInfo.InvariantCulture, $"tile {tile} on square {m.From} slides into blank on square {m.To}\n\n");
+        sb.Append(Row("srcCell, blankCell", $"{m.From}, {m.To}   (nibble shifts {4 * m.From}, {4 * m.To})"));
         sb.Append(Row("v", $"0x{before.PackedNibbles:X16}"));
         sb.Append(Row($"tile = (v >> 4*{m.From}) & 0xF", $"0x{tile:X}"));
         sb.Append(Row($"mask = tile<<4*{m.To} ^ tile<<4*{m.From}", $"0x{mask:X16}"));
         sb.Append(Row("v' = v ^ mask", $"0x{after.PackedNibbles:X16}"));
+        sb.Append(Row("occupancy' (non-blank)", $"0x{OccupancyOf(after):X4}"));
         ulong hz = (after.PackedNibbles - 0x1111111111111111UL) & ~after.PackedNibbles & 0x8888888888888888UL;
         sb.Append(Row("haszero(v')", $"0x{hz:X16}"));
         sb.Append(Row("blank = tzcnt(haszero) >> 2", $"{BitOperations.TrailingZeroCount(hz) >> 2}"));
@@ -254,6 +335,11 @@ public sealed class KlotskiSession : PuzzleSession<KlotskiState, KlotskiMove>
     public override RegisterSpec RegisterLayout => new(3, 20, 10, "3-bit shape code per cell");
     public override string OccupancyCaption => "occupied cells (20-bit)";
 
+    private static readonly string[] ShapeNames = ["Empty", "1x1", "1x2V", "2x1H", "2x2"];
+
+    public override ulong CellsOfGroup(int group) => 1UL << group;
+    public override string PieceMaskName(int pieceId) => $"PieceMasks[{pieceId}]";
+
     public override GroupInfo GroupInfoFor(int group)
     {
         int cls = (int)((State.CanonicalShapeKey >> (3 * group)) & 7);
@@ -262,7 +348,9 @@ public sealed class KlotskiSession : PuzzleSession<KlotskiState, KlotskiMove>
             0 => Color.FromRgb(0x47, 0x55, 0x69),
             _ => DrawHelpers.Hex(_k.Topology.Groups[cls - 1].ColorHex),
         };
-        return new GroupInfo(c, $"c{group}");
+        string name = ShapeNames[cls];
+        return new GroupInfo(c, $"{group}:{(cls == 0 ? "--" : name)}", "",
+            $"Cell {group} ({group / 4},{group % 4}) bits {group * 3}..{group * 3 + 2}\n0b{Convert.ToString(cls, 2).PadLeft(3, '0')} -> {name}");
     }
 
     protected override IReadOnlyList<PieceView> BuildPieces(KlotskiState s)
@@ -297,9 +385,21 @@ public sealed class KlotskiSession : PuzzleSession<KlotskiState, KlotskiMove>
         ulong delta = (KlotskiState.SpreadCells(pieceMask) ^ KlotskiState.SpreadCells(target)) * (ulong)(g.GroupId + 1);
         var sb = new StringBuilder();
         sb.Append(CultureInfo.InvariantCulture, $"piece '{piece.Label}' ({g.Name}, shape class {g.GroupId + 1}) anchor {m.From} -> {m.To}\n\n");
+        int dr = m.To / t.Width - m.From / t.Width, dc = m.To % t.Width - m.From % t.Width;
+        (string dir, string edgeName, ulong edge, string shift, ulong shifted) = (dr, dc) switch
+        {
+            (0, -1) => ("left", "LeftColMask", 0x11111UL, ">> 1", pieceMask >> 1),
+            (0, 1) => ("right", "RightColMask", 0x88888UL, "<< 1", pieceMask << 1),
+            (-1, 0) => ("up", "TopRowMask", 0x0000FUL, ">> 4", pieceMask >> 4),
+            _ => ("down", "BottomRowMask", 0xF0000UL, "<< 4", pieceMask << 4),
+        };
         sb.Append(Row("baseMask[g]", $"0x{g.BaseMask:X}"));
         sb.Append(Row($"pieceMask = base << {m.From}", $"0x{pieceMask:X5}"));
-        sb.Append(Row("other = occ ^ pieceMask", $"0x{other:X5}"));
+        sb.Append(Row("OccupancyMask", $"0x{before.OccupancyMask:X5}"));
+        sb.Append(Row("otherPieces = occ ^ pieceMask", $"0x{other:X5}"));
+        sb.Append(Row($"move {dir}: pieceMask & {edgeName}", $"0x{pieceMask & edge:X5} (== 0 -> in bounds)"));
+        sb.Append(Row($"shiftedMask = pieceMask {shift}", $"0x{shifted:X5}"));
+        sb.Append(Row("otherPieces & shiftedMask", $"0x{other & shifted:X5} (== 0 -> free)"));
         sb.Append(Row($"target = base << {m.To}", $"0x{target:X5}"));
         sb.Append(Row($"(valid[g] >> {m.To}) & 1", $"{(g.ValidAnchorsMask >> m.To) & 1}"));
         sb.Append(Row("(other & target) == 0", $"0x{other & target:X} -> legal"));
@@ -321,7 +421,7 @@ public sealed class RushHourSession : PuzzleSession<RushHourState, RushHourMove>
         Reset();
     }
 
-    public RushHourSession() : this(RushHourDomain.CreateDefault()) { }
+    public RushHourSession() : this(RushHourDomain.CreateLab1()) { }
 
     public override string Title => "Rush Hour";
     public override string Representation => "Each vehicle has one degree of freedom: a 3-bit offset along its lane. Occupancy is rebuilt from VehicleMasks[v, offset]; legality tests one FrontNeighborBit.";
@@ -332,7 +432,17 @@ public sealed class RushHourSession : PuzzleSession<RushHourState, RushHourMove>
 
     private Color VehicleColor(int v) => v == 0 ? Color.FromRgb(0xEF, 0x44, 0x44) : PuzzleSession.Hue(v * 47 + 20, 0.5, 0.85);
 
-    public override GroupInfo GroupInfoFor(int group) => new(VehicleColor(group), _r.Topology.Vehicles[group].Label.ToString());
+    public override ulong CellsOfGroup(int group) => _r.Topology.VehicleMasks[group, State.OffsetOf(group)];
+    public override string PieceMaskName(int pieceId) => $"VehicleMasks[{pieceId},{State.OffsetOf(pieceId)}]";
+
+    public override GroupInfo GroupInfoFor(int group)
+    {
+        var v = _r.Topology.Vehicles[group];
+        int off = State.OffsetOf(group);
+        string axis = v.IsHorizontal ? "row" : "col";
+        return new GroupInfo(VehicleColor(group), $"v{group}:{v.Label}", $"{(v.IsHorizontal ? 'r' : 'c')}{v.Lane} off {off}",
+            $"Vehicle {group} ({v.Label}), {axis} {v.Lane}, length {v.Length}\nbits {group * 3}..{group * 3 + 2}\n0b{Convert.ToString(off, 2).PadLeft(3, '0')} -> offset {off}");
+    }
 
     protected override IReadOnlyList<PieceView> BuildPieces(RushHourState s)
     {
@@ -364,11 +474,13 @@ public sealed class RushHourSession : PuzzleSession<RushHourState, RushHourMove>
         ulong nb = m.Delta > 0 ? topo.FrontNeighborBit[m.Vehicle, off] : topo.BackNeighborBit[m.Vehicle, off];
         var sb = new StringBuilder();
         sb.Append(CultureInfo.InvariantCulture, $"vehicle {veh.Label} ({(veh.IsHorizontal ? "row" : "col")} {veh.Lane}, len {veh.Length}) offset {off} -> {off + m.Delta}\n\n");
+        sb.Append(Row($"offset = (packed >> 3*{m.Vehicle}) & 0b111", $"{off}   (packed 0x{before.PackedOffsets:X16})"));
         sb.Append(Row("occ = OR VehicleMasks[v,off[v]]", $"0x{occ:X9}"));
         sb.Append(Row($"VehicleMasks[{veh.Label},{off}]", $"0x{topo.VehicleMasks[m.Vehicle, off]:X9}"));
         sb.Append(Row(m.Delta > 0 ? "FrontNeighborBit" : "BackNeighborBit", $"0x{nb:X9}"));
         sb.Append(Row("(occ & neighbor) == 0", $"0x{occ & nb:X} -> legal"));
-        sb.Append(Row($"packed {(m.Delta > 0 ? "+" : "-")}= 1 << 3*{m.Vehicle}", $"0x{(1UL << (3 * m.Vehicle)):X}"));
+        sb.Append(Row($"clear = packed & ~(7 << 3*{m.Vehicle})", $"0x{before.PackedOffsets & ~(7UL << (3 * m.Vehicle)):X16}"));
+        sb.Append(Row($"packed' = clear | ({off + m.Delta} << 3*{m.Vehicle})", $"0x{(before.PackedOffsets & ~(7UL << (3 * m.Vehicle))) | ((ulong)(off + m.Delta) << (3 * m.Vehicle)):X16}"));
         sb.Append(Row("packed'", $"0x{after.PackedOffsets:X16}"));
         sb.Append(Row("occ'", $"0x{after.Occupancy(topo):X9}"));
         return sb.ToString();

@@ -1,11 +1,12 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 
 namespace E2e4.SlidingBlock.Logic.Labs.Wpf;
 
-public readonly record struct GroupInfo(Color Color, string Label);
+public readonly record struct GroupInfo(Color Color, string Label, string Footer = "", string Detail = "");
 
 internal static class DrawHelpers
 {
@@ -29,10 +30,16 @@ public sealed class RegisterView : FrameworkElement
     public static readonly DependencyProperty FlashProperty = DependencyProperty.Register(
         nameof(Flash), typeof(double), typeof(RegisterView), new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender));
 
-    private const double CellW = 13, CellH = 20, Gap = 7, LabelH = 13;
+    private const double CellW = 13, CellH = 20, Gap = 7, LabelH = 13, FooterH = 12;
+    private const double RowH = LabelH + CellH + FooterH + 8;
     private ulong _value, _changed;
     private int _groupBits = 4, _groupCount = 16, _perRow = 8;
     private Func<int, GroupInfo>? _info;
+    private ulong _highlight;
+    private int _hot = -1;
+
+    /// <summary>Raised when the pointer enters a bit group (its index) or leaves the register (-1).</summary>
+    public event Action<int>? GroupHovered;
 
     public double Flash { get => (double)GetValue(FlashProperty); set => SetValue(FlashProperty, value); }
 
@@ -44,6 +51,41 @@ public sealed class RegisterView : FrameworkElement
         _info = info;
         InvalidateMeasure();
         InvalidateVisual();
+    }
+
+    /// <summary>Outlines the given groups (bit g = group g); used for cross-highlighting from the board.</summary>
+    public void HighlightGroups(ulong groups)
+    {
+        _highlight = groups;
+        InvalidateVisual();
+    }
+
+    private int HitGroup(Point pt)
+    {
+        double gw = _groupBits * CellW + Gap;
+        int col = (int)(pt.X / gw), row = (int)(pt.Y / RowH);
+        if (pt.X < 0 || pt.Y < 0 || col >= _perRow || pt.X - col * gw > _groupBits * CellW) return -1;
+        int p = row * _perRow + col;
+        return p < _groupCount ? _groupCount - 1 - p : -1;
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        int g = HitGroup(e.GetPosition(this));
+        if (g == _hot) return;
+        _hot = g;
+        string detail = g >= 0 && _info is not null ? _info(g).Detail : "";
+        ToolTip = detail.Length > 0 ? detail : null;
+        GroupHovered?.Invoke(g);
+    }
+
+    protected override void OnMouseLeave(MouseEventArgs e)
+    {
+        base.OnMouseLeave(e);
+        _hot = -1;
+        ToolTip = null;
+        GroupHovered?.Invoke(-1);
     }
 
     public void Update(ulong value, ulong changed)
@@ -58,7 +100,7 @@ public sealed class RegisterView : FrameworkElement
     protected override Size MeasureOverride(Size availableSize)
     {
         int rows = (_groupCount + _perRow - 1) / _perRow;
-        return new Size(_perRow * (_groupBits * CellW + Gap), rows * (LabelH + CellH + 8));
+        return new Size(_perRow * (_groupBits * CellW + Gap), rows * RowH);
     }
 
     protected override void OnRender(DrawingContext drawingContext)
@@ -69,11 +111,19 @@ public sealed class RegisterView : FrameworkElement
         for (int g = 0; g < _groupCount; g++)
         {
             int p = _groupCount - 1 - g;
-            double x0 = p % _perRow * (_groupBits * CellW + Gap), y0 = p / _perRow * (LabelH + CellH + 8);
+            double x0 = p % _perRow * (_groupBits * CellW + Gap), y0 = p / _perRow * RowH;
             var info = _info?.Invoke(g) ?? new GroupInfo(Colors.SlateGray, g.ToString(CultureInfo.InvariantCulture));
             var bg = new SolidColorBrush(Color.FromArgb(0x55, info.Color.R, info.Color.G, info.Color.B));
             drawingContext.DrawRoundedRectangle(bg, new Pen(new SolidColorBrush(Color.FromArgb(0xAA, info.Color.R, info.Color.G, info.Color.B)), 1),
                 new Rect(x0, y0 + LabelH, _groupBits * CellW, CellH), 3, 3);
+            if (((_highlight >> g) & 1UL) != 0)
+                drawingContext.DrawRoundedRectangle(null, new Pen(new SolidColorBrush(Color.FromRgb(0xF5, 0xB3, 0x01)), 2.5),
+                    new Rect(x0 - 2, y0 + LabelH - 2, _groupBits * CellW + 4, CellH + 4), 4, 4);
+            if (info.Footer.Length > 0)
+            {
+                var ft = DrawHelpers.Text(info.Footer, 9, labelBrush, this);
+                drawingContext.DrawText(ft, new Point(x0 + (_groupBits * CellW - ft.Width) / 2, y0 + LabelH + CellH + 1));
+            }
             var lt = DrawHelpers.Text(info.Label, 9, labelBrush, this);
             drawingContext.DrawText(lt, new Point(x0 + (_groupBits * CellW - lt.Width) / 2, y0));
             for (int i = _groupBits - 1; i >= 0; i--)

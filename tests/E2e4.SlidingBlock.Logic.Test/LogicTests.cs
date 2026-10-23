@@ -300,3 +300,83 @@ public class DomainTests
         Assert.True(d.IsGoal(s));
     }
 }
+
+public class LabSpecTests
+{
+    [Fact]
+    public void Lab1RushHourLayoutMatchesTheBrief()
+    {
+        var d = RushHourDomain.CreateLab1();
+        var t = d.Topology;
+        Assert.Equal(8, t.VehicleCount);
+        (int lane, int offset, int length, bool horizontal)[] expected =
+        [
+            (2, 1, 2, true), (3, 1, 3, false), (0, 0, 2, true), (0, 3, 2, false),
+            (5, 2, 3, true), (5, 0, 2, false), (4, 1, 2, true), (2, 0, 2, false),
+        ];
+        for (int v = 0; v < 8; v++)
+        {
+            Assert.Equal(expected[v].lane, t.Vehicles[v].Lane);
+            Assert.Equal(expected[v].offset, d.InitialState.OffsetOf(v));
+            Assert.Equal(expected[v].length, t.Vehicles[v].Length);
+            Assert.Equal(expected[v].horizontal, t.Vehicles[v].IsHorizontal);
+        }
+        Assert.NotNull(new PuzzleSolver().SolveBfs(d, d.InitialState));
+    }
+
+    [Fact]
+    public void KlotskiShapeClassesFollowTheBrief()
+    {
+        var d = KlotskiDomain.CreateClassic();
+        Assert.Equal(0x9FFFFUL, d.InitialState.OccupancyMask);
+        ulong key = d.InitialState.CanonicalShapeKey;
+        int Code(int cell) => (int)((key >> (3 * cell)) & 7);
+        Assert.Equal(2, Code(0));  // 1x2 vertical
+        Assert.Equal(4, Code(1));  // 2x2 master
+        Assert.Equal(3, Code(9));  // 2x1 horizontal
+        Assert.Equal(1, Code(13)); // 1x1
+        Assert.Equal(0, Code(17)); // empty
+    }
+
+    [Fact]
+    public void ParentMapFloodFillSplitsStraightFromHookAndRebuildsThePath()
+    {
+        // 3x3 board, 1x1 piece at 0, blocker at 4: 8 is reachable only by turning a corner.
+        const ulong All9 = 0x1FFUL;
+        var parent = new sbyte[9];
+        ulong reach = PolyominoState.FindReachableAnchors(0, 1UL, All9, 1UL << 4, 3, parent, out ulong straight, out ulong hook);
+        Assert.Equal(reach, PolyominoState.FindReachableAnchors(0, 1UL, All9, 1UL << 4, 3));
+        Assert.Equal(straight | hook, reach);
+        Assert.Equal(0UL, straight & hook);
+        Assert.NotEqual(0UL, straight & (1UL << 2)); // same row, no corner
+        Assert.NotEqual(0UL, hook & (1UL << 8));     // needs both axes
+        var rebuilt = new List<int>();
+        for (int a = 8; a != 0; a = parent[a]) rebuilt.Add(a);
+        rebuilt.Add(0);
+        rebuilt.Reverse();
+        Assert.Equal(5, rebuilt.Count); // 0, 1, 2, 5, 8 or 0, 3, 6, 7, 8
+        Assert.Equal(PolyominoState.ReconstructHookPath(0, 8, 1UL, All9, 1UL << 4, 3).Count, rebuilt.Count);
+    }
+
+    [Fact]
+    public void HookDemoPresetNeedsAFourStepHookAroundTheWall()
+    {
+        var d = PolyominoDomain.CreateLab2();
+        var t = d.Topology;
+        int a = t.Pieces.First(p => p.Label == "A").PieceId, j = t.Pieces.First(p => p.Label == "J").PieceId;
+        var s = d.InitialState.WithPieceMoved(t, a, 7).WithPieceMoved(t, j, 19);
+        var g = t.Groups[t.Pieces[a].GroupId];
+        ulong other = s.OccupancyMask ^ (g.BaseMask << 7);
+        var parent = new sbyte[25];
+        PolyominoState.FindReachableAnchors(7, g.BaseMask, g.ValidAnchorsMask, other, 5, parent, out _, out ulong hook);
+        Assert.NotEqual(0UL, hook & (1UL << 17));
+        Assert.Equal([7, 8, 13, 18, 17], PolyominoState.ReconstructHookPath(7, 17, g.BaseMask, g.ValidAnchorsMask, other, 5));
+    }
+
+    [Fact]
+    public void LabGroupNamesMatchTheBrief()
+    {
+        var names = PolyominoDomain.CreateLab2().Topology.Groups.Select(g => g.Name).ToArray();
+        Assert.Equal(["L-Tromino", "Upward T", "J-Tromino", "1x1 Single"], names);
+    }
+}
