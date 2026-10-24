@@ -36,8 +36,9 @@ dotnet build E2e4.SlidingBlock.Logic.slnx
 dotnet test E2e4.SlidingBlock.Logic.slnx
 ```
 
-CI (`.github/workflows/ci.yml`) runs the tests on `ubuntu-24.04`, `ubuntu-26.04` and `windows-latest`, which also checks whitespace
-formatting (`dotnet format whitespace --verify-no-changes`).
+CI (`.github/workflows/ci.yml`) runs only when started by hand (`gh workflow run ci.yml --ref <branch>`; Actions minutes are limited), on
+`ubuntu-24.04` and `windows-latest` (plus `ubuntu-26.04` with the `ubuntu-26` input). Windows also checks whitespace
+formatting (`dotnet format whitespace --verify-no-changes`). Run the tests locally before pushing; the tag-triggered publish workflow tests too.
 
 ## Releasing
 

@@ -1,14 +1,13 @@
 name: CI
 
+# Manual only, to save Actions minutes: `gh workflow run ci.yml --ref <branch>` (Windows minutes cost double).
 on:
-  push:
-    branches: [ master ]
-    paths-ignore: [ 'docs/**', 'assets/**', '**/*.md' ]
-  pull_request:
-    paths-ignore: [ 'docs/**', 'assets/**', '**/*.md' ]
-  # Weekly run on the newer Ubuntu image only; pushes and PRs use ubuntu-24.04 and Windows (Windows minutes cost double).
-  schedule:
-    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      ubuntu-26:
+        description: Also test on ubuntu-26.04
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -25,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(github.event_name == 'schedule' && '["ubuntu-26.04"]' || '["ubuntu-24.04","windows-latest"]') }}
+        os: ${{ fromJSON(inputs.ubuntu-26 && '["ubuntu-24.04","ubuntu-26.04","windows-latest"]' || '["ubuntu-24.04","windows-latest"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
