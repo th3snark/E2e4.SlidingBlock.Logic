@@ -23,6 +23,7 @@ dotnet_diagnostic.IDE0049.severity = warning
 # - CA1711, CA1707: naming conventions that clash with ...EventHandler delegates and xUnit Test_Names.
 # - CA1861: constant array arguments, which only occur in test data.
 # - CA1822, CA1859: members kept as instance members / abstract return types on purpose.
+# - CA1000: the generic bitboard types expose their factories and flood fills as statics. CA1051: CompositeMove is a plain move record with public fields.
 dotnet_diagnostic.CS1591.severity = suggestion
 dotnet_diagnostic.CA1848.severity = suggestion
 dotnet_diagnostic.CA1873.severity = suggestion
@@ -31,6 +32,8 @@ dotnet_diagnostic.CA1707.severity = suggestion
 dotnet_diagnostic.CA1861.severity = suggestion
 dotnet_diagnostic.CA1822.severity = suggestion
 dotnet_diagnostic.CA1859.severity = suggestion
+dotnet_diagnostic.CA1000.severity = suggestion
+dotnet_diagnostic.CA1051.severity = suggestion
 
 # Interfaces start with I.
 dotnet_naming_rule.interfaces_begin_with_i.severity = suggestion

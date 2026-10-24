@@ -10,6 +10,7 @@ Research notes and design explanations for the engine's object model. Read them 
 | 4 | [Zobrist hashing and GroupAnchors](04-zobrist-and-group-anchors.md) | Removing the k! identical-piece symmetry with permutation-invariant hashing and a lossless canonical state |
 | 5 | [Object model](05-object-model.md) | Topology vs state types, the domain interface and the solver, with class and flow diagrams |
 | 6 | [The WPF laboratories](06-labs.md) | What `E2e4.SlidingBlock.Logic.Labs.Wpf` shows and how it maps onto the engine |
+| - | [Extended mechanics](extended-mechanics.md) | Generic `UInt128` boards, hex grids, rotation, push/carry, ice, layers, plates and diodes |
 | 7 | [References](references.md) | Papers and prior work |
 | - | [Glossary](glossary.md) | Terms and acronyms (LSB, BFS, IDA*, ...) with short definitions |
 

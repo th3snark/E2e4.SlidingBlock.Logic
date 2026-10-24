@@ -2,42 +2,69 @@ using System.Numerics;
 
 namespace E2e4.SlidingBlock.Logic;
 
-/// <summary>Immutable puzzle description: board size, walls, equivalence groups, pieces and Zobrist keys.</summary>
-public sealed class PuzzleTopology
+/// <summary>Immutable puzzle description: board size, walls, equivalence groups, pieces, board cells with state and Zobrist keys.</summary>
+public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>
 {
     public const ulong ZobristSeed = 0x9E3779B97F4A7C15UL;
 
-    internal PuzzleTopology(int width, int height, ulong walls, IReadOnlyList<EquivalenceGroup> groups, IReadOnlyList<PieceTemplate> pieces)
+    /// <summary>Columns of <see cref="ZobristTable"/>: enough for a <see cref="UInt128"/> board.</summary>
+    public const int ZobristColumns = 128;
+
+    internal PuzzleTopology(int width, int height, GridGeometry geometry, TBitboard walls, IReadOnlyList<EquivalenceGroup<TBitboard>> groups,
+        IReadOnlyList<PieceTemplate> pieces, IReadOnlyList<DirectionalDiode> diodes, IReadOnlyList<PressurePlateRule<TBitboard>> plates)
     {
         Width = width;
         Height = height;
+        Geometry = geometry;
         StaticWallsMask = walls;
         Groups = groups;
         Pieces = pieces;
+        Diodes = diodes;
+        PressurePlates = plates;
+        _deltas = new int[Grid.DirectionCount(geometry)];
+        for (int d = 0; d < _deltas.Length; d++) _deltas[d] = Grid.Delta(width, d);
         ZobristTable = BuildZobrist(groups.Count);
+        ValidAnchorsByDir = BuildValidAnchorsByDir();
     }
+
+    private readonly int[] _deltas;
 
     public int Width { get; }
     public int Height { get; }
+    public GridGeometry Geometry { get; }
     public int CellCount => Width * Height;
-    public ulong StaticWallsMask { get; }
-    public IReadOnlyList<EquivalenceGroup> Groups { get; }
+    public int DirectionCount => _deltas.Length;
+    public TBitboard StaticWallsMask { get; }
+    public IReadOnlyList<EquivalenceGroup<TBitboard>> Groups { get; }
     public IReadOnlyList<PieceTemplate> Pieces { get; }
+    public IReadOnlyList<DirectionalDiode> Diodes { get; }
+    public IReadOnlyList<PressurePlateRule<TBitboard>> PressurePlates { get; }
     public ulong[,] ZobristTable { get; }
 
-    public ulong PieceMask(int pieceId, int anchor) => Groups[Pieces[pieceId].GroupId].BaseMask << anchor;
+    /// <summary>
+    /// [group, direction]: bit s is set iff s is a valid anchor and moving the group into s along that direction does not enter a diode
+    /// cell from a forbidden side. Equal to the group's <see cref="EquivalenceGroup{TBitboard}.ValidAnchorsMask"/> on boards without diodes.
+    /// </summary>
+    public TBitboard[,] ValidAnchorsByDir { get; }
 
-    public static PuzzleTopologyBuilder CreateBuilder(int width, int height) => new(width, height);
+    /// <summary>Cell index change of a one-step move per direction: -1, +1, -W, +W (and -W + 1, +W - 1 on a hex board).</summary>
+    public ReadOnlySpan<int> GetDirectionDeltas() => _deltas;
+
+    public TBitboard PieceMask(int pieceId, int anchor) => Groups[Pieces[pieceId].GroupId].BaseMask << anchor;
+
+    public static PuzzleTopologyBuilder<TBitboard> CreateBuilder(int width, int height, GridGeometry geometry = GridGeometry.Orthogonal4Way) =>
+        new(width, height, geometry);
 
     /// <summary>
     /// Builds a topology from an ASCII map. '#' is a wall, '.' is empty, every other character is one piece.
-    /// Pieces with the same normalized shape, directions and key share an equivalence group; groups are
+    /// Pieces with the same normalized shape, directions, key and physics share an equivalence group; groups are
     /// ordered by the legend order.
     /// </summary>
-    public static PuzzleTopology FromAsciiMap(IReadOnlyList<string> rows, IReadOnlyList<(char Symbol, PieceKind Kind)> legend)
+    public static PuzzleTopology<TBitboard> FromAsciiMap(IReadOnlyList<string> rows, IReadOnlyList<(char Symbol, PieceKind Kind)> legend,
+        GridGeometry geometry = GridGeometry.Orthogonal4Way)
     {
         int height = rows.Count, width = rows[0].Length;
-        var builder = new PuzzleTopologyBuilder(width, height);
+        var builder = new PuzzleTopologyBuilder<TBitboard>(width, height, geometry);
         var cellsBySymbol = new Dictionary<char, List<(int r, int c)>>();
         var order = new List<char>();
         for (int r = 0; r < height; r++)
@@ -50,34 +77,37 @@ public sealed class PuzzleTopology
                 list.Add((r, c));
             }
 
-        var groupKeys = new Dictionary<(ulong, AllowedDirections, string), int>();
+        var groupKeys = new Dictionary<(TBitboard, PieceKind), int>();
         // Pass 1: create groups in legend order so group ids are predictable.
         foreach (var (symbol, kind) in legend)
         {
             if (!cellsBySymbol.TryGetValue(symbol, out var cells)) continue;
-            var (baseMask, _) = PuzzleTopologyBuilder.Normalize(cells, width);
-            var key = (baseMask, kind.Directions, kind.Key);
+            var (baseMask, _) = PuzzleTopologyBuilder<TBitboard>.Normalize(cells, width);
+            var key = (baseMask, KeyOf(kind));
             if (!groupKeys.ContainsKey(key))
-                groupKeys[key] = builder.AddGroup(kind.Name, cells, kind.Directions);
+                groupKeys[key] = builder.AddGroup(kind.Name, cells, kind.Directions, kind.ElevationMask, kind.SlidePhysics, kind.Roles);
         }
         // Pass 2: pieces in row-major order of first appearance.
         foreach (char ch in order)
         {
             var cells = cellsBySymbol[ch];
             var kind = legend.First(l => l.Symbol == ch).Kind;
-            var (baseMask, _) = PuzzleTopologyBuilder.Normalize(cells, width);
+            var (baseMask, _) = PuzzleTopologyBuilder<TBitboard>.Normalize(cells, width);
             int anchor = cells.Min(x => x.r * width + x.c);
-            builder.AddPiece(groupKeys[(baseMask, kind.Directions, kind.Key)], ch.ToString(), anchor);
+            builder.AddPiece(groupKeys[(baseMask, KeyOf(kind))], ch.ToString(), anchor);
         }
         return builder.Build();
     }
 
+    // The display name does not take part in the group identity.
+    private static PieceKind KeyOf(PieceKind kind) => kind with { Name = "" };
+
     private static ulong[,] BuildZobrist(int groups)
     {
-        var table = new ulong[Math.Max(groups, 1), 64];
+        var table = new ulong[Math.Max(groups, 1), ZobristColumns];
         ulong state = ZobristSeed;
         for (int g = 0; g < table.GetLength(0); g++)
-            for (int s = 0; s < 64; s++)
+            for (int s = 0; s < ZobristColumns; s++)
             {
                 // XorShift64*
                 state ^= state >> 12;
@@ -87,33 +117,133 @@ public sealed class PuzzleTopology
             }
         return table;
     }
+
+    private TBitboard[,] BuildValidAnchorsByDir()
+    {
+        int dirs = _deltas.Length, cells = CellCount;
+        var table = new TBitboard[Math.Max(Groups.Count, 1), dirs];
+        for (int g = 0; g < Groups.Count; g++)
+        {
+            var group = Groups[g];
+            for (int d = 0; d < dirs; d++)
+            {
+                TBitboard valid = group.ValidAnchorsMask;
+                foreach (var diode in Diodes)
+                {
+                    if ((diode.AllowedEntryDirectionsMask >> d & 1) != 0) continue;
+                    TBitboard cell = TBitboard.One << diode.CellIndex;
+                    for (int n = 0; n < cells; n++)
+                    {
+                        if (((valid >> n) & TBitboard.One) == TBitboard.Zero) continue;
+                        int prev = n - _deltas[d];
+                        TBitboard before = (uint)prev < (uint)cells ? group.BaseMask << prev : TBitboard.Zero;
+                        TBitboard entered = (group.BaseMask << n) & ~before;
+                        if ((entered & cell) != TBitboard.Zero) valid &= ~(TBitboard.One << n);
+                    }
+                }
+                table[g, d] = valid;
+            }
+        }
+        return table;
+    }
 }
 
-public sealed class PuzzleTopologyBuilder
+public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>
 {
-    private readonly int _width, _height;
-    private ulong _walls;
-    private readonly List<(string Name, IReadOnlyList<(int dRow, int dCol)> Cells, ulong Base, AllowedDirections Dirs)> _groups = [];
-    private readonly List<PieceTemplate> _pieces = [];
-
-    public PuzzleTopologyBuilder(int width, int height)
+    private sealed record GroupDef(string Name, IReadOnlyList<(int dRow, int dCol)> Cells, TBitboard Base, AllowedDirections Dirs,
+        byte Elevation, SlidePhysics Physics, RoleFlags Roles)
     {
-        if (width <= 0 || height <= 0 || width * height > 64) throw new ArgumentOutOfRangeException(nameof(width), "Board must fit in 64 bits.");
-        _width = width;
-        _height = height;
+        public int RingStart { get; init; } = -1;
+        public int RingLength { get; init; }
+        public int RingIndex { get; init; }
+        public int BoxSize { get; init; }
+        public int[] RingOffsets { get; init; } = [];
     }
 
-    public PuzzleTopologyBuilder AddWall(int row, int col)
+    private readonly int _width, _height;
+    private readonly GridGeometry _geometry;
+    private TBitboard _walls;
+    private readonly List<GroupDef> _groups = [];
+    private readonly List<PieceTemplate> _pieces = [];
+    private readonly List<DirectionalDiode> _diodes = [];
+    private readonly List<PressurePlateRule<TBitboard>> _plates = [];
+
+    public PuzzleTopologyBuilder(int width, int height, GridGeometry geometry = GridGeometry.Orthogonal4Way)
     {
-        _walls |= 1UL << (row * _width + col);
+        if (width <= 0 || height <= 0 || width * height > Grid.BitWidth<TBitboard>())
+            throw new ArgumentOutOfRangeException(nameof(width), $"Board must fit in {Grid.BitWidth<TBitboard>()} bits.");
+        _width = width;
+        _height = height;
+        _geometry = geometry;
+    }
+
+    public PuzzleTopologyBuilder<TBitboard> AddWall(int row, int col)
+    {
+        _walls |= TBitboard.One << (row * _width + col);
         return this;
     }
 
-    public int AddGroup(string name, IEnumerable<(int dRow, int dCol)> cells, AllowedDirections directions = AllowedDirections.Both)
+    public PuzzleTopologyBuilder<TBitboard> AddDiode(int row, int col, byte allowedEntryDirectionsMask)
+    {
+        _diodes.Add(new DirectionalDiode(row * _width + col, allowedEntryDirectionsMask));
+        return this;
+    }
+
+    public PuzzleTopologyBuilder<TBitboard> AddPressurePlate(TBitboard triggerCellsMask, TBitboard gateCellsMask, byte triggerElevationMask = 0b01,
+        bool normallyClosed = true)
+    {
+        _plates.Add(new PressurePlateRule<TBitboard>(triggerCellsMask, gateCellsMask, triggerElevationMask, normallyClosed));
+        return this;
+    }
+
+    public int AddGroup(string name, IEnumerable<(int dRow, int dCol)> cells, AllowedDirections directions = AllowedDirections.Both,
+        byte elevationMask = 0b01, SlidePhysics physics = SlidePhysics.ContinuousFloodFill, RoleFlags roles = RoleFlags.None)
     {
         var (baseMask, rel) = Normalize(cells, _width);
-        _groups.Add((name, rel, baseMask, directions));
+        _groups.Add(new GroupDef(name, rel, baseMask, directions, elevationMask, physics, roles));
         return _groups.Count - 1;
+    }
+
+    /// <summary>
+    /// Adds the distinct 90-degree orientations of a shape as a ring of groups that rotate into each other inside the square box
+    /// around the shape's bounding box (anchored at its top-left). Returns the group ids in clockwise order, starting with the shape as given.
+    /// </summary>
+    public IReadOnlyList<int> AddRotatableGroup(string name, IEnumerable<(int dRow, int dCol)> cells, AllowedDirections directions = AllowedDirections.Both,
+        byte elevationMask = 0b01, SlidePhysics physics = SlidePhysics.ContinuousFloodFill, RoleFlags roles = RoleFlags.None)
+    {
+        var start = cells.Distinct().ToList();
+        int minR = start.Min(c => c.dRow), minC = start.Min(c => c.dCol);
+        start = start.Select(c => (c.dRow - minR, c.dCol - minC)).ToList();
+        int n = Math.Max(start.Max(c => c.dRow), start.Max(c => c.dCol)) + 1;
+        if (n > _width || n > _height) throw new ArgumentException("The rotation box does not fit on the board.", nameof(cells));
+
+        var orientations = new List<List<(int dRow, int dCol)>>();
+        var current = start;
+        while (true)
+        {
+            var sorted = current.OrderBy(c => c.dRow).ThenBy(c => c.dCol).ToList();
+            if (orientations.Count > 0 && orientations[0].SequenceEqual(sorted)) break;
+            orientations.Add(sorted);
+            current = sorted.Select(c => (c.dCol, n - 1 - c.dRow)).ToList();
+        }
+
+        int first = _groups.Count, len = orientations.Count;
+        var offsets = orientations.Select(o => o[0].dRow * _width + o[0].dCol).ToArray();
+        var ids = new List<int>();
+        for (int i = 0; i < len; i++)
+        {
+            var (baseMask, rel) = Normalize(orientations[i], _width);
+            _groups.Add(new GroupDef(name, rel, baseMask, directions, elevationMask, physics, roles)
+            {
+                RingStart = first,
+                RingLength = len,
+                RingIndex = i,
+                BoxSize = n,
+                RingOffsets = offsets,
+            });
+            ids.Add(first + i);
+        }
+        return ids;
     }
 
     public int AddPiece(int groupId, string label, int initialAnchor)
@@ -122,31 +252,61 @@ public sealed class PuzzleTopologyBuilder
         return _pieces.Count - 1;
     }
 
-    public PuzzleTopology Build()
+    public PuzzleTopology<TBitboard> Build()
     {
-        var groups = new List<EquivalenceGroup>();
+        var groups = new List<EquivalenceGroup<TBitboard>>();
         for (int g = 0; g < _groups.Count; g++)
         {
-            var (name, rel, baseMask, dirs) = _groups[g];
-            groups.Add(new EquivalenceGroup(g, name, baseMask, ComputeValidAnchors(rel), dirs, rel));
+            var d = _groups[g];
+            var group = new EquivalenceGroup<TBitboard>(g, d.Name, d.Base, ComputeValidAnchors(d.Cells), d.Dirs, d.Cells)
+            {
+                ElevationMask = d.Elevation,
+                SlidePhysics = d.Physics,
+                Roles = d.Roles,
+            };
+            if (d.RingStart >= 0 && d.RingLength > 1)
+            {
+                int i = d.RingIndex, len = d.RingLength;
+                int next = d.RingStart + (i + 1) % len, prev = d.RingStart + (i + len - 1) % len;
+                TBitboard box = TBitboard.Zero;
+                for (int r = 0; r < d.BoxSize; r++)
+                    for (int c = 0; c < d.BoxSize; c++) box |= TBitboard.One << (r * _width + c);
+                group = group with
+                {
+                    CanRotate = true,
+                    NextCwGroupId = next,
+                    NextCcwGroupId = prev,
+                    BoxOriginDelta = -d.RingOffsets[i],
+                    AnchorDeltaCw = d.RingOffsets[next - d.RingStart] - d.RingOffsets[i],
+                    AnchorDeltaCcw = d.RingOffsets[prev - d.RingStart] - d.RingOffsets[i],
+                    RotationBoxSize = d.BoxSize,
+                    SweptClearanceMask = box,
+                };
+            }
+            groups.Add(group);
         }
 
-        ulong occupied = _walls;
+        var layers = new TBitboard[2];
+        layers[0] = layers[1] = _walls;
         foreach (var p in _pieces)
         {
             var g = groups[p.GroupId];
-            if (((g.ValidAnchorsMask >> p.InitialAnchor) & 1UL) == 0)
+            if (((g.ValidAnchorsMask >> p.InitialAnchor) & TBitboard.One) == TBitboard.Zero)
                 throw new InvalidOperationException($"Piece {p.Label} has invalid initial anchor {p.InitialAnchor}.");
-            ulong m = g.BaseMask << p.InitialAnchor;
-            if ((occupied & m) != 0) throw new InvalidOperationException($"Piece {p.Label} overlaps another piece or wall.");
-            occupied |= m;
+            TBitboard m = g.BaseMask << p.InitialAnchor;
+            for (int layer = 0; layer < 2; layer++)
+            {
+                if ((g.ElevationMask >> layer & 1) == 0) continue;
+                if ((layers[layer] & m) != TBitboard.Zero) throw new InvalidOperationException($"Piece {p.Label} overlaps another piece or wall.");
+                layers[layer] |= m;
+            }
         }
-        return new PuzzleTopology(_width, _height, _walls, groups, _pieces.ToArray());
+        return new PuzzleTopology<TBitboard>(_width, _height, _geometry, _walls, groups, _pieces.ToArray(), _diodes.ToArray(), _plates.ToArray());
     }
 
-    private ulong ComputeValidAnchors(IReadOnlyList<(int dRow, int dCol)> rel)
+    private TBitboard ComputeValidAnchors(IReadOnlyList<(int dRow, int dCol)> rel)
     {
-        ulong valid = 0;
+        TBitboard valid = TBitboard.Zero;
         for (int s = 0; s < _width * _height; s++)
         {
             int r = s / _width, c = s % _width;
@@ -154,9 +314,9 @@ public sealed class PuzzleTopologyBuilder
             foreach (var (dr, dc) in rel)
             {
                 int rr = r + dr, cc = c + dc;
-                if (rr < 0 || rr >= _height || cc < 0 || cc >= _width || ((_walls >> (rr * _width + cc)) & 1UL) != 0) { ok = false; break; }
+                if (rr < 0 || rr >= _height || cc < 0 || cc >= _width || ((_walls >> (rr * _width + cc)) & TBitboard.One) != TBitboard.Zero) { ok = false; break; }
             }
-            if (ok) valid |= 1UL << s;
+            if (ok) valid |= TBitboard.One << s;
         }
         return valid;
     }
@@ -165,15 +325,20 @@ public sealed class PuzzleTopologyBuilder
     /// LSB normalization: lay the cells in their bounding box, then shift right by tzcnt so the first
     /// occupied cell in row-major order sits on bit 0. Also returns cells relative to that first cell.
     /// </summary>
-    public static (ulong BaseMask, IReadOnlyList<(int dRow, int dCol)> RelativeCells) Normalize(IEnumerable<(int dRow, int dCol)> cells, int boardWidth)
+    public static (TBitboard BaseMask, IReadOnlyList<(int dRow, int dCol)> RelativeCells) Normalize(IEnumerable<(int dRow, int dCol)> cells, int boardWidth)
     {
         var list = cells.Distinct().OrderBy(c => c.dRow).ThenBy(c => c.dCol).ToList();
         if (list.Count == 0) throw new ArgumentException("A piece needs at least one cell.", nameof(cells));
         int minR = list.Min(c => c.dRow), minC = list.Min(c => c.dCol), maxC = list.Max(c => c.dCol);
         if (maxC - minC + 1 > boardWidth) throw new ArgumentException("Piece is wider than the board.", nameof(cells));
-        ulong raw = 0;
-        foreach (var (r, c) in list) raw |= 1UL << ((r - minR) * boardWidth + (c - minC));
-        ulong baseMask = raw >> BitOperations.TrailingZeroCount(raw);
+        TBitboard raw = TBitboard.Zero;
+        foreach (var (r, c) in list)
+        {
+            int bit = (r - minR) * boardWidth + (c - minC);
+            if (bit >= Grid.BitWidth<TBitboard>()) throw new ArgumentException("Piece does not fit in the bitboard.", nameof(cells));
+            raw |= TBitboard.One << bit;
+        }
+        TBitboard baseMask = raw >> Grid.Lsb(raw);
         var origin = list[0];
         var rel = list.Select(c => (c.dRow - origin.dRow, c.dCol - origin.dCol)).ToArray();
         return (baseMask, rel);

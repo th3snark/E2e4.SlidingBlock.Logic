@@ -13,6 +13,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\E2e4.SlidingBlock.Logic\Aliases.cs" Link="Aliases.cs" />
     <ProjectReference Include="..\E2e4.SlidingBlock.Logic\E2e4.SlidingBlock.Logic.csproj" />
   </ItemGroup>
 
