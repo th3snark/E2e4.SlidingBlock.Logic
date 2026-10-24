@@ -33,6 +33,33 @@ public enum RoleFlags : byte
 /// <summary>A cell that can only be entered from the directions set in <see cref="AllowedEntryDirectionsMask"/> (bit d = direction d).</summary>
 public readonly record struct DirectionalDiode(int CellIndex, byte AllowedEntryDirectionsMask);
 
+/// <summary>The engine's direction numbers (bit d of a diode mask, the <see cref="Partition.Direction"/> of a partition).</summary>
+public static class GridDirection
+{
+    public const int Left = 0;
+    public const int Right = 1;
+    public const int Up = 2;
+    public const int Down = 3;
+
+    /// <summary>Hex grids only: up and to the right (-W + 1).</summary>
+    public const int UpRight = 4;
+
+    /// <summary>Hex grids only: down and to the left (+W - 1).</summary>
+    public const int DownLeft = 5;
+}
+
+/// <summary>
+/// An immovable partition on the edge between <paramref name="Cell"/> and its neighbour in <paramref name="Direction"/>: no piece crosses it
+/// in either direction, not even in the middle of a longer move. The builder keeps it in one canonical form, <paramref name="Direction"/>
+/// being <see cref="GridDirection.Right"/>, <see cref="GridDirection.Down"/> or <see cref="GridDirection.DownLeft"/> (the neighbour has
+/// the higher cell index), so equal partitions compare equal however they were declared.
+/// </summary>
+public readonly record struct Partition(int Cell, int Direction)
+{
+    /// <summary>The cell on the other side of the partition, on a board <paramref name="width"/> cells wide.</summary>
+    public int Neighbour(int width) => Cell + Grid.Delta(width, Direction);
+}
+
 /// <summary>
 /// A gate that is solid (<paramref name="NormallyClosed"/>) until a piece on <paramref name="TriggerElevationMask"/> covers a trigger cell;
 /// with <paramref name="NormallyClosed"/> false it is solid only while the trigger is covered.

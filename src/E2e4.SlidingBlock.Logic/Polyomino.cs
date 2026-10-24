@@ -223,7 +223,7 @@ public struct PolyominoState<TBitboard> : IEquatable<PolyominoState<TBitboard>>
     /// <summary>
     /// Register-only BFS flood fill over anchors. Returns every anchor (excluding the start) reachable by
     /// sliding one square at a time, including multi-step corner "hook" paths. Entry masks stop shifts
-    /// from wrapping across rows. <paramref name="validByDir"/> (one mask per direction) restricts which anchors a step may enter, e.g. for diodes.
+    /// from wrapping across rows. <paramref name="validByDir"/> (one mask per direction) restricts which anchors a step may enter, e.g. for diodes and partitions.
     /// </summary>
     public static TBitboard FindReachableAnchors(int startAnchor, TBitboard baseMask, TBitboard validAnchorsMask, TBitboard otherOccupancy, int boardWidth,
         AllowedDirections directions = AllowedDirections.Both, GridGeometry geometry = GridGeometry.Orthogonal4Way, ReadOnlySpan<TBitboard> validByDir = default)
@@ -389,7 +389,7 @@ internal static class MoveGen<TBitboard> where TBitboard : unmanaged, IBinaryInt
         TBitboard other = OtherOccupancy(topology, state, g, a, walls);
         if (g.SlidePhysics == SlidePhysics.ContinuousFloodFill)
         {
-            ReadOnlySpan<TBitboard> byDir = topology.DiodeTable.Length > 0 ? topology.ValidByDirRow(g.GroupId) : default;
+            ReadOnlySpan<TBitboard> byDir = topology.HasEntryRules ? topology.ValidByDirRow(g.GroupId) : default;
             return PolyominoState<TBitboard>.Flood(a, g.BaseMask, g.ValidAnchorsMask, other, g.Directions, topology.DeltaTable, topology.EntryTable, byDir);
         }
 
@@ -433,7 +433,10 @@ internal static class MoveGen<TBitboard> where TBitboard : unmanaged, IBinaryInt
             int next = curr + delta;
             if (!Grid.Has(topology.ValidAnchorsFor(g.GroupId, dir), next))
             {
+                // A wall under the footprint, or else the cells it would enter across a partition or against a diode.
                 blocking = WallCells(topology, g, next);
+                if (blocking == TBitboard.Zero)
+                    blocking = (g.BaseMask << next) & ~(g.BaseMask << curr) & topology.ForbiddenEntryCells(dir);
                 break;
             }
             TBitboard footprint = g.BaseMask << next;
@@ -503,7 +506,7 @@ public sealed class PolyominoDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
         var g = Topology.GroupTable[state.GroupOf(pieceId)];
         int a = state.AnchorOf(pieceId);
         TBitboard other = MoveGen<TBitboard>.OtherOccupancy(Topology, state, g, a, ActiveDynamicWalls(state));
-        ReadOnlySpan<TBitboard> byDir = Topology.DiodeTable.Length > 0 ? Topology.ValidByDirRow(g.GroupId) : default;
+        ReadOnlySpan<TBitboard> byDir = Topology.HasEntryRules ? Topology.ValidByDirRow(g.GroupId) : default;
         return PolyominoState<TBitboard>.ReconstructHookPath(a, targetAnchor, g.BaseMask, g.ValidAnchorsMask, other, Topology.Width, g.Directions,
             Topology.Geometry, byDir);
     }

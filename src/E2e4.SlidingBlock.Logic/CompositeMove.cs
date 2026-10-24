@@ -158,6 +158,7 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
         if (boxOrigin < 0 || boxOrigin % topo.Width + size > topo.Width || boxOrigin / topo.Width + size > topo.Height) return false;
         TBitboard blocked = MoveGen<TBitboard>.OtherOccupancy(topo, state, g, a, walls) | topo.StaticWallsMask;
         if ((blocked & (g.SweptClearanceMask << boxOrigin)) != TBitboard.Zero) return false;
+        if (topo.PartitionTable.Length > 0 && topo.HasPartitionWithin(boxOrigin, size)) return false;
 
         move = CompositeMove.Rotated(pieceId, g.GroupId, next, a, nextAnchor, -1);
         return true;

@@ -21,6 +21,7 @@ public static class RaycastReport
             var t = traces[i];
             string reason = t.BlockingBitsMask == 0 ? "Board Edge"
                 : (t.BlockingBitsMask & topo.StaticWallsMask) != 0 ? "Static Bumper Wall"
+                : (t.BlockingBitsMask & topo.ForbiddenEntryCells(t.Direction)) != 0 ? "Partition"
                 : "Piece Collision";
             list.Add(new RaycastMoveResult(topo.GetDirectionDeltas()[t.Direction], Names[t.Direction], t.StartAnchor, t.TerminalAnchor, t.StepCount,
                 t.SweptCellsMask, reason, t.BlockingBitsMask));
