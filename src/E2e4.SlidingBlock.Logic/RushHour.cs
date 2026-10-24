@@ -12,26 +12,33 @@ public sealed class RushHourTopology
     {
         Vehicles = vehicles;
         int n = vehicles.Count;
-        VehicleMasks = new ulong[n, Size];
-        FrontNeighborBit = new ulong[n, Size];
-        BackNeighborBit = new ulong[n, Size];
+        _masks = new ulong[n * Size];
+        _front = new ulong[n * Size];
+        _back = new ulong[n * Size];
         foreach (var v in vehicles)
             for (int off = 0; off <= Size - v.Length; off++)
             {
                 ulong m = 0;
                 for (int k = 0; k < v.Length; k++) m |= Bit(v, off + k);
-                VehicleMasks[v.Index, off] = m;
-                FrontNeighborBit[v.Index, off] = off + v.Length < Size ? Bit(v, off + v.Length) : 0;
-                BackNeighborBit[v.Index, off] = off > 0 ? Bit(v, off - 1) : 0;
+                _masks[v.Index * Size + off] = m;
+                _front[v.Index * Size + off] = off + v.Length < Size ? Bit(v, off + v.Length) : 0;
+                _back[v.Index * Size + off] = off > 0 ? Bit(v, off - 1) : 0;
             }
     }
 
     public IReadOnlyList<Vehicle> Vehicles { get; }
     public int VehicleCount => Vehicles.Count;
-    public ulong[,] VehicleMasks { get; }
+
+    private readonly ulong[] _masks, _front, _back;
+
+    /// <summary>The cells the vehicle covers at <paramref name="offset"/> along its lane.</summary>
+    public ulong VehicleMask(int vehicle, int offset) => _masks[vehicle * Size + offset];
+
     /// <summary>Single bit just past the vehicle's front; 0 means the board edge (move impossible).</summary>
-    public ulong[,] FrontNeighborBit { get; }
-    public ulong[,] BackNeighborBit { get; }
+    public ulong FrontNeighborBit(int vehicle, int offset) => _front[vehicle * Size + offset];
+
+    /// <summary>Single bit just behind the vehicle's back; 0 means the board edge.</summary>
+    public ulong BackNeighborBit(int vehicle, int offset) => _back[vehicle * Size + offset];
 
     private static ulong Bit(Vehicle v, int along) => 1UL << (v.IsHorizontal ? v.Lane * Size + along : along * Size + v.Lane);
 
@@ -88,7 +95,7 @@ public readonly struct RushHourState : IEquatable<RushHourState>
     public ulong Occupancy(RushHourTopology topo)
     {
         ulong occ = 0;
-        for (int v = 0; v < topo.VehicleCount; v++) occ |= topo.VehicleMasks[v, OffsetOf(v)];
+        for (int v = 0; v < topo.VehicleCount; v++) occ |= topo.VehicleMask(v, OffsetOf(v));
         return occ;
     }
 
@@ -132,7 +139,7 @@ public sealed class RushHourDomain : ISlidingBlockDomain<RushHourState, RushHour
         for (int v = 0; v < Topology.VehicleCount; v++)
         {
             int off = state.OffsetOf(v);
-            ulong back = Topology.BackNeighborBit[v, off], front = Topology.FrontNeighborBit[v, off];
+            ulong back = Topology.BackNeighborBit(v, off), front = Topology.FrontNeighborBit(v, off);
             if (back != 0 && (occ & back) == 0) moveBuffer[n++] = new RushHourMove((byte)v, -1);
             if (front != 0 && (occ & front) == 0) moveBuffer[n++] = new RushHourMove((byte)v, 1);
         }
@@ -141,5 +148,5 @@ public sealed class RushHourDomain : ISlidingBlockDomain<RushHourState, RushHour
 
     public RushHourState ApplyMove(in RushHourState state, in RushHourMove move) => state.Shift(move.Vehicle, move.Delta);
 
-    public ulong GetHashCode64(in RushHourState state) => state.PackedOffsets * 0x9E3779B97F4A7C15UL;
+    public ulong GetHashCode64(in RushHourState state) => Hashing.Mix(state.PackedOffsets);
 }

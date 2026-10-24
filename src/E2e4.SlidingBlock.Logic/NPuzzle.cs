@@ -61,7 +61,8 @@ public readonly record struct NPuzzleMove(byte From, byte To);
 /// </summary>
 public sealed class NPuzzleDomain : ISlidingBlockDomain<NPuzzleState, NPuzzleMove>
 {
-    private readonly byte[] _goalRow = new byte[16], _goalCol = new byte[16];
+    // [tile * 16 + square]: Manhattan distance from the square to the tile's goal square; the blank costs nothing.
+    private readonly byte[] _distance = new byte[16 * 16];
 
     public NPuzzleDomain(NPuzzleState initial, NPuzzleState goal)
     {
@@ -71,8 +72,8 @@ public sealed class NPuzzleDomain : ISlidingBlockDomain<NPuzzleState, NPuzzleMov
         for (int tile = 0; tile < 16; tile++)
         {
             int square = (int)((inverse >> (tile << 2)) & 0xF);
-            _goalRow[tile] = (byte)(square >> 2);
-            _goalCol[tile] = (byte)(square & 3);
+            if (tile == 0) continue;
+            for (int s = 0; s < 16; s++) _distance[tile * 16 + s] = (byte)(Math.Abs((s >> 2) - (square >> 2)) + Math.Abs((s & 3) - (square & 3)));
         }
     }
 
@@ -86,12 +87,8 @@ public sealed class NPuzzleDomain : ISlidingBlockDomain<NPuzzleState, NPuzzleMov
     public int ManhattanDistance(NPuzzleState state)
     {
         int sum = 0;
-        for (int s = 0; s < 16; s++)
-        {
-            int t = state.TileAt(s);
-            if (t == 0) continue;
-            sum += Math.Abs((s >> 2) - _goalRow[t]) + Math.Abs((s & 3) - _goalCol[t]);
-        }
+        ulong packed = state.PackedNibbles;
+        for (int s = 0; s < 16; s++, packed >>= 4) sum += _distance[(int)(packed & 0xF) * 16 + s];
         return sum;
     }
 
@@ -107,5 +104,5 @@ public sealed class NPuzzleDomain : ISlidingBlockDomain<NPuzzleState, NPuzzleMov
 
     public NPuzzleState ApplyMove(in NPuzzleState state, in NPuzzleMove move) => state.SlideTileIntoBlank(move.From);
 
-    public ulong GetHashCode64(in NPuzzleState state) => state.PackedNibbles * 0x9E3779B97F4A7C15UL;
+    public ulong GetHashCode64(in NPuzzleState state) => Hashing.Mix(state.PackedNibbles);
 }

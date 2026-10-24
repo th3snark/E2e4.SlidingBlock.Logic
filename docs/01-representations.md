@@ -32,8 +32,8 @@ nibble:    F  E  D  C ... 3  2  1  0      0xFEDCBA9876543210  (solved: tile k on
 Cars (`1x2`) and trucks (`1x3`) cannot change lane or rotate, so each vehicle has exactly one degree of freedom: its offset
 `0..4` along its fixed row or column. That is 3 bits per vehicle, so up to 16 vehicles fit in 48 bits.
 
-- Occupancy (36 bits) is rebuilt in O(N) from a precomputed table `VehicleMasks[vehicle, offset]`.
-- Legality of a step is a single bit test against `FrontNeighborBit[vehicle, offset]` or `BackNeighborBit[vehicle, offset]`;
+- Occupancy (36 bits) is rebuilt in O(N) from a precomputed table `VehicleMask(vehicle, offset)`.
+- Legality of a step is a single bit test against `FrontNeighborBit(vehicle, offset)` or `BackNeighborBit(vehicle, offset)`;
   a value of `0` means the board edge, so the move is impossible.
 
 ## 1.3 Unrestricted 2D pieces: Klotski and polyominoes

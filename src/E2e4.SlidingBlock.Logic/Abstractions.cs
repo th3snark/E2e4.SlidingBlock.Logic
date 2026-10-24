@@ -57,6 +57,13 @@ public sealed record PieceTemplate(int PieceId, int GroupId, string Label, int I
 public sealed record PieceKind(string Name, AllowedDirections Directions = AllowedDirections.Both, string Key = "",
     byte ElevationMask = 0b01, SlidePhysics SlidePhysics = SlidePhysics.ContinuousFloodFill, RoleFlags Roles = RoleFlags.None);
 
+/// <summary>The 64-bit hash step the packed-register domains share.</summary>
+internal static class Hashing
+{
+    /// <summary>Spreads a register over all 64 bits (Fibonacci hashing).</summary>
+    public static ulong Mix(ulong value) => value * 0x9E3779B97F4A7C15UL;
+}
+
 public interface ISlidingBlockDomain<TState, TMove> where TState : struct, IEquatable<TState>
 {
     TState InitialState { get; }

@@ -71,22 +71,28 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
     where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>
 {
     private const RoleFlags ClusterRoles = RoleFlags.Pusher | RoleFlags.HollowCarrier | RoleFlags.Magnetic;
-    private readonly PolyominoDomain<TBitboard> _goalDomain;
-
-    /// <param name="goalDomain">Supplies the topology, the initial position and the goal test.</param>
+    /// <param name="goalDomain">Supplies the topology and the goal; the initial position is the topology's.</param>
     /// <param name="maxPushDepth">How many pieces deep a push chains: 1 moves only what the pusher touches directly.</param>
     public CompositeDomain(PolyominoDomain<TBitboard> goalDomain, int maxPushDepth = 1)
+        : this(goalDomain.Topology, goalDomain.Goal, maxPushDepth)
     {
-        _goalDomain = goalDomain;
-        MaxPushDepth = maxPushDepth;
     }
 
-    public PuzzleTopology<TBitboard> Topology => _goalDomain.Topology;
+    public CompositeDomain(PuzzleTopology<TBitboard> topology, PolyominoGoal<TBitboard> goal, int maxPushDepth = 1)
+    {
+        Topology = topology;
+        Goal = goal;
+        MaxPushDepth = maxPushDepth;
+        InitialState = PolyominoState<TBitboard>.FromTopology(topology);
+    }
+
+    public PuzzleTopology<TBitboard> Topology { get; }
+    public PolyominoGoal<TBitboard> Goal { get; }
     public int MaxPushDepth { get; }
-    public PolyominoState<TBitboard> InitialState => _goalDomain.InitialState;
+    public PolyominoState<TBitboard> InitialState { get; }
     public int MaxMoves => Topology.Pieces.Count * (Topology.CellCount + 8);
 
-    public bool IsGoal(in PolyominoState<TBitboard> state) => _goalDomain.IsGoal(state);
+    public bool IsGoal(in PolyominoState<TBitboard> state) => Goal.IsReached(state);
     public ulong GetHashCode64(in PolyominoState<TBitboard> state) => state.ZobristHash;
 
     public PolyominoState<TBitboard> ApplyMove(in PolyominoState<TBitboard> state, in CompositeMove move)
@@ -100,22 +106,22 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
         var topo = Topology;
         int n = 0;
         TBitboard walls = MoveGen<TBitboard>.ActiveDynamicWalls(topo, state);
-        foreach (var p in topo.Pieces)
+        foreach (var p in topo.PieceTable)
         {
             int id = p.PieceId, a = state.AnchorOf(id);
-            var g = topo.Groups[state.GroupOf(id)];
+            var g = topo.GroupTable[state.GroupOf(id)];
 
             if (g.CanRotate)
             {
-                if (TryRotate(state, id, g, true, walls, out var cw)) Add(state, cw, moveBuffer, ref n);
+                if (TryRotate(state, id, g, true, walls, out var cw)) Add(state, walls, cw, moveBuffer, ref n);
                 if (TryRotate(state, id, g, false, walls, out var ccw) && !(g.NextCwGroupId == g.NextCcwGroupId && g.AnchorDeltaCw == g.AnchorDeltaCcw))
-                    Add(state, ccw, moveBuffer, ref n);
+                    Add(state, walls, ccw, moveBuffer, ref n);
             }
 
             if (g.SlidePhysics != SlidePhysics.FrictionlessRaycast && ((g.Roles & ClusterRoles) != 0 || g.SlidePhysics == SlidePhysics.SingleStep))
             {
                 for (int d = 0; d < topo.DirectionCount; d++)
-                    if (TryCluster(state, id, d, walls, out var move)) Add(state, move, moveBuffer, ref n);
+                    if (TryCluster(state, id, d, walls, out var move)) Add(state, walls, move, moveBuffer, ref n);
             }
             else
             {
@@ -125,16 +131,16 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
                     int target = Grid.Lsb(r), dir = -2;
                     for (int d = 0; d < deltas.Length; d++)
                         if (target - a == deltas[d] && Grid.StepStaysOnBoard(a, d, topo.Width, topo.CellCount)) dir = d;
-                    Add(state, CompositeMove.Single(id, g.GroupId, a, target, dir), moveBuffer, ref n);
+                    Add(state, walls, CompositeMove.Single(id, g.GroupId, a, target, dir), moveBuffer, ref n);
                 }
             }
         }
         return n;
     }
 
-    private void Add(in PolyominoState<TBitboard> state, CompositeMove move, Span<CompositeMove> buffer, ref int n)
+    private void Add(in PolyominoState<TBitboard> state, TBitboard walls, CompositeMove move, Span<CompositeMove> buffer, ref int n)
     {
-        if (Topology.PressurePlates.Count > 0 && MoveGen<TBitboard>.Crushes(Topology, state, state.WithDeltas(Topology, move.AsSpan()))) return;
+        if (Topology.PlateTable.Length > 0 && MoveGen<TBitboard>.Crushes(Topology, walls, state, state.WithDeltas(Topology, move.AsSpan()))) return;
         buffer[n++] = move;
     }
 
@@ -146,7 +152,7 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
         if (next < 0) return false;
         int a = state.AnchorOf(pieceId);
         int nextAnchor = a + (clockwise ? g.AnchorDeltaCw : g.AnchorDeltaCcw);
-        if ((uint)nextAnchor >= (uint)topo.CellCount || ((topo.Groups[next].ValidAnchorsMask >> nextAnchor) & TBitboard.One) == TBitboard.Zero) return false;
+        if ((uint)nextAnchor >= (uint)topo.CellCount || ((topo.GroupTable[next].ValidAnchorsMask >> nextAnchor) & TBitboard.One) == TBitboard.Zero) return false;
 
         int boxOrigin = a + g.BoxOriginDelta, size = g.RotationBoxSize;
         if (boxOrigin < 0 || boxOrigin % topo.Width + size > topo.Width || boxOrigin / topo.Width + size > topo.Height) return false;
@@ -165,9 +171,9 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
         Span<int> members = stackalloc int[CompositeMove.MaxPieces], depth = stackalloc int[CompositeMove.MaxPieces];
         int count = 1;
         members[0] = pieceId;
-        if (!Grid.IsAllowed(topo.Groups[state.GroupOf(pieceId)].Directions, dir)) return false;
+        if (!Grid.IsAllowed(topo.GroupTable[state.GroupOf(pieceId)].Directions, dir)) return false;
 
-        if ((topo.Groups[state.GroupOf(pieceId)].Roles & RoleFlags.Magnetic) != 0 && !GatherMagnetic(state, members, depth, ref count)) return false;
+        if ((topo.GroupTable[state.GroupOf(pieceId)].Roles & RoleFlags.Magnetic) != 0 && !GatherMagnetic(state, members, depth, ref count)) return false;
 
         bool changed;
         do
@@ -176,17 +182,17 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
             for (int i = 0; i < count; i++)
             {
                 int m = members[i], am = state.AnchorOf(m);
-                var gm = topo.Groups[state.GroupOf(m)];
+                var gm = topo.GroupTable[state.GroupOf(m)];
                 if (!Grid.IsAllowed(gm.Directions, dir) || !Grid.StepStaysOnBoard(am, dir, topo.Width, topo.CellCount)) return false;
                 int nxt = am + delta;
-                if (((topo.ValidAnchorsByDir[gm.GroupId, dir] >> nxt) & TBitboard.One) == TBitboard.Zero) return false;
+                if (!Grid.Has(topo.ValidAnchorsFor(gm.GroupId, dir), nxt)) return false;
                 TBitboard foot = gm.BaseMask << nxt;
                 if ((walls & foot) != TBitboard.Zero) return false;
 
-                foreach (var q in topo.Pieces)
+                foreach (var q in topo.PieceTable)
                 {
                     if (members[..count].Contains(q.PieceId)) continue;
-                    var gq = topo.Groups[state.GroupOf(q.PieceId)];
+                    var gq = topo.GroupTable[state.GroupOf(q.PieceId)];
                     if ((gq.ElevationMask & gm.ElevationMask) == 0) continue;
                     if (((gq.BaseMask << state.AnchorOf(q.PieceId)) & foot) == TBitboard.Zero) continue;
 
@@ -219,15 +225,15 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
         do
         {
             changed = false;
-            foreach (var q in topo.Pieces)
+            foreach (var q in topo.PieceTable)
             {
                 if (members[..count].Contains(q.PieceId)) continue;
-                var gq = topo.Groups[state.GroupOf(q.PieceId)];
+                var gq = topo.GroupTable[state.GroupOf(q.PieceId)];
                 if ((gq.Roles & RoleFlags.Magnetic) == 0) continue;
                 TBitboard qFoot = gq.BaseMask << state.AnchorOf(q.PieceId);
                 for (int i = 0; i < count; i++)
                 {
-                    var gm = topo.Groups[state.GroupOf(members[i])];
+                    var gm = topo.GroupTable[state.GroupOf(members[i])];
                     if ((gm.ElevationMask & gq.ElevationMask) == 0) continue;
                     TBitboard f = gm.BaseMask << state.AnchorOf(members[i]);
                     TBitboard touch = ((f << 1) & notCol0) | ((f >> 1) & notLast) | (f << w) | (f >> w);

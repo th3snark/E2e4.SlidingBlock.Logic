@@ -8,7 +8,7 @@ with `TBitboard` = `ulong` (up to 64 cells) or `UInt128` (up to 128 cells). `Ali
 |---------|-------|------|
 | Hex axial grids | `GridGeometry`, `PuzzleTopology.GetDirectionDeltas()` | Six deltas `-1, +1, -W, +W, -W+1, +W-1`; each direction has an entry mask so a shift never wraps a row |
 | Elevation layers | `EquivalenceGroup.ElevationMask`, `PolyominoState.LayerOccupancy` | Bit 0 ground, bit 1 upper; a piece only collides with the layers it occupies |
-| Diodes | `DirectionalDiode`, `PuzzleTopology.ValidAnchorsByDir` | Per-direction valid-anchor masks; the flood fill ANDs the mask of the direction it steps in |
+| Diodes | `DirectionalDiode`, `PuzzleTopology.ValidAnchorsFor(group, direction)` | Per-direction valid-anchor masks; the flood fill ANDs the mask of the direction it steps in |
 | Pressure plates | `PressurePlateRule`, `PolyominoDomain.ActiveDynamicWalls` | Closed gates join the blockers; a move that closes a gate on a piece is rejected |
 | Ice / single step | `SlidePhysics`, `PolyominoDomain.TraceRaycast` | A glide emits only its terminal anchor |
 | Rotation | `PuzzleTopologyBuilder.AddRotatableGroup`, `CompositeDomain` | A ring of groups, one per orientation; the swept `N x N` box must be clear; the piece moves between groups |

@@ -67,6 +67,33 @@ public struct PolyominoState<TBitboard> : IEquatable<PolyominoState<TBitboard>>
 
     public ulong ZobristHash { get; private set; }
 
+    /// <summary>
+    /// The Zobrist hash computed from scratch from the pieces. <see cref="ZobristHash"/> is kept up to date incrementally; the two agree
+    /// for every position, which makes this the check for the incremental updates.
+    /// </summary>
+    public readonly ulong ComputeZobrist(PuzzleTopology<TBitboard> topology)
+    {
+        ulong h = 0;
+        foreach (var p in topology.PieceTable) h ^= topology.ZobristTable[_pieceGroups[p.PieceId], _pieceAnchors[p.PieceId]];
+        return h;
+    }
+
+    /// <summary>The piece covering <paramref name="cell"/>, or -1 if the cell is empty or a wall.</summary>
+    public readonly int PieceAt(PuzzleTopology<TBitboard> topology, int cell)
+    {
+        foreach (var p in topology.PieceTable)
+            if (Grid.Has(topology.GroupTable[_pieceGroups[p.PieceId]].BaseMask << _pieceAnchors[p.PieceId], cell)) return p.PieceId;
+        return -1;
+    }
+
+    /// <summary>The lowest cell that holds neither a piece nor a wall, or -1 if the board is full.</summary>
+    public readonly int FirstFreeCell(PuzzleTopology<TBitboard> topology)
+    {
+        TBitboard free = ~(TotalOccupancy | topology.StaticWallsMask);
+        int cell = Grid.Lsb(free);
+        return cell < topology.CellCount ? cell : -1;
+    }
+
     public readonly TBitboard GroupAnchorsOf(int groupId) => _groupAnchors[groupId];
     public readonly int AnchorOf(int pieceId) => _pieceAnchors[pieceId];
 
@@ -113,8 +140,8 @@ public struct PolyominoState<TBitboard> : IEquatable<PolyominoState<TBitboard>>
     private void Change(PuzzleTopology<TBitboard> topology, int pieceId, int newGroup, int newAnchor)
     {
         int oldGroup = _pieceGroups[pieceId], old = _pieceAnchors[pieceId];
-        var og = topology.Groups[oldGroup];
-        var ng = topology.Groups[newGroup];
+        var og = topology.GroupTable[oldGroup];
+        var ng = topology.GroupTable[newGroup];
         _pieceAnchors[pieceId] = (byte)newAnchor;
         _pieceGroups[pieceId] = (byte)newGroup;
         _groupAnchors[oldGroup] ^= TBitboard.One << old;
@@ -139,14 +166,10 @@ public struct PolyominoState<TBitboard> : IEquatable<PolyominoState<TBitboard>>
 
     private static TBitboard FreeAnchors(int startAnchor, TBitboard baseMask, TBitboard validAnchorsMask, TBitboard otherOccupancy)
     {
-        TBitboard start = TBitboard.One << startAnchor;
-        TBitboard free = start;
-        for (TBitboard v = validAnchorsMask; v != TBitboard.Zero; v &= v - TBitboard.One)
-        {
-            int a = Grid.Lsb(v);
-            if (((baseMask << a) & otherOccupancy) == TBitboard.Zero) free |= TBitboard.One << a;
-        }
-        return free & (validAnchorsMask | start);
+        // An anchor is blocked when any cell of the shape lands on an occupied cell: one shift of the occupancy per shape cell.
+        TBitboard blocked = TBitboard.Zero;
+        foreach (int cell in Grid.Bits(baseMask)) blocked |= otherOccupancy >> cell;
+        return (validAnchorsMask & ~blocked) | (TBitboard.One << startAnchor);
     }
 
     private static int Prepare(int width, AllowedDirections allowed, GridGeometry geometry, Span<int> dirs, Span<int> deltas, Span<TBitboard> entry)
@@ -161,6 +184,32 @@ public struct PolyominoState<TBitboard> : IEquatable<PolyominoState<TBitboard>>
             n++;
         }
         return n;
+    }
+
+    /// <summary>The flood fill of the public <c>FindReachableAnchors</c> over direction tables the caller already has (indexed by direction).</summary>
+    internal static TBitboard Flood(int startAnchor, TBitboard baseMask, TBitboard validAnchorsMask, TBitboard otherOccupancy, AllowedDirections directions,
+        ReadOnlySpan<int> deltas, ReadOnlySpan<TBitboard> entry, ReadOnlySpan<TBitboard> validByDir)
+    {
+        TBitboard free = FreeAnchors(startAnchor, baseMask, validAnchorsMask, otherOccupancy);
+        TBitboard start = TBitboard.One << startAnchor;
+        TBitboard visitedOrInvalid = ~free | start;
+        TBitboard frontier = start, reachable = TBitboard.Zero;
+        while (frontier != TBitboard.Zero)
+        {
+            TBitboard next = TBitboard.Zero;
+            for (int d = 0; d < deltas.Length; d++)
+            {
+                if (!Grid.IsAllowed(directions, d)) continue;
+                TBitboard step = Grid.Shift(frontier, deltas[d]) & entry[d];
+                if (!validByDir.IsEmpty) step &= validByDir[d];
+                next |= step;
+            }
+            next &= ~visitedOrInvalid;
+            visitedOrInvalid |= next;
+            reachable |= next;
+            frontier = next;
+        }
+        return reachable;
     }
 
     private static TBitboard StepMask(TBitboard frontier, int slot, ReadOnlySpan<int> dirs, ReadOnlySpan<int> deltas, ReadOnlySpan<TBitboard> entry,
@@ -179,24 +228,15 @@ public struct PolyominoState<TBitboard> : IEquatable<PolyominoState<TBitboard>>
     public static TBitboard FindReachableAnchors(int startAnchor, TBitboard baseMask, TBitboard validAnchorsMask, TBitboard otherOccupancy, int boardWidth,
         AllowedDirections directions = AllowedDirections.Both, GridGeometry geometry = GridGeometry.Orthogonal4Way, ReadOnlySpan<TBitboard> validByDir = default)
     {
-        TBitboard free = FreeAnchors(startAnchor, baseMask, validAnchorsMask, otherOccupancy);
-        Span<int> dirs = stackalloc int[Grid.MaxDirections], deltas = stackalloc int[Grid.MaxDirections];
+        int count = Grid.DirectionCount(geometry);
+        Span<int> deltas = stackalloc int[Grid.MaxDirections];
         Span<TBitboard> entry = stackalloc TBitboard[Grid.MaxDirections];
-        int n = Prepare(boardWidth, directions, geometry, dirs, deltas, entry);
-
-        TBitboard start = TBitboard.One << startAnchor;
-        TBitboard visitedOrInvalid = ~free | start;
-        TBitboard frontier = start, reachable = TBitboard.Zero;
-        while (frontier != TBitboard.Zero)
+        for (int d = 0; d < count; d++)
         {
-            TBitboard next = TBitboard.Zero;
-            for (int i = 0; i < n; i++) next |= StepMask(frontier, i, dirs, deltas, entry, validByDir);
-            next &= ~visitedOrInvalid;
-            visitedOrInvalid |= next;
-            reachable |= next;
-            frontier = next;
+            deltas[d] = Grid.Delta(boardWidth, d);
+            entry[d] = Grid.EntryMask<TBitboard>(d, boardWidth);
         }
-        return reachable;
+        return Flood(startAnchor, baseMask, validAnchorsMask, otherOccupancy, directions, deltas[..count], entry[..count], validByDir);
     }
 
     /// <summary>
@@ -319,7 +359,7 @@ internal static class MoveGen<TBitboard> where TBitboard : unmanaged, IBinaryInt
     public static TBitboard ActiveDynamicWalls(PuzzleTopology<TBitboard> topology, in PolyominoState<TBitboard> state)
     {
         TBitboard walls = TBitboard.Zero;
-        foreach (var rule in topology.PressurePlates)
+        foreach (var rule in topology.PlateTable)
         {
             TBitboard triggerOcc = state.GetRelevantOccupancy(rule.TriggerElevationMask, TBitboard.Zero);
             bool isPressed = (triggerOcc & rule.TriggerCellsMask) != TBitboard.Zero;
@@ -329,35 +369,28 @@ internal static class MoveGen<TBitboard> where TBitboard : unmanaged, IBinaryInt
         return walls;
     }
 
-    /// <summary>True when the move leaves a gate closed on a piece that was not under a closed gate before.</summary>
-    public static bool Crushes(PuzzleTopology<TBitboard> topology, in PolyominoState<TBitboard> before, in PolyominoState<TBitboard> after)
+    /// <summary>True when the move leaves a gate closed on a piece that was not under a closed gate before. <paramref name="wallsBefore"/> is <see cref="ActiveDynamicWalls"/> of <paramref name="before"/>.</summary>
+    public static bool Crushes(PuzzleTopology<TBitboard> topology, TBitboard wallsBefore, in PolyominoState<TBitboard> before, in PolyominoState<TBitboard> after)
     {
-        if (topology.PressurePlates.Count == 0) return false;
+        if (topology.PlateTable.Length == 0) return false;
         TBitboard now = after.TotalOccupancy & ActiveDynamicWalls(topology, after);
-        TBitboard was = before.TotalOccupancy & ActiveDynamicWalls(topology, before);
+        TBitboard was = before.TotalOccupancy & wallsBefore;
         return (now & ~was) != TBitboard.Zero;
     }
 
     public static TBitboard OtherOccupancy(PuzzleTopology<TBitboard> topology, in PolyominoState<TBitboard> state, EquivalenceGroup<TBitboard> g, int anchor,
         TBitboard walls) => state.GetRelevantOccupancy(g.ElevationMask, g.BaseMask << anchor) | walls;
 
-    private static TBitboard[] ByDirRow(PuzzleTopology<TBitboard> topology, int groupId)
-    {
-        var row = new TBitboard[topology.DirectionCount];
-        for (int d = 0; d < row.Length; d++) row[d] = topology.ValidAnchorsByDir[groupId, d];
-        return row;
-    }
-
     /// <summary>Anchors the piece may move to in one turn according to its group's <see cref="SlidePhysics"/>.</summary>
     public static TBitboard Reachable(PuzzleTopology<TBitboard> topology, in PolyominoState<TBitboard> state, int pieceId, TBitboard walls)
     {
-        var g = topology.Groups[state.GroupOf(pieceId)];
+        var g = topology.GroupTable[state.GroupOf(pieceId)];
         int a = state.AnchorOf(pieceId);
         TBitboard other = OtherOccupancy(topology, state, g, a, walls);
         if (g.SlidePhysics == SlidePhysics.ContinuousFloodFill)
         {
-            ReadOnlySpan<TBitboard> byDir = topology.Diodes.Count > 0 ? ByDirRow(topology, g.GroupId) : default;
-            return PolyominoState<TBitboard>.FindReachableAnchors(a, g.BaseMask, g.ValidAnchorsMask, other, topology.Width, g.Directions, topology.Geometry, byDir);
+            ReadOnlySpan<TBitboard> byDir = topology.DiodeTable.Length > 0 ? topology.ValidByDirRow(g.GroupId) : default;
+            return PolyominoState<TBitboard>.Flood(a, g.BaseMask, g.ValidAnchorsMask, other, g.Directions, topology.DeltaTable, topology.EntryTable, byDir);
         }
 
         TBitboard result = TBitboard.Zero;
@@ -398,7 +431,7 @@ internal static class MoveGen<TBitboard> where TBitboard : unmanaged, IBinaryInt
         {
             if (!Grid.StepStaysOnBoard(curr, dir, topology.Width, cells)) break;
             int next = curr + delta;
-            if (((topology.ValidAnchorsByDir[g.GroupId, dir] >> next) & TBitboard.One) == TBitboard.Zero)
+            if (!Grid.Has(topology.ValidAnchorsFor(g.GroupId, dir), next))
             {
                 blocking = WallCells(topology, g, next);
                 break;
@@ -419,11 +452,8 @@ public sealed class PolyominoDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
 {
     /// <summary>The puzzle is solved when group <paramref name="goalGroupId"/> has exactly one piece, on <paramref name="goalAnchor"/>.</summary>
     public PolyominoDomain(PuzzleTopology<TBitboard> topology, int goalGroupId, int goalAnchor)
+        : this(topology, new PolyominoGoal<TBitboard>(goalGroupId, goalAnchor))
     {
-        Topology = topology;
-        GoalGroupId = goalGroupId;
-        GoalAnchor = goalAnchor;
-        InitialState = PolyominoState<TBitboard>.FromTopology(topology);
     }
 
     /// <summary>
@@ -433,43 +463,33 @@ public sealed class PolyominoDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
     /// says whether group g has to match the goal; groups left out may end up anywhere.
     /// </summary>
     public PolyominoDomain(PuzzleTopology<TBitboard> topology, PolyominoState<TBitboard> goal, ulong matchedGroups = ulong.MaxValue)
+        : this(topology, new PolyominoGoal<TBitboard>(goal, matchedGroups))
+    {
+    }
+
+    /// <summary>The puzzle is solved when <paramref name="goal"/> is reached.</summary>
+    public PolyominoDomain(PuzzleTopology<TBitboard> topology, PolyominoGoal<TBitboard> goal)
     {
         Topology = topology;
-        GoalGroupId = GoalAnchor = -1;
-        _goal = goal;
-        _matchedGroups = matchedGroups;
-        _hasGoalPosition = true;
+        Goal = goal;
         InitialState = PolyominoState<TBitboard>.FromTopology(topology);
     }
 
-    private readonly PolyominoState<TBitboard> _goal;
-    private readonly ulong _matchedGroups;
-    private readonly bool _hasGoalPosition;
+    public PolyominoGoal<TBitboard> Goal { get; }
 
     public PuzzleTopology<TBitboard> Topology { get; }
 
     /// <summary>Goal of the single-group constructor; -1 when the goal is a whole position (<see cref="GoalPosition"/>).</summary>
-    public int GoalGroupId { get; }
-    public int GoalAnchor { get; }
+    public int GoalGroupId => Goal.GroupId;
+    public int GoalAnchor => Goal.Anchor;
 
     /// <summary>The goal position when the domain was built with one, otherwise null.</summary>
-    public PolyominoState<TBitboard>? GoalPosition => _hasGoalPosition ? _goal : null;
+    public PolyominoState<TBitboard>? GoalPosition => Goal.Position;
 
     public PolyominoState<TBitboard> InitialState { get; }
     public int MaxMoves => Topology.Pieces.Count * Topology.CellCount;
 
-    public bool IsGoal(in PolyominoState<TBitboard> state)
-    {
-        if (!_hasGoalPosition) return state.GroupAnchorsOf(GoalGroupId) == TBitboard.One << GoalAnchor;
-        if (_matchedGroups == ulong.MaxValue) return state.Equals(_goal);
-        for (ulong m = _matchedGroups; m != 0; m &= m - 1)
-        {
-            int g = BitOperations.TrailingZeroCount(m);
-            if (g >= GroupAnchorBuffer<TBitboard>.Length) break;
-            if (state.GroupAnchorsOf(g) != _goal.GroupAnchorsOf(g)) return false;
-        }
-        return true;
-    }
+    public bool IsGoal(in PolyominoState<TBitboard> state) => Goal.IsReached(state);
 
     /// <summary>The cells closed gates make solid in <paramref name="state"/>.</summary>
     public TBitboard ActiveDynamicWalls(in PolyominoState<TBitboard> state) => MoveGen<TBitboard>.ActiveDynamicWalls(Topology, state);
@@ -480,15 +500,10 @@ public sealed class PolyominoDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
     /// <summary>The cells a piece passes through on its shortest way to <paramref name="targetAnchor"/> (start and target included), empty if it cannot get there.</summary>
     public IReadOnlyList<int> PathFor(in PolyominoState<TBitboard> state, int pieceId, int targetAnchor)
     {
-        var g = Topology.Groups[state.GroupOf(pieceId)];
+        var g = Topology.GroupTable[state.GroupOf(pieceId)];
         int a = state.AnchorOf(pieceId);
         TBitboard other = MoveGen<TBitboard>.OtherOccupancy(Topology, state, g, a, ActiveDynamicWalls(state));
-        TBitboard[] byDir = [];
-        if (Topology.Diodes.Count > 0)
-        {
-            byDir = new TBitboard[Topology.DirectionCount];
-            for (int d = 0; d < byDir.Length; d++) byDir[d] = Topology.ValidAnchorsByDir[g.GroupId, d];
-        }
+        ReadOnlySpan<TBitboard> byDir = Topology.DiodeTable.Length > 0 ? Topology.ValidByDirRow(g.GroupId) : default;
         return PolyominoState<TBitboard>.ReconstructHookPath(a, targetAnchor, g.BaseMask, g.ValidAnchorsMask, other, Topology.Width, g.Directions,
             Topology.Geometry, byDir);
     }
@@ -499,7 +514,7 @@ public sealed class PolyominoDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
     /// </summary>
     public int TraceRaycast(in PolyominoState<TBitboard> state, int pieceId, Span<RaycastTrace<TBitboard>> results)
     {
-        var g = Topology.Groups[state.GroupOf(pieceId)];
+        var g = Topology.GroupTable[state.GroupOf(pieceId)];
         int a = state.AnchorOf(pieceId), n = 0;
         TBitboard other = MoveGen<TBitboard>.OtherOccupancy(Topology, state, g, a, ActiveDynamicWalls(state));
         for (int d = 0; d < Topology.DirectionCount && n < results.Length; d++)
@@ -515,13 +530,16 @@ public sealed class PolyominoDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
     {
         int n = 0;
         TBitboard walls = MoveGen<TBitboard>.ActiveDynamicWalls(Topology, state);
-        foreach (var p in Topology.Pieces)
-            for (TBitboard r = MoveGen<TBitboard>.Reachable(Topology, state, p.PieceId, walls); r != TBitboard.Zero; r &= r - TBitboard.One)
+        var pieces = Topology.PieceTable;
+        for (int i = 0; i < pieces.Length; i++)
+        {
+            int pieceId = pieces[i].PieceId;
+            foreach (int target in Grid.Bits(MoveGen<TBitboard>.Reachable(Topology, state, pieceId, walls)))
             {
-                int target = Grid.Lsb(r);
-                if (Topology.PressurePlates.Count > 0 && MoveGen<TBitboard>.Crushes(Topology, state, state.WithPieceMoved(Topology, p.PieceId, target))) continue;
-                moveBuffer[n++] = new PolyominoMove((byte)p.PieceId, (byte)target);
+                if (Topology.PlateTable.Length > 0 && MoveGen<TBitboard>.Crushes(Topology, walls, state, state.WithPieceMoved(Topology, pieceId, target))) continue;
+                moveBuffer[n++] = new PolyominoMove((byte)pieceId, (byte)target);
             }
+        }
         return n;
     }
 

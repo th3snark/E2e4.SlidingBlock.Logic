@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace E2e4.SlidingBlock.Logic;
 
@@ -86,9 +87,15 @@ internal static class Grid
 
     public static T Shift<T>(T mask, int delta) where T : unmanaged, IBinaryInteger<T> => delta >= 0 ? mask << delta : mask >> -delta;
 
-    public static int BitWidth<T>() where T : unmanaged, IBinaryInteger<T> => int.CreateChecked(T.PopCount(T.AllBitsSet));
+    public static int BitWidth<T>() where T : unmanaged, IBinaryInteger<T> => Unsafe.SizeOf<T>() * 8;
 
-    public static int Lsb<T>(T mask) where T : unmanaged, IBinaryInteger<T> => int.CreateChecked(T.TrailingZeroCount(mask));
+    public static int Lsb<T>(T mask) where T : unmanaged, IBinaryInteger<T> => int.CreateTruncating(T.TrailingZeroCount(mask));
+
+    /// <summary>True when bit <paramref name="index"/> of <paramref name="mask"/> is set.</summary>
+    public static bool Has<T>(T mask, int index) where T : unmanaged, IBinaryInteger<T> => ((mask >> index) & T.One) != T.Zero;
+
+    /// <summary>The indices of the set bits of <paramref name="mask"/>, lowest first, without allocating.</summary>
+    public static SetBits<T> Bits<T>(T mask) where T : unmanaged, IBinaryInteger<T> => new(mask);
 
     /// <summary>Mask of the cells that may be entered by a step in <paramref name="dir"/> without wrapping a row.</summary>
     public static T EntryMask<T>(int dir, int width) where T : unmanaged, IBinaryInteger<T>
@@ -100,4 +107,26 @@ internal static class Grid
         for (int i = 0; i < bits; i += width) col0 |= T.One << i;
         return col > 0 ? ~col0 : ~(col0 << (width - 1));
     }
+}
+
+/// <summary>Allocation-free <c>foreach (int index in Grid.Bits(mask))</c> over the set bits of a bitboard.</summary>
+internal struct SetBits<T> where T : unmanaged, IBinaryInteger<T>
+{
+    private T _rest;
+
+    public SetBits(T mask) => _rest = mask;
+
+    public int Current => Grid.Lsb(_rest);
+
+    public bool MoveNext()
+    {
+        // The first call only reports whether there is a bit; later calls clear the one just returned.
+        if (_started) _rest &= _rest - T.One;
+        _started = true;
+        return _rest != T.Zero;
+    }
+
+    private bool _started;
+
+    public readonly SetBits<T> GetEnumerator() => this;
 }

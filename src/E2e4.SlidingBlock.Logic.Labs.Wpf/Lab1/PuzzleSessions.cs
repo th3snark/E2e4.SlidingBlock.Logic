@@ -395,7 +395,7 @@ public sealed class RushHourSession : PuzzleSession<RushHourState, RushHourMove>
 
     private Color VehicleColor(int v) => v == _r.GoalVehicle ? Color.FromRgb(0xEF, 0x44, 0x44) : PuzzleSession.Hue(v * 47 + 20, 0.5, 0.85);
 
-    public override ulong CellsOfGroup(int group) => _r.Topology.VehicleMasks[group, State.OffsetOf(group)];
+    public override ulong CellsOfGroup(int group) => _r.Topology.VehicleMask(group, State.OffsetOf(group));
     public override string PieceMaskName(int pieceId) => $"VehicleMasks[{pieceId},{State.OffsetOf(pieceId)}]";
 
     public override GroupInfo GroupInfoFor(int group)
@@ -434,12 +434,12 @@ public sealed class RushHourSession : PuzzleSession<RushHourState, RushHourMove>
         var veh = topo.Vehicles[m.Vehicle];
         int off = before.OffsetOf(m.Vehicle);
         ulong occ = before.Occupancy(topo);
-        ulong nb = m.Delta > 0 ? topo.FrontNeighborBit[m.Vehicle, off] : topo.BackNeighborBit[m.Vehicle, off];
+        ulong nb = m.Delta > 0 ? topo.FrontNeighborBit(m.Vehicle, off) : topo.BackNeighborBit(m.Vehicle, off);
         var sb = new StringBuilder();
         sb.Append(CultureInfo.InvariantCulture, $"vehicle {veh.Label} ({(veh.IsHorizontal ? "row" : "col")} {veh.Lane}, len {veh.Length}) offset {off} -> {off + m.Delta}\n\n");
         sb.Append(Row($"offset = (packed >> 3*{m.Vehicle}) & 0b111", $"{off}   (packed 0x{before.PackedOffsets:X16})"));
         sb.Append(Row("occ = OR VehicleMasks[v,off[v]]", $"0x{occ:X9}"));
-        sb.Append(Row($"VehicleMasks[{veh.Label},{off}]", $"0x{topo.VehicleMasks[m.Vehicle, off]:X9}"));
+        sb.Append(Row($"VehicleMasks[{veh.Label},{off}]", $"0x{topo.VehicleMask(m.Vehicle, off):X9}"));
         sb.Append(Row(m.Delta > 0 ? "FrontNeighborBit" : "BackNeighborBit", $"0x{nb:X9}"));
         sb.Append(Row("(occ & neighbor) == 0", $"0x{occ & nb:X} -> legal"));
         sb.Append(Row($"clear = packed & ~(7 << 3*{m.Vehicle})", $"0x{before.PackedOffsets & ~(7UL << (3 * m.Vehicle)):X16}"));

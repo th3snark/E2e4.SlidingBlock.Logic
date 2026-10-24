@@ -33,6 +33,9 @@
     <Project Path="src/E2e4.SlidingBlock.Logic/E2e4.SlidingBlock.Logic.csproj" />
     <Project Path="src/E2e4.SlidingBlock.Logic.Labs.Wpf/E2e4.SlidingBlock.Logic.Labs.Wpf.csproj" />
   </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/E2e4.SlidingBlock.Logic.Benchmarks/E2e4.SlidingBlock.Logic.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/E2e4.SlidingBlock.Logic.Test/E2e4.SlidingBlock.Logic.Test.csproj" />
   </Folder>

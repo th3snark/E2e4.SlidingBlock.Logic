@@ -590,12 +590,7 @@ public partial class Lab3View : UserControl
         return l.Count == 0 ? "-" : string.Join(",", l);
     }
 
-    private ulong RecomputedHash(in PolyominoState state)
-    {
-        ulong h = 0;
-        foreach (var p in T.Pieces) h ^= T.ZobristTable[state.GroupOf(p.PieceId), state.AnchorOf(p.PieceId)];
-        return h;
-    }
+    private ulong RecomputedHash(in PolyominoState state) => state.ComputeZobrist(T);
 
     private string Derivation(CompositeMove move, ulong previous, ulong result)
     {

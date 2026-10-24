@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+
 namespace E2e4.SlidingBlock.Logic;
 
 public sealed record SolveResult<TMove>(IReadOnlyList<TMove> Moves, long NodesExpanded);
@@ -11,28 +13,23 @@ public sealed class PuzzleSolver
     public SolveResult<TMove>? SolveBfs<TState, TMove>(ISlidingBlockDomain<TState, TMove> domain, TState start, CancellationToken ct = default)
         where TState : struct, IEquatable<TState>
     {
-        var states = new List<TState> { start };
-        var parent = new List<int> { -1 };
-        var moveUsed = new List<TMove> { default! };
-        var seen = new Dictionary<TState, int> { [start] = 0 };
+        var graph = new SearchGraph<TState, TMove>(start, domain.GetHashCode64(start));
         var buffer = new TMove[domain.MaxMoves];
         if (domain.IsGoal(start)) return new SolveResult<TMove>([], 0);
 
-        for (int head = 0; head < states.Count; head++)
+        for (int head = 0; head < graph.Count; head++)
         {
             if ((head & 1023) == 0) ct.ThrowIfCancellationRequested();
             if (head > MaxNodes) return null;
-            TState cur = states[head];
+            TState cur = graph.StateAt(head);
             int n = domain.GenerateMoves(cur, buffer);
             for (int i = 0; i < n; i++)
             {
                 TState next = domain.ApplyMove(cur, buffer[i]);
-                if (seen.ContainsKey(next)) continue;
-                seen[next] = states.Count;
-                states.Add(next);
-                parent.Add(head);
-                moveUsed.Add(buffer[i]);
-                if (domain.IsGoal(next)) return new SolveResult<TMove>(Trace(states.Count - 1, parent, moveUsed), head + 1);
+                ulong hash = domain.GetHashCode64(next);
+                if (graph.Find(next, hash, out _)) continue;
+                int added = graph.Add(next, hash, head, buffer[i]);
+                if (domain.IsGoal(next)) return new SolveResult<TMove>(graph.Trace(added), head + 1);
             }
         }
         return null;
@@ -42,14 +39,12 @@ public sealed class PuzzleSolver
     public SolveResult<TMove>? SolveAStar<TState, TMove>(ISlidingBlockDomain<TState, TMove> domain, TState start, Func<TState, int> heuristic, CancellationToken ct = default)
         where TState : struct, IEquatable<TState>
     {
-        var states = new List<TState> { start };
-        var parent = new List<int> { -1 };
-        var moveUsed = new List<TMove> { default! };
+        var graph = new SearchGraph<TState, TMove>(start, domain.GetHashCode64(start));
         var g = new List<int> { 0 };
-        var best = new Dictionary<TState, int> { [start] = 0 };
-        var open = new PriorityQueue<int, (int f, int h)>();
+        // Ordered by f, then by h, packed so one integer comparison does both.
+        var open = new PriorityQueue<int, long>();
         int h0 = heuristic(start);
-        open.Enqueue(0, (h0, h0));
+        open.Enqueue(0, Priority(h0, h0));
         var buffer = new TMove[domain.MaxMoves];
         long expanded = 0;
 
@@ -57,83 +52,174 @@ public sealed class PuzzleSolver
         {
             if ((++expanded & 1023) == 0) ct.ThrowIfCancellationRequested();
             if (expanded > MaxNodes) return null;
-            TState cur = states[idx];
-            if (best.TryGetValue(cur, out int bg) && bg < g[idx]) continue;
-            if (domain.IsGoal(cur)) return new SolveResult<TMove>(Trace(idx, parent, moveUsed), expanded);
+            TState cur = graph.StateAt(idx);
+            if (graph.Find(cur, domain.GetHashCode64(cur), out int best) && g[best] < g[idx]) continue;
+            if (domain.IsGoal(cur)) return new SolveResult<TMove>(graph.Trace(idx), expanded);
             int n = domain.GenerateMoves(cur, buffer);
             for (int i = 0; i < n; i++)
             {
                 TState next = domain.ApplyMove(cur, buffer[i]);
+                ulong hash = domain.GetHashCode64(next);
                 int ng = g[idx] + 1;
-                if (best.TryGetValue(next, out int old) && old <= ng) continue;
-                best[next] = ng;
-                states.Add(next);
-                parent.Add(idx);
-                moveUsed.Add(buffer[i]);
+                if (graph.Find(next, hash, out int old) && g[old] <= ng) continue;
+                int added = graph.Add(next, hash, idx, buffer[i]);
                 g.Add(ng);
                 int h = heuristic(next);
-                open.Enqueue(states.Count - 1, (ng + h, h));
+                open.Enqueue(added, Priority(ng + h, h));
             }
         }
         return null;
     }
 
+    private static long Priority(int f, int h) => ((long)f << 32) | (uint)h;
+
     /// <summary>Iterative-deepening A*; memory-light, suited to large state spaces with a strong heuristic.</summary>
     public SolveResult<TMove>? SolveIdaStar<TState, TMove>(ISlidingBlockDomain<TState, TMove> domain, TState start, Func<TState, int> heuristic, CancellationToken ct = default)
         where TState : struct, IEquatable<TState>
     {
-        var path = new List<TMove>();
-        var buffers = new List<TMove[]>();
-        long nodes = 0;
+        var search = new IdaSearch<TState, TMove>(domain, heuristic, MaxNodes, ct);
         int bound = heuristic(start);
-
-        // Returns -1 when solved, otherwise the smallest f that exceeded the bound (int.MaxValue = dead end).
-        int Search(TState state, TState parentState, bool hasParent, int g, int limit)
+        while (true)
         {
-            if ((++nodes & 4095) == 0) ct.ThrowIfCancellationRequested();
-            if (nodes > MaxNodes) throw new OperationCanceledException("Node limit reached.");
-            int f = g + heuristic(state);
+            search.Path.Clear();
+            int t = search.Search(start, start, false, 0, bound);
+            if (t == IdaSearch<TState, TMove>.Solved) return new SolveResult<TMove>(search.Path.ToArray(), search.Nodes);
+            if (t is int.MaxValue or IdaSearch<TState, TMove>.Aborted) return null;
+            bound = t;
+        }
+    }
+
+    /// <summary>One IDA* run: the moves of the current path, a move buffer per depth and the node count.</summary>
+    private sealed class IdaSearch<TState, TMove> where TState : struct, IEquatable<TState>
+    {
+        public const int Solved = -1, Aborted = -2;
+
+        private readonly ISlidingBlockDomain<TState, TMove> _domain;
+        private readonly Func<TState, int> _heuristic;
+        private readonly long _maxNodes;
+        private readonly CancellationToken _ct;
+        private readonly List<TMove[]> _buffers = [];
+
+        public IdaSearch(ISlidingBlockDomain<TState, TMove> domain, Func<TState, int> heuristic, long maxNodes, CancellationToken ct)
+        {
+            _domain = domain;
+            _heuristic = heuristic;
+            _maxNodes = maxNodes;
+            _ct = ct;
+        }
+
+        public List<TMove> Path { get; } = [];
+        public long Nodes { get; private set; }
+
+        /// <returns><see cref="Solved"/>, <see cref="Aborted"/> at the node cap, otherwise the smallest f that exceeded the bound (int.MaxValue = dead end).</returns>
+        public int Search(TState state, TState parentState, bool hasParent, int g, int limit)
+        {
+            if ((++Nodes & 4095) == 0) _ct.ThrowIfCancellationRequested();
+            if (Nodes > _maxNodes) return Aborted;
+            int f = g + _heuristic(state);
             if (f > limit) return f;
-            if (domain.IsGoal(state)) return -1;
-            if (buffers.Count <= g) buffers.Add(new TMove[domain.MaxMoves]);
-            var buf = buffers[g];
-            int n = domain.GenerateMoves(state, buf);
+            if (_domain.IsGoal(state)) return Solved;
+            if (_buffers.Count <= g) _buffers.Add(new TMove[_domain.MaxMoves]);
+            var buf = _buffers[g];
+            int n = _domain.GenerateMoves(state, buf);
             int min = int.MaxValue;
             for (int i = 0; i < n; i++)
             {
-                TState next = domain.ApplyMove(state, buf[i]);
+                TState next = _domain.ApplyMove(state, buf[i]);
                 if (hasParent && next.Equals(parentState)) continue;
-                path.Add(buf[i]);
+                Path.Add(buf[i]);
                 int t = Search(next, state, true, g + 1, limit);
-                if (t == -1) return -1;
-                path.RemoveAt(path.Count - 1);
+                if (t is Solved or Aborted) return t;
+                Path.RemoveAt(Path.Count - 1);
                 if (t < min) min = t;
             }
             return min;
         }
-
-        try
-        {
-            while (true)
-            {
-                path.Clear();
-                int t = Search(start, start, false, 0, bound);
-                if (t == -1) return new SolveResult<TMove>(path.ToArray(), nodes);
-                if (t == int.MaxValue) return null;
-                bound = t;
-            }
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            return null;
-        }
     }
 
-    private static TMove[] Trace<TMove>(int index, List<int> parent, List<TMove> moves)
+    /// <summary>
+    /// The positions a search has met, each stored once, with the move that first reached it and a hash table from position to its latest node.
+    /// </summary>
+    private sealed class SearchGraph<TState, TMove> where TState : struct, IEquatable<TState>
     {
-        var result = new List<TMove>();
-        for (int i = index; parent[i] >= 0; i = parent[i]) result.Add(moves[i]);
-        result.Reverse();
-        return result.ToArray();
+        private readonly List<TState> _states = [];
+        private readonly List<int> _parent = [];
+        private readonly List<TMove> _move = [];
+        private int[] _slots = new int[1024];   // node index + 1; 0 = empty
+        private ulong[] _hashes = new ulong[1024];
+        private int _filled;
+
+        public SearchGraph(TState start, ulong hash)
+        {
+            Add(start, hash, -1, default!);
+        }
+
+        public int Count => _states.Count;
+
+        public TState StateAt(int node) => _states[node];
+
+        /// <summary>Looks the position up; <paramref name="node"/> is its latest node when found.</summary>
+        public bool Find(in TState state, ulong hash, out int node)
+        {
+            int mask = _slots.Length - 1;
+            var states = CollectionsMarshal.AsSpan(_states);
+            for (int i = (int)(hash >> 32) & mask; ; i = (i + 1) & mask)
+            {
+                int v = _slots[i];
+                if (v == 0) { node = -1; return false; }
+                if (_hashes[i] == hash && states[v - 1].Equals(state)) { node = v - 1; return true; }
+            }
+        }
+
+        /// <summary>Adds a node for the position and makes it the latest one for its table entry.</summary>
+        public int Add(in TState state, ulong hash, int parent, TMove move)
+        {
+            int node = _states.Count;
+            _states.Add(state);
+            _parent.Add(parent);
+            _move.Add(move);
+            if ((_filled + 1) * 2 > _slots.Length) Grow();
+            int mask = _slots.Length - 1;
+            var states = CollectionsMarshal.AsSpan(_states);
+            int i = (int)(hash >> 32) & mask;
+            for (; _slots[i] != 0; i = (i + 1) & mask)
+            {
+                if (_hashes[i] == hash && states[_slots[i] - 1].Equals(state))
+                {
+                    _slots[i] = node + 1;   // a better route to a known position replaces its node
+                    return node;
+                }
+            }
+            _slots[i] = node + 1;
+            _hashes[i] = hash;
+            _filled++;
+            return node;
+        }
+
+        private void Grow()
+        {
+            var slots = new int[_slots.Length * 2];
+            var hashes = new ulong[slots.Length];
+            int mask = slots.Length - 1;
+            for (int s = 0; s < _slots.Length; s++)
+            {
+                if (_slots[s] == 0) continue;
+                int i = (int)(_hashes[s] >> 32) & mask;
+                while (slots[i] != 0) i = (i + 1) & mask;
+                slots[i] = _slots[s];
+                hashes[i] = _hashes[s];
+            }
+            _slots = slots;
+            _hashes = hashes;
+        }
+
+        public TMove[] Trace(int node)
+        {
+            int length = 0;
+            for (int i = node; _parent[i] >= 0; i = _parent[i]) length++;
+            var result = new TMove[length];
+            for (int i = node; _parent[i] >= 0; i = _parent[i]) result[--length] = _move[i];
+            return result;
+        }
     }
 }

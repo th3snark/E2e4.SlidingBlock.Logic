@@ -10,24 +10,41 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBina
     /// <summary>Columns of <see cref="ZobristTable"/>: enough for a <see cref="UInt128"/> board.</summary>
     public const int ZobristColumns = 128;
 
-    internal PuzzleTopology(int width, int height, GridGeometry geometry, TBitboard walls, IReadOnlyList<EquivalenceGroup<TBitboard>> groups,
-        IReadOnlyList<PieceTemplate> pieces, IReadOnlyList<DirectionalDiode> diodes, IReadOnlyList<PressurePlateRule<TBitboard>> plates)
+    internal PuzzleTopology(int width, int height, GridGeometry geometry, TBitboard walls, EquivalenceGroup<TBitboard>[] groups,
+        PieceTemplate[] pieces, DirectionalDiode[] diodes, PressurePlateRule<TBitboard>[] plates)
     {
         Width = width;
         Height = height;
         Geometry = geometry;
         StaticWallsMask = walls;
-        Groups = groups;
-        Pieces = pieces;
-        Diodes = diodes;
-        PressurePlates = plates;
+        GroupTable = groups;
+        PieceTable = pieces;
+        DiodeTable = diodes;
+        PlateTable = plates;
         _deltas = new int[Grid.DirectionCount(geometry)];
-        for (int d = 0; d < _deltas.Length; d++) _deltas[d] = Grid.Delta(width, d);
-        ZobristTable = BuildZobrist(groups.Count);
-        ValidAnchorsByDir = BuildValidAnchorsByDir();
+        EntryTable = new TBitboard[_deltas.Length];
+        for (int d = 0; d < _deltas.Length; d++)
+        {
+            _deltas[d] = Grid.Delta(width, d);
+            EntryTable[d] = Grid.EntryMask<TBitboard>(d, width);
+        }
+        ZobristTable = BuildZobrist(groups.Length);
+        _validByDir = BuildValidAnchorsByDir();
     }
 
     private readonly int[] _deltas;
+    private readonly TBitboard[] _validByDir;
+
+    // The engine's hot paths index these arrays directly: going through the IReadOnlyList properties allocates an enumerator per foreach.
+    internal EquivalenceGroup<TBitboard>[] GroupTable { get; }
+    internal PieceTemplate[] PieceTable { get; }
+    internal DirectionalDiode[] DiodeTable { get; }
+    internal PressurePlateRule<TBitboard>[] PlateTable { get; }
+
+    /// <summary>Per direction, the cells a step in that direction may enter without wrapping a row.</summary>
+    internal TBitboard[] EntryTable { get; }
+
+    internal ReadOnlySpan<int> DeltaTable => _deltas;
 
     public int Width { get; }
     public int Height { get; }
@@ -35,17 +52,20 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBina
     public int CellCount => Width * Height;
     public int DirectionCount => _deltas.Length;
     public TBitboard StaticWallsMask { get; }
-    public IReadOnlyList<EquivalenceGroup<TBitboard>> Groups { get; }
-    public IReadOnlyList<PieceTemplate> Pieces { get; }
-    public IReadOnlyList<DirectionalDiode> Diodes { get; }
-    public IReadOnlyList<PressurePlateRule<TBitboard>> PressurePlates { get; }
+    public IReadOnlyList<EquivalenceGroup<TBitboard>> Groups => GroupTable;
+    public IReadOnlyList<PieceTemplate> Pieces => PieceTable;
+    public IReadOnlyList<DirectionalDiode> Diodes => DiodeTable;
+    public IReadOnlyList<PressurePlateRule<TBitboard>> PressurePlates => PlateTable;
     public ulong[,] ZobristTable { get; }
 
     /// <summary>
-    /// [group, direction]: bit s is set iff s is a valid anchor and moving the group into s along that direction does not enter a diode
+    /// Bit s is set iff s is a valid anchor of the group and moving the group into s along <paramref name="direction"/> does not enter a diode
     /// cell from a forbidden side. Equal to the group's <see cref="EquivalenceGroup{TBitboard}.ValidAnchorsMask"/> on boards without diodes.
     /// </summary>
-    public TBitboard[,] ValidAnchorsByDir { get; }
+    public TBitboard ValidAnchorsFor(int groupId, int direction) => _validByDir[groupId * _deltas.Length + direction];
+
+    /// <summary>One mask per direction for <paramref name="groupId"/> (see <see cref="ValidAnchorsFor"/>).</summary>
+    internal ReadOnlySpan<TBitboard> ValidByDirRow(int groupId) => _validByDir.AsSpan(groupId * _deltas.Length, _deltas.Length);
 
     /// <summary>Cell index change of a one-step move per direction: -1, +1, -W, +W (and -W + 1, +W - 1 on a hex board).</summary>
     public ReadOnlySpan<int> GetDirectionDeltas() => _deltas;
@@ -118,17 +138,17 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBina
         return table;
     }
 
-    private TBitboard[,] BuildValidAnchorsByDir()
+    private TBitboard[] BuildValidAnchorsByDir()
     {
         int dirs = _deltas.Length, cells = CellCount;
-        var table = new TBitboard[Math.Max(Groups.Count, 1), dirs];
-        for (int g = 0; g < Groups.Count; g++)
+        var table = new TBitboard[Math.Max(GroupTable.Length, 1) * dirs];
+        for (int g = 0; g < GroupTable.Length; g++)
         {
-            var group = Groups[g];
+            var group = GroupTable[g];
             for (int d = 0; d < dirs; d++)
             {
                 TBitboard valid = group.ValidAnchorsMask;
-                foreach (var diode in Diodes)
+                foreach (var diode in DiodeTable)
                 {
                     if ((diode.AllowedEntryDirectionsMask >> d & 1) != 0) continue;
                     TBitboard cell = TBitboard.One << diode.CellIndex;
@@ -141,7 +161,7 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBina
                         if ((entered & cell) != TBitboard.Zero) valid &= ~(TBitboard.One << n);
                     }
                 }
-                table[g, d] = valid;
+                table[g * dirs + d] = valid;
             }
         }
         return table;
@@ -301,7 +321,7 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
                 layers[layer] |= m;
             }
         }
-        return new PuzzleTopology<TBitboard>(_width, _height, _geometry, _walls, groups, _pieces.ToArray(), _diodes.ToArray(), _plates.ToArray());
+        return new PuzzleTopology<TBitboard>(_width, _height, _geometry, _walls, groups.ToArray(), _pieces.ToArray(), _diodes.ToArray(), _plates.ToArray());
     }
 
     private TBitboard ComputeValidAnchors(IReadOnlyList<(int dRow, int dCol)> rel)

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <Product>E2e4 Sliding Block Logic Benchmarks</Product>
+    <Description>Stopwatch benchmarks of the engine's move generation and solvers; run in Release before and after a performance change.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\E2e4.SlidingBlock.Logic.Labs.Wpf\LabPuzzles.cs" Link="LabPuzzles.cs" />
+    <Compile Include="..\..\src\E2e4.SlidingBlock.Logic\Aliases.cs" Link="Aliases.cs" />
+    <ProjectReference Include="..\..\src\E2e4.SlidingBlock.Logic\E2e4.SlidingBlock.Logic.csproj" />
+  </ItemGroup>
+
+</Project>

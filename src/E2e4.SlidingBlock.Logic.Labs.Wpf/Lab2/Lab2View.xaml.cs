@@ -443,12 +443,7 @@ public partial class Lab2View : UserControl
         return sb.ToString();
     }
 
-    private ulong RecomputedHash(in PolyominoState state)
-    {
-        ulong h = 0;
-        foreach (var p in _t.Pieces) h ^= _t.ZobristTable[p.GroupId, state.AnchorOf(p.PieceId)];
-        return h;
-    }
+    private ulong RecomputedHash(in PolyominoState state) => state.ComputeZobrist(_t);
 
     private void MoveSelected(int target, IReadOnlyList<int> path)
     {
