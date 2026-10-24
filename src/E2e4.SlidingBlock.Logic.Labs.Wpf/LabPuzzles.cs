@@ -112,4 +112,97 @@ public static class LabPuzzles
         b.AddPiece(s, "B", 14);
         return new PolyominoDomain(b.Build(), Lab2MasterGroup, Lab2GoalAnchor);
     }
+
+    // ---- Lab 3 (extended mechanics) -------------------------------------------------------------------------
+
+    public const int Lab3Width = 6;
+
+    /// <summary>One Lab 3 board: its domain for play and solving, the plain polyomino domain that owns the goal, and what the player is told.</summary>
+    public sealed record Lab3Mode(string Title, string Brief, PolyominoDomain Goal, CompositeDomain<ulong> Domain,
+        IReadOnlyDictionary<string, string> Colors);
+
+    /// <summary>Mode 1: an L-tromino turns through four orientation groups; a blocker sits in the empty corner of its 2x2 rotation box.</summary>
+    public static Lab3Mode CreateLab3Rotation()
+    {
+        var b = PuzzleTopology.CreateBuilder(Lab3Width, Lab3Width);
+        b.AddWall(4, 4);
+        var ring = b.AddRotatableGroup("L-Tromino", [(0, 0), (1, 0), (1, 1)]);
+        int blocker = b.AddGroup("1x1 Blocker", [(0, 0)]);
+        b.AddPiece(ring[0], "L", 7);
+        b.AddPiece(blocker, "A", 8);
+        b.AddPiece(blocker, "B", 20);
+        var goal = new PolyominoDomain(b.Build(), ring[3], 15);
+        return new Lab3Mode("Orientation ring & swept-clearance rotation",
+            "Rotate the L-tromino 90 degrees with the two rotation buttons. A turn needs the whole 2x2 rotation box free, so blocker A has to leave " +
+            "the box first. Turning into the third orientation moves the LSB anchor by one square. Goal: the L in its fourth orientation (an upside-down L) on anchor 15 (dashed outline).",
+            goal, new CompositeDomain<ulong>(goal), Lab3RotationColors);
+    }
+
+    public static readonly IReadOnlyDictionary<string, string> Lab3RotationColors = new Dictionary<string, string>
+    {
+        ["L-Tromino"] = "#F5B301",
+        ["1x1 Blocker"] = "#10B981",
+    };
+
+    /// <summary>Mode 2: a hollow U carries the crate in its pocket; the pusher avatar shoves crates in a chain.</summary>
+    public static Lab3Mode CreateLab3Carrier()
+    {
+        static PuzzleTopology Build(int crateA)
+        {
+            var b = PuzzleTopology.CreateBuilder(Lab3Width, Lab3Width);
+            b.AddWall(3, 0);
+            b.AddWall(3, 5);
+            int u = b.AddGroup("Hollow U-Carrier", [(0, 0), (0, 2), (1, 0), (1, 1), (1, 2)], physics: SlidePhysics.SingleStep,
+                roles: RoleFlags.Pusher | RoleFlags.HollowCarrier);
+            int crate = b.AddGroup("Crate", [(0, 0)], physics: SlidePhysics.SingleStep, roles: RoleFlags.Pushable);
+            int avatar = b.AddGroup("Sokoban Pusher", [(0, 0)], physics: SlidePhysics.SingleStep, roles: RoleFlags.Pusher);
+            b.AddPiece(u, "U", 13);
+            b.AddPiece(crate, "A", crateA);
+            b.AddPiece(crate, "B", 8);
+            b.AddPiece(avatar, "P", 2);
+            return b.Build();
+        }
+
+        var topo = Build(14);
+        // Both crates have to match; the carrier and the pusher may end anywhere.
+        var goal = new PolyominoDomain(topo, PolyominoState.FromTopology(Build(32)), 1UL << 1);
+        return new Lab3Mode("Coupled kinematics: hollow U-carrier & Sokoban push",
+            "Slide the U-carrier or the pusher one square. The U drags the crate in its pocket along when it moves left, right or up, " +
+            "and leaves it behind when it moves down, out of the open mouth. A pusher shoves up to three pieces in a row. Goal: crates on anchors 8 and 32.",
+            goal, new CompositeDomain<ulong>(goal, maxPushDepth: 3), Lab3CarrierColors);
+    }
+
+    public static readonly IReadOnlyDictionary<string, string> Lab3CarrierColors = new Dictionary<string, string>
+    {
+        ["Hollow U-Carrier"] = "#3B82F6",
+        ["Crate"] = "#F59E0B",
+        ["Sokoban Pusher"] = "#EF4444",
+    };
+
+    /// <summary>Mode 3: frictionless ice. Pieces glide until a wall, the edge or another piece stops them.</summary>
+    public static Lab3Mode CreateLab3Ice()
+    {
+        var b = PuzzleTopology.CreateBuilder(Lab3Width, Lab3Width);
+        b.AddWall(0, 4);
+        b.AddWall(2, 0);
+        b.AddWall(5, 3);
+        int glider = b.AddGroup("Ice Glider", [(0, 0)], physics: SlidePhysics.FrictionlessRaycast);
+        int bar = b.AddGroup("Ice Slider Bar", [(0, 0), (1, 0)], physics: SlidePhysics.FrictionlessRaycast);
+        int block = b.AddGroup("Ice L-Block", [(0, 0), (1, 0), (1, 1)], physics: SlidePhysics.FrictionlessRaycast);
+        b.AddPiece(glider, "G", 0);
+        b.AddPiece(bar, "I", 19);
+        b.AddPiece(block, "L", 15);
+        var goal = new PolyominoDomain(b.Build(), glider, 20);
+        return new Lab3Mode("Frictionless raycast: ricochet physics",
+            "Pick a piece and a direction: it glides until the next square would leave the board, hit a bumper wall or hit another piece, " +
+            "and cannot stop in between. Goal: the 1x1 glider on anchor 20 (dashed outline); use the other blocks as stoppers.",
+            goal, new CompositeDomain<ulong>(goal), Lab3IceColors);
+    }
+
+    public static readonly IReadOnlyDictionary<string, string> Lab3IceColors = new Dictionary<string, string>
+    {
+        ["Ice Glider"] = "#22D3EE",
+        ["Ice Slider Bar"] = "#A855F7",
+        ["Ice L-Block"] = "#F5B301",
+    };
 }

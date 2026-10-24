@@ -59,6 +59,18 @@ A 5x5 board (bits `0..24`) with a static wall on square 12:
 
 The goal is to bring the master L to anchor 16.
 
+## Lab 3: extended mechanics
+
+A 6x6 board with three modes, all played through `CompositeDomain` (see [extended-mechanics.md](extended-mechanics.md)).
+
+| Mode | What it shows |
+| --- | --- |
+| 1 Rotation | An L-tromino turns through four orientation groups. A turn needs its whole 2x2 rotation box free (`SweptClearanceMask << boxOrigin`); the blocker in the empty corner is highlighted in red until it moves. Entering and leaving the fourth orientation moves the LSB anchor by one square. |
+| 2 U-carrier and push | The hollow U drags the crate in its pocket when it moves left, right or up and leaves it behind when it moves down. Hovering an arrow previews a single slide or a coupled `CompositeMove`; the XOR panel shows the 4-term hash update. |
+| 3 Ice raycast | Pieces glide until the next square would leave the board, hit a bumper wall or hit a piece. The inspector lists the four glides (`RaycastReport`) with their stop reason and blocking bits. |
+
+All modes have the diagnostic mask overlay, undo and reset (a `PlaySession` per mode). `LabPuzzles` holds the three layouts and goals; `RaycastReport` turns the engine's glide traces into rows.
+
 ## Reference tab
 
 An in-app summary of the proofs in this folder and the citations in [references.md](references.md).

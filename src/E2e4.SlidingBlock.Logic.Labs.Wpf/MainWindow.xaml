@@ -4,6 +4,7 @@
         xmlns:w="clr-namespace:E2e4.SlidingBlock.Logic.Labs.Wpf"
         xmlns:l1="clr-namespace:E2e4.SlidingBlock.Logic.Labs.Wpf.Lab1"
         xmlns:l2="clr-namespace:E2e4.SlidingBlock.Logic.Labs.Wpf.Lab2"
+        xmlns:l3="clr-namespace:E2e4.SlidingBlock.Logic.Labs.Wpf.Lab3"
         Title="Sliding Puzzle Bitboard Laboratories" Width="1400" Height="920" MinWidth="1100" MinHeight="700"
         Background="{StaticResource Bg0}" Foreground="{StaticResource Fg}" FontFamily="Segoe UI" FontSize="13"
         WindowStartupLocation="CenterScreen" WindowState="Maximized">
@@ -24,6 +25,7 @@
         <TabControl>
             <TabItem Header="Lab 1 - Standard Architectures"><l1:Lab1View/></TabItem>
             <TabItem Header="Lab 2 - Polyomino &amp; Hook Moves"><l2:Lab2View/></TabItem>
+            <TabItem Header="Lab 3 - Extended Mechanics"><l3:Lab3View/></TabItem>
             <TabItem Header="Architecture &amp; Research Guide"><w:ReferenceView/></TabItem>
         </TabControl>
     </DockPanel>

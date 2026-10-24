@@ -11,7 +11,7 @@ for the N-puzzle, Klotski, Rush Hour and polyominoes. `PROMPT.md` is the origina
 
 - `src/E2e4.SlidingBlock.Logic/` — the library (`net10.0`): `ISlidingBlockDomain` (`Abstractions.cs`), the per-puzzle state and domain types
   (`NPuzzle.cs`, `Klotski.cs`, `RushHour.cs`, `Polyomino.cs`), `PuzzleTopology`, `GridGeometry.cs`, `CompositeMove.cs` (rotation, push, carry; see `docs/extended-mechanics.md`), `Aliases.cs` (the `ulong` names of the generic polyomino types), `PuzzleSolver`, `PuzzleWalk`, `PlaySession` and `BitboardExtensions`.
-- `src/E2e4.SlidingBlock.Logic.Labs.Wpf/` — WPF application with the two laboratories (`Lab1`, `Lab2`). `LabPuzzles.cs` holds the layouts, goals and colours they play (plain C#, linked into the test project). Private, not packed; it sets
+- `src/E2e4.SlidingBlock.Logic.Labs.Wpf/` — WPF application with the three laboratories (`Lab1`, `Lab2`, `Lab3`). `LabPuzzles.cs` holds the layouts, goals and colours they play (plain C#, linked into the test project along with `Lab3/RaycastReport.cs`). Private, not packed; it sets
   `EnableWindowsTargeting` so the Linux CI runners can build it.
 - `tests/E2e4.SlidingBlock.Logic.Test/` — xUnit tests (net10.0).
 - `docs/` — markdown research notes and design explanations with Mermaid diagrams (start at `docs/README.md`); keep them in step with\r\n  the code when the object model changes.\r\n- `assets/icon.png` / `icon.svg` — the package icon: the E2e4 frame, a Klotski board and the Logic badge shared with E2e4.Chess.Logic.

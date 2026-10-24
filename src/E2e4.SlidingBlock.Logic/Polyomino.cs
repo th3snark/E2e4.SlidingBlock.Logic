@@ -370,6 +370,22 @@ internal static class MoveGen<TBitboard> where TBitboard : unmanaged, IBinaryInt
         return result;
     }
 
+    /// <summary>The static wall cells the group's footprint would cover on <paramref name="anchor"/>; empty when it merely leaves the board.</summary>
+    private static TBitboard WallCells(PuzzleTopology<TBitboard> topology, EquivalenceGroup<TBitboard> g, int anchor)
+    {
+        TBitboard hit = TBitboard.Zero;
+        int w = topology.Width, r0 = anchor / w, c0 = anchor % w;
+        for (int i = 0; i < g.RelativeCells.Count; i++)
+        {
+            var (dr, dc) = g.RelativeCells[i];
+            int r = r0 + dr, c = c0 + dc;
+            if ((uint)r >= (uint)topology.Height || (uint)c >= (uint)w) continue;
+            TBitboard cell = TBitboard.One << (r * w + c);
+            if ((topology.StaticWallsMask & cell) != TBitboard.Zero) hit |= cell;
+        }
+        return hit;
+    }
+
     /// <summary>Slides from <paramref name="start"/> along <paramref name="dir"/> until blocked (or <paramref name="maxSteps"/>); returns the final anchor.</summary>
     public static int Glide(PuzzleTopology<TBitboard> topology, EquivalenceGroup<TBitboard> g, int dir, int start, TBitboard other, int maxSteps,
         out int steps, out TBitboard swept, out TBitboard blocking)
@@ -382,7 +398,11 @@ internal static class MoveGen<TBitboard> where TBitboard : unmanaged, IBinaryInt
         {
             if (!Grid.StepStaysOnBoard(curr, dir, topology.Width, cells)) break;
             int next = curr + delta;
-            if (((topology.ValidAnchorsByDir[g.GroupId, dir] >> next) & TBitboard.One) == TBitboard.Zero) break;
+            if (((topology.ValidAnchorsByDir[g.GroupId, dir] >> next) & TBitboard.One) == TBitboard.Zero)
+            {
+                blocking = WallCells(topology, g, next);
+                break;
+            }
             TBitboard footprint = g.BaseMask << next;
             TBitboard hit = other & footprint;
             if (hit != TBitboard.Zero) { blocking = hit; break; }
