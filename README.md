@@ -18,9 +18,9 @@ var start = PuzzleWalk.RandomWalk(domain, goal, 25, new Random(3));
 SolveResult<NPuzzleMove>? result = new PuzzleSolver().SolveIdaStar(domain, start, domain.ManhattanDistance);
 Console.WriteLine(result?.Moves.Count);
 
-// Rush Hour: the topology is parsed from an ASCII map, the puzzle says which vehicle has to reach which offset.
-var topology = RushHourTopology.FromAsciiMap(rows, leadingLabels: "X");
-var rushHour = new RushHourDomain(topology, goalVehicle: topology.IndexOf('X'), goalOffset: 4);
+// Rush Hour: the vehicles are read off an ASCII diagram, and the red car (the first symbol) has to reach the far end of its row.
+var symbols = LaneVehicle.SymbolsOf(rows, leadingLabels: "X");
+var rushHour = LaneSlide.RushHour(rows, symbols);
 Console.WriteLine(new PuzzleSolver().SolveBfs(rushHour, rushHour.InitialState)?.Moves.Count);
 ```
 
@@ -28,7 +28,8 @@ Console.WriteLine(new PuzzleSolver().SolveBfs(rushHour, rushHour.InitialState)?.
 
 - `NPuzzleState`: the 4x4 sliding tile puzzle packed into 16 nibbles of a `ulong`, with a branchless XOR tile swap. The goal position is a constructor argument, and the Manhattan distance is measured against it.
 - `KlotskiState` and `KlotskiDomain`: Klotski with a canonical shape key, so interchangeable pieces are the same position.
-- `RushHourState` and `RushHourDomain`: vehicles as lane offsets packed into a `ulong`.
+- `LaneState16`, `LaneState64` and `LaneSlideDomain<TState, TBitboard>`: vehicles as lane offsets packed 4 bits each (up to 64 vehicles on 128 cells); Rush Hour moves one cell, garage puzzles slide any distance.
+- `PushState` and `PushDomain`: Soko warehouse pushing, where the storeman's walking is free, with dead squares and a heuristic.
 - `PolyominoState` and `PolyominoDomain`: non-rectangular pieces (L, T, J, S, Z, U) on a bitboard, with multi-step corner-hook slides and a
   permutation-invariant Zobrist hash.
 - `PuzzleTopology` and `PuzzleTopologyBuilder`: build a board from an ASCII map or relative cell lists, with LSB normalisation and precomputed

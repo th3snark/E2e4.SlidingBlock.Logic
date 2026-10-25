@@ -81,7 +81,7 @@ public class GoldenTests
     {
         { "npuzzle", 0xA454058DA3E90453UL },
         { "klotski", 0x358D8F596A343E3BUL },
-        { "rushhour", 0xAAEDCC7FACD4A3F2UL },
+        { "rushhour", 0xD9E7EAC7F9423106UL },
         { "lab2", 0x824041C2194168BAUL },
         { "lab3-rotation", 0xD3200486DDBA8341UL },
         { "lab3-carrier", 0x185FA007B51CEFEDUL },
@@ -163,7 +163,7 @@ public class GoldenTests
     public static TheoryData<string, ulong> ExpectedSolves => new()
     {
         { "bfs-klotski", 0x5DCDB2DC04679C05UL },
-        { "bfs-rushhour", 0x0B2CF84B676C11E1UL },
+        { "bfs-rushhour", 0xA2594C7BFF0C288FUL },
         { "bfs-lab2", 0xD63223CDB8327D2FUL },
         { "astar-npuzzle", 0xF00C854DAC1F1E27UL },
         { "ida-npuzzle", 0x43F69ED55F58B8D5UL },

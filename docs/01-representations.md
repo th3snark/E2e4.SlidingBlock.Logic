@@ -8,7 +8,7 @@ Engines converge on three specialised 64-bit layouts, chosen by each piece's deg
 flowchart TD
     Q{How can a piece move?}
     Q -->|All pieces identical, one blank| N[N-puzzle<br/>nibble-packed ulong]
-    Q -->|One axis only, fixed lane| R[Rush Hour<br/>3-bit lane offsets + lookup tables]
+    Q -->|One axis only, fixed lane| R[Rush Hour<br/>4-bit lane offsets + lookup tables]
     Q -->|Both axes, shapes repeat| K[Klotski and polyominoes<br/>bitboards + canonical key]
 ```
 
@@ -30,11 +30,13 @@ nibble:    F  E  D  C ... 3  2  1  0      0xFEDCBA9876543210  (solved: tile k on
 ## 1.2 Axis-constrained puzzles: 1D offset packing (Rush Hour)
 
 Cars (`1x2`) and trucks (`1x3`) cannot change lane or rotate, so each vehicle has exactly one degree of freedom: its offset
-`0..4` along its fixed row or column. That is 3 bits per vehicle, so up to 16 vehicles fit in 48 bits.
+`0..15` along its fixed row or column (a lane is at most 16 cells). That is 4 bits per vehicle, kept in two `UInt128` registers
+(`LaneState16` holds 16 vehicles in one `ulong`, `LaneState64` holds 64 in four), so up to 64 vehicles on 128 cells fit. The same `LaneSlideDomain<TState, TBitboard>` plays
+classic Rush Hour (`maxStep` 1, one cell per move) and the garage puzzles (any distance is one move).
 
-- Occupancy (36 bits) is rebuilt in O(N) from a precomputed table `VehicleMask(vehicle, offset)`.
-- Legality of a step is a single bit test against `FrontNeighborBit(vehicle, offset)` or `BackNeighborBit(vehicle, offset)`;
-  a value of `0` means the board edge, so the move is impossible.
+- Occupancy is rebuilt in O(N) from a precomputed table `MaskAt(vehicle, offset)`.
+- Legality of a slide is that no cell it passes over or lands on is held by another vehicle: `(MaskAt(v, o) & others) == 0`
+  for each offset `o` up to `maxStep` away, stopping at the first blocked one.
 
 ## 1.3 Unrestricted 2D pieces: Klotski and polyominoes
 
@@ -58,6 +60,7 @@ Pieces move in two dimensions and several are identical. A naive "piece id per c
 | Puzzle | State | Bits | Identity of a position | Hash |
 |--------|-------|------|------------------------|------|
 | 15-puzzle | `NPuzzleState` | 64 (16 x 4) | the `ulong` | multiplicative mix of the `ulong` |
-| Rush Hour | `RushHourState` | up to 48 (16 x 3) | the packed offsets | multiplicative mix |
+| Rush Hour | `LaneState16` | 64 (16 x 4) | the packed offsets | multiplicative mix |
+| Garages | `LaneState64` | up to 256 (64 x 4) | the packed offsets | fold of four words (`Hashing.Mix`) |
 | Klotski | `KlotskiState` | 60 (20 x 3) | `CanonicalShapeKey` | multiplicative mix of the key |
 | Polyominoes | `PolyominoState` | one `ulong` per group | `GroupAnchors[]` + Zobrist hash | incremental Zobrist XOR |

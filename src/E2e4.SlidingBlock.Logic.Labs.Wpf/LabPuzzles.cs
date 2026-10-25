@@ -73,13 +73,11 @@ public static class LabPuzzles
         "..EEE.",
     ];
 
-    /// <summary>The red car X is vehicle 0 and has to reach the right edge (offset 4 for a 2-long car).</summary>
-    public static RushHourDomain CreateRushHour()
-    {
-        var topo = RushHourTopology.FromAsciiMap(RushHourMap, leadingLabels: RushHourRedCar.ToString());
-        int red = topo.IndexOf(RushHourRedCar);
-        return new RushHourDomain(topo, red, RushHourTopology.Size - topo.Vehicles[red].Length);
-    }
+    /// <summary>The symbol of each vehicle of <see cref="RushHourMap"/>, by vehicle index: the red car X first, then B to H.</summary>
+    public static readonly string RushHourSymbols = LaneVehicle.SymbolsOf(RushHourMap, leadingLabels: RushHourRedCar.ToString());
+
+    /// <summary>The red car X is vehicle 0 and has to reach the right edge (offset 4 for a 2-long car); a move is one cell.</summary>
+    public static LaneSlideDomain CreateRushHour() => LaneSlide.RushHour(RushHourMap, RushHourSymbols);
 
     // ---- Lab 2 (polyominoes) --------------------------------------------------------------------------------
 

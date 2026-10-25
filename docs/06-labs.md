@@ -11,7 +11,7 @@ A mode selector switches between three puzzles, each with an interactive board, 
 |------|----------------|-------|
 | 15-puzzle | 16 nibbles of the `ulong` | starts from a 30-move scramble |
 | Klotski | 20 three-bit shape codes (the canonical key) | classic 4x5 layout |
-| Rush Hour | one 3-bit offset per vehicle | the 8-vehicle layout from the brief (`LabPuzzles.CreateRushHour`), red car must reach offset 4 |
+| Rush Hour | one 4-bit offset per vehicle | the 8-vehicle layout from the brief (`LabPuzzles.CreateRushHour`), red car must reach offset 4 |
 
 The Klotski register uses the shape classes `1 = 1x1`, `2 = 1x2 vertical`, `3 = 2x1 horizontal`, `4 = 2x2` (the legend order in
 `LabPuzzles.CreateKlotski`).

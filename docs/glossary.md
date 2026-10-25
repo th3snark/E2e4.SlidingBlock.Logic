@@ -48,7 +48,7 @@ Terms and acronyms used in this repository, in alphabetical order. Where a term 
 | **Transposition table** | Cache of already-seen states keyed by hash, so a position reached by different move orders is searched once. |
 | **tzcnt (trailing-zero count)** | CPU instruction (`BitOperations.TrailingZeroCount`) giving the index of the lowest set bit; the LSB lookup. |
 | **ValidAnchorsMask** | Per-group bitboard of anchors where the whole shape stays on the board and off walls. See [valid anchors and hook moves](03-valid-anchors-and-hook-moves.md). |
-| **Vehicle offset** | A Rush Hour vehicle's position along its lane, `0..4`, stored in 3 bits. |
+| **Vehicle offset** | A lane-sliding vehicle's position along its lane, `0..15`, stored in 4 bits. |
 | **WPF (Windows Presentation Foundation)** | The .NET desktop UI framework used by the laboratories app. |
 | **XOR (exclusive or)** | Bitwise operation that is its own inverse and is commutative and associative; the basis of cheap incremental updates and Zobrist hashing. |
 | **XorShift64\*** | Fast pseudo-random generator (xor-shifts then a multiply) used to fill the Zobrist table from a fixed seed. |

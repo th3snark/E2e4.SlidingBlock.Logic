@@ -10,7 +10,7 @@ for the N-puzzle, Klotski, Rush Hour and polyominoes. `PROMPT.md` is the origina
 ## Layout
 
 - `src/E2e4.SlidingBlock.Logic/` — the library (`net10.0`): `ISlidingBlockDomain` (`Abstractions.cs`), the per-puzzle state and domain types
-  (`NPuzzle.cs`, `Klotski.cs`, `RushHour.cs`, `Polyomino.cs`, `PolyominoGoal.cs`), `PuzzleTopology`, `GridGeometry.cs`, `CompositeMove.cs` (rotation, push, carry; see `docs/extended-mechanics.md`), `Aliases.cs` (the `ulong` names of the generic polyomino types), `PuzzleSolver`, `PuzzleWalk`, `PlaySession` and `BitboardExtensions`.
+  (`NPuzzle.cs`, `Klotski.cs`, `RushHour.cs`, `LaneSlide.cs` (`LaneSlideDomain<TState, TBitboard>`: vehicles sliding along lanes, up to 64 on 128 cells; any distance can be one move), `Push.cs` (Soko warehouse pushing with free walking, dead squares and a heuristic), `Polyomino.cs`, `PolyominoGoal.cs`), `PuzzleTopology`, `GridGeometry.cs`, `CompositeMove.cs` (rotation, push, carry; see `docs/extended-mechanics.md`), `Aliases.cs` (the `ulong` names of the generic polyomino types), `PuzzleSolver`, `PuzzleWalk`, `PlaySession` and `BitboardExtensions`.
 - `src/E2e4.SlidingBlock.Logic.Labs.Wpf/` — WPF application with the three laboratories (`Lab1`, `Lab2`, `Lab3`). `LabPuzzles.cs` holds the layouts, goals and colours they play (plain C#, linked into the test project along with `Lab3/RaycastReport.cs`). Private, not packed; it sets
   `EnableWindowsTargeting` so the Linux CI runners can build it.
 - `tests/E2e4.SlidingBlock.Logic.Test/` — xUnit tests (net10.0).
@@ -20,7 +20,7 @@ for the N-puzzle, Klotski, Rush Hour and polyominoes. `PROMPT.md` is the origina
 ## Rules
 
 - The library knows how pieces move and how to search, never which puzzle is being played: no layouts or ASCII maps, no goal positions,
-  no goal-relative heuristics, no colours. Goals are constructor data of the domains; each puzzle (the Puzzles app, the Labs) owns its definition.
+  no colours. Goals are constructor data of the domains, and a domain that takes its goal that way may supply an admissible heuristic for its own move count (`PushDomain.Heuristic`); each puzzle (the Puzzles app, the Labs) owns its definition.
 - No dependencies, no WPF/WinForms in the library, no I/O. CI fails if the library gains a package dependency.
 - State types are structs on purpose and move generation writes into caller-supplied `Span<TMove>` buffers: keep the hot paths allocation-free.
 - Nullable is on and warnings are errors: the tree must build with 0 warnings. File-scoped namespaces and `int`/`string` keywords are enforced

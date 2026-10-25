@@ -63,16 +63,17 @@ classDiagram
     PlaySession ..> ISlidingBlockDomain : plays any
     ISlidingBlockDomain <|.. NPuzzleDomain
     ISlidingBlockDomain <|.. KlotskiDomain
-    ISlidingBlockDomain <|.. RushHourDomain
+    ISlidingBlockDomain <|.. LaneSlideDomain~TState,TBitboard~
+    ISlidingBlockDomain <|.. PushDomain
     ISlidingBlockDomain <|.. PolyominoDomain
     KlotskiDomain --> PuzzleTopology
     PolyominoDomain --> PuzzleTopology
-    RushHourDomain --> RushHourTopology
+    LaneSlideDomain~TState,TBitboard~ --> LaneVehicle
 ```
 
 ## 5.1a What the engine does not know
 
-Goals are data. `NPuzzleDomain(initial, goal)`, `KlotskiDomain(topology, masterPieceId, goalAnchor)`, `RushHourDomain(topology, goalVehicle, goalOffset)`
+Goals are data. `NPuzzleDomain(initial, goal)`, `KlotskiDomain(topology, masterPieceId, goalAnchor)`, `LaneSlideDomain<TState, TBitboard>(vehicles, columns, rows, goalVehicle, goalOffset, maxStep)` (`LaneState16` or `LaneState64` for the position; `ulong` for up to 64 cells, `UInt128` for up to 128) (Rush Hour is `LaneSlide.RushHour(rows, symbols)`)
 and `PolyominoDomain(topology, goalGroupId, goalAnchor)` (or `PolyominoDomain(topology, goalPosition)` for a whole-position goal where identical pieces are interchangeable, optionally ignoring some groups; both build a `PolyominoGoal`, which `CompositeDomain` takes too) receive the answer from the puzzle that uses them. The engine has no layouts
 (the classic Klotski map, the Rush Hour boards), no notion of where the blank belongs, no goal-relative heuristic baked into a state
 (`NPuzzleDomain.ManhattanDistance` is measured against the goal it was given) and no colours. Layouts and goals live in the puzzle
@@ -87,7 +88,7 @@ definitions of the consumers (`E2e4.SlidingBlock.Puzzles.Core`; `LabPuzzles` in 
 | `PieceTemplate` | One physical piece: id, group, label, initial anchor |
 | `PuzzleTopology` | Board size, wall mask, groups, pieces, Zobrist table; factory from an ASCII map |
 | `PuzzleTopologyBuilder` | Builds a topology from relative cell lists; validates anchors and overlaps; computes the masks |
-| `RushHourTopology` | Vehicles plus `VehicleMasks`, `FrontNeighborBit`, `BackNeighborBit` |
+| `LaneVehicle` | One vehicle of a lane-sliding puzzle: lane, length, breadth, start offset; `Parse` reads them off a diagram |
 
 ASCII maps use `#` for a wall, `.` for empty, and any other character for one piece; a legend maps characters to a `PieceKind` (name, directions and an opaque key; appearance such as colour is the consumer's business).
 Pieces whose normalised shape, directions and role match join the same group.
@@ -97,7 +98,7 @@ Pieces whose normalised shape, directions and role match join the same group.
 | State | Size | Fields |
 |-------|------|--------|
 | `NPuzzleState` (`readonly struct`) | 8 bytes | `PackedNibbles` |
-| `RushHourState` (`readonly struct`) | 8 bytes | `PackedOffsets` (3 bits per vehicle) |
+| `LaneState16` / `LaneState64` (`readonly struct`) | 8 / 32 bytes | packed offsets, 4 bits per vehicle (16 / 64 vehicles) |
 | `KlotskiState` (`readonly struct`) | | `[InlineArray(10)]` piece anchors, `OccupancyMask` (20 bits), `CanonicalShapeKey` (60 bits) |
 | `PolyominoState` (`struct`) | | `[InlineArray(16)]` `GroupAnchors`, `[InlineArray(16)]` piece anchors, `OccupancyMask`, `ZobristHash` |
 
@@ -110,7 +111,8 @@ deliberately ignores the per-piece anchor buffer; see [section 4](04-zobrist-and
 |--------|------|---------|
 | `NPuzzleDomain` | `NPuzzleMove(From, To)` | the tile on `From` slides into the blank on `To` |
 | `KlotskiDomain` | `KlotskiMove(Piece, From, To)` | one-cell step of a piece (single-step metric) |
-| `RushHourDomain` | `RushHourMove(Vehicle, Delta)` | one-cell step, `Delta` is `-1` or `+1` |
+| `LaneSlideDomain<TState, TBitboard>` | `LaneMove(Vehicle, Offset)` | the vehicle slides to `Offset` along its lane, at most `maxStep` cells (1 for Rush Hour) |
+| `PushDomain` | `PushMove(Case, To, PlayerAt)` | one case pushed to `To` in as many pushes as it takes; the storeman's walking is free |
 | `PolyominoDomain` | `PolyominoMove(PieceId, TargetAnchor)` | one turn, including multi-step hooks |
 
 ## 5.5 Solving

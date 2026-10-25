@@ -235,11 +235,8 @@ internal static class TestPuzzles
         "HHH...",
     ];
 
-    public static RushHourDomain RushHourDefault()
-    {
-        var topo = RushHourTopology.FromAsciiMap(RushHourDefaultMap, leadingLabels: "X");
-        return new RushHourDomain(topo, topo.IndexOf('X'), RushHourTopology.Size - 2);
-    }
+    public static LaneSlideDomain RushHourDefault() =>
+        LaneSlide.RushHour(RushHourDefaultMap, LaneVehicle.SymbolsOf(RushHourDefaultMap, leadingLabels: "X"));
 }
 
 public class DomainTests
@@ -306,8 +303,8 @@ public class DomainTests
         foreach (var mv in result!.Moves)
         {
             s = d.ApplyMove(s, mv);
-            ulong occ = s.Occupancy(d.Topology);
-            Assert.Equal(d.Topology.Vehicles.Sum(v => v.Length), BitOperations.PopCount(occ));
+            var occ = d.Occupancy(s);
+            Assert.Equal(d.Vehicles.Sum(v => v.Length), BitOperations.PopCount(occ));
         }
         Assert.True(d.IsGoal(s));
     }
@@ -355,8 +352,8 @@ public class LabSpecTests
     public void Lab1RushHourLayoutMatchesTheBrief()
     {
         var d = LabPuzzles.CreateRushHour();
-        var t = d.Topology;
-        Assert.Equal(8, t.VehicleCount);
+        var t = d;
+        Assert.Equal(8, t.Vehicles.Count);
         (int lane, int offset, int length, bool horizontal)[] expected =
         [
             (2, 1, 2, true), (3, 1, 3, false), (0, 0, 2, true), (0, 3, 2, false),

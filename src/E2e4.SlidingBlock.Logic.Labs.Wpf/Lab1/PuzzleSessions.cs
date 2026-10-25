@@ -374,11 +374,11 @@ public sealed class KlotskiSession : PuzzleSession<KlotskiState, KlotskiMove>
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-public sealed class RushHourSession : PuzzleSession<RushHourState, RushHourMove>
+public sealed class RushHourSession : PuzzleSession<LaneState16, LaneMove>
 {
-    private readonly RushHourDomain _r;
+    private readonly LaneSlideDomain _r;
 
-    private RushHourSession(RushHourDomain d) : base(d)
+    private RushHourSession(LaneSlideDomain d) : base(d)
     {
         _r = d;
         Reset();
@@ -386,66 +386,68 @@ public sealed class RushHourSession : PuzzleSession<RushHourState, RushHourMove>
 
     public RushHourSession() : this(LabPuzzles.CreateRushHour()) { }
 
+    private static char Label(int vehicle) => LabPuzzles.RushHourSymbols[vehicle];
+
     public override string Title => "Rush Hour";
-    public override string Representation => "Each vehicle has one degree of freedom: a 3-bit offset along its lane. Occupancy is rebuilt from VehicleMasks[v, offset]; legality tests one FrontNeighborBit.";
+    public override string Representation => "Each vehicle has one degree of freedom: a 4-bit offset along its lane (the engine's lane-sliding domain, which also holds the 64-vehicle garages in two 128-bit registers; the first 16 vehicles show here). Occupancy is rebuilt from MaskAt(v, offset); legality tests the cells the vehicle would move into.";
     public override int Rows => 6;
     public override int Cols => 6;
-    public override RegisterSpec RegisterLayout => new(3, _r.Topology.VehicleCount, 8, "3-bit offset per vehicle");
+    public override RegisterSpec RegisterLayout => new(4, _r.Vehicles.Count, 8, "4-bit offset per vehicle");
     public override string OccupancyCaption => "occupied cells (36-bit)";
 
     private Color VehicleColor(int v) => v == _r.GoalVehicle ? Color.FromRgb(0xEF, 0x44, 0x44) : PuzzleSession.Hue(v * 47 + 20, 0.5, 0.85);
 
-    public override ulong CellsOfGroup(int group) => _r.Topology.VehicleMask(group, State.OffsetOf(group));
-    public override string PieceMaskName(int pieceId) => $"VehicleMasks[{pieceId},{State.OffsetOf(pieceId)}]";
+    public override ulong CellsOfGroup(int group) => (ulong)_r.MaskAt(group, State.OffsetOf(group));
+    public override string PieceMaskName(int pieceId) => $"MaskAt({pieceId},{State.OffsetOf(pieceId)})";
 
     public override GroupInfo GroupInfoFor(int group)
     {
-        var v = _r.Topology.Vehicles[group];
+        var v = _r.Vehicles[group];
         int off = State.OffsetOf(group);
         string axis = v.IsHorizontal ? "row" : "col";
-        return new GroupInfo(VehicleColor(group), $"v{group}:{v.Label}", $"{(v.IsHorizontal ? 'r' : 'c')}{v.Lane} off {off}",
-            $"Vehicle {group} ({v.Label}), {axis} {v.Lane}, length {v.Length}\nbits {group * 3}..{group * 3 + 2}\n0b{Convert.ToString(off, 2).PadLeft(3, '0')} -> offset {off}");
+        return new GroupInfo(VehicleColor(group), $"v{group}:{Label(group)}", $"{(v.IsHorizontal ? 'r' : 'c')}{v.Lane} off {off}",
+            $"Vehicle {group} ({Label(group)}), {axis} {v.Lane}, length {v.Length}\nbits {group * 4}..{group * 4 + 3}\n0b{Convert.ToString(off, 2).PadLeft(4, '0')} -> offset {off}");
     }
 
-    protected override IReadOnlyList<PieceView> BuildPieces(RushHourState s)
+    protected override IReadOnlyList<PieceView> BuildPieces(LaneState16 s)
     {
         var list = new List<PieceView>();
-        foreach (var v in _r.Topology.Vehicles)
+        foreach (var v in _r.Vehicles)
         {
             int off = s.OffsetOf(v.Index);
             var cells = Enumerable.Range(0, v.Length).Select(k => v.IsHorizontal ? (v.Lane, off + k) : (off + k, v.Lane)).ToArray();
-            list.Add(new PieceView(v.Index, v.Label.ToString(), VehicleColor(v.Index), cells));
+            list.Add(new PieceView(v.Index, Label(v.Index).ToString(), VehicleColor(v.Index), cells));
         }
         return list;
     }
 
-    protected override MoveView Describe(RushHourState s, RushHourMove m, int index)
+    protected override MoveView Describe(LaneState16 s, LaneMove m, int index)
     {
-        bool h = _r.Topology.Vehicles[m.Vehicle].IsHorizontal;
-        return new MoveView(index, m.Vehicle, h ? 0 : m.Delta, h ? m.Delta : 0);
+        bool h = _r.Vehicles[m.Vehicle].IsHorizontal;
+        int delta = m.Offset - s.OffsetOf(m.Vehicle);
+        return new MoveView(index, m.Vehicle, h ? 0 : delta, h ? delta : 0);
     }
 
-    protected override ulong RegisterOf(RushHourState s) => s.PackedOffsets;
-    protected override ulong OccupancyOf(RushHourState s) => s.Occupancy(_r.Topology);
+    protected override ulong RegisterOf(LaneState16 s) => s.Word(0);
+    protected override ulong OccupancyOf(LaneState16 s) => (ulong)_r.Occupancy(s);
 
-    protected override string BuildTrace(RushHourState before, RushHourMove m, RushHourState after)
+    protected override string BuildTrace(LaneState16 before, LaneMove m, LaneState16 after)
     {
-        var topo = _r.Topology;
-        var veh = topo.Vehicles[m.Vehicle];
+        var veh = _r.Vehicles[m.Vehicle];
         int off = before.OffsetOf(m.Vehicle);
-        ulong occ = before.Occupancy(topo);
-        ulong nb = m.Delta > 0 ? topo.FrontNeighborBit(m.Vehicle, off) : topo.BackNeighborBit(m.Vehicle, off);
+        ulong occ = OccupancyOf(before), own = (ulong)_r.MaskAt(m.Vehicle, off), target = (ulong)_r.MaskAt(m.Vehicle, m.Offset);
+        ulong packed = RegisterOf(before), clear = packed & ~(0xFUL << (4 * m.Vehicle));
         var sb = new StringBuilder();
-        sb.Append(CultureInfo.InvariantCulture, $"vehicle {veh.Label} ({(veh.IsHorizontal ? "row" : "col")} {veh.Lane}, len {veh.Length}) offset {off} -> {off + m.Delta}\n\n");
-        sb.Append(Row($"offset = (packed >> 3*{m.Vehicle}) & 0b111", $"{off}   (packed 0x{before.PackedOffsets:X16})"));
-        sb.Append(Row("occ = OR VehicleMasks[v,off[v]]", $"0x{occ:X9}"));
-        sb.Append(Row($"VehicleMasks[{veh.Label},{off}]", $"0x{topo.VehicleMask(m.Vehicle, off):X9}"));
-        sb.Append(Row(m.Delta > 0 ? "FrontNeighborBit" : "BackNeighborBit", $"0x{nb:X9}"));
-        sb.Append(Row("(occ & neighbor) == 0", $"0x{occ & nb:X} -> legal"));
-        sb.Append(Row($"clear = packed & ~(7 << 3*{m.Vehicle})", $"0x{before.PackedOffsets & ~(7UL << (3 * m.Vehicle)):X16}"));
-        sb.Append(Row($"packed' = clear | ({off + m.Delta} << 3*{m.Vehicle})", $"0x{(before.PackedOffsets & ~(7UL << (3 * m.Vehicle))) | ((ulong)(off + m.Delta) << (3 * m.Vehicle)):X16}"));
-        sb.Append(Row("packed'", $"0x{after.PackedOffsets:X16}"));
-        sb.Append(Row("occ'", $"0x{after.Occupancy(topo):X9}"));
+        sb.Append(CultureInfo.InvariantCulture, $"vehicle {Label(m.Vehicle)} ({(veh.IsHorizontal ? "row" : "col")} {veh.Lane}, len {veh.Length}) offset {off} -> {m.Offset}\n\n");
+        sb.Append(Row($"offset = (packed >> 4*{m.Vehicle}) & 0b1111", $"{off}   (packed 0x{packed:X16})"));
+        sb.Append(Row("occ = OR MaskAt(v, off[v])", $"0x{occ:X9}"));
+        sb.Append(Row($"MaskAt({Label(m.Vehicle)},{off})", $"0x{own:X9}"));
+        sb.Append(Row($"MaskAt({Label(m.Vehicle)},{m.Offset})", $"0x{target:X9}"));
+        sb.Append(Row("(occ & ~own & target) == 0", $"0x{occ & ~own & target:X} -> legal"));
+        sb.Append(Row($"clear = packed & ~(15 << 4*{m.Vehicle})", $"0x{clear:X16}"));
+        sb.Append(Row($"packed' = clear | ({m.Offset} << 4*{m.Vehicle})", $"0x{clear | ((ulong)m.Offset << (4 * m.Vehicle)):X16}"));
+        sb.Append(Row("packed'", $"0x{RegisterOf(after):X16}"));
+        sb.Append(Row("occ'", $"0x{OccupancyOf(after):X9}"));
         return sb.ToString();
     }
 }

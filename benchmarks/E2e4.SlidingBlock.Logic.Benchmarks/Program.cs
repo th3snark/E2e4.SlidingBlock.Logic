@@ -6,7 +6,7 @@ using E2e4.SlidingBlock.Logic.Labs;
 // Best of several runs; allocation is the managed bytes one run allocates on this thread.
 foreach (var (name, run) in Scenarios())
 {
-    run();
+    for (var warm = Stopwatch.StartNew(); warm.ElapsedMilliseconds < 400;) run();   // long enough for the JIT to reach its optimised code
     double best = double.MaxValue;
     long bytes = 0;
     for (int i = 0; i < 7; i++)
