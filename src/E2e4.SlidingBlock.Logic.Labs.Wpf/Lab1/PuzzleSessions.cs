@@ -389,7 +389,7 @@ public sealed class RushHourSession : PuzzleSession<LaneState16, LaneMove>
     private static char Label(int vehicle) => LabPuzzles.RushHourSymbols[vehicle];
 
     public override string Title => "Rush Hour";
-    public override string Representation => "Each vehicle has one degree of freedom: a 4-bit offset along its lane (the engine's lane-sliding domain, which also holds the 64-vehicle garages in two 128-bit registers; the first 16 vehicles show here). Occupancy is rebuilt from MaskAt(v, offset); legality tests the cells the vehicle would move into.";
+    public override string Representation => "Each vehicle has one degree of freedom: a 4-bit offset along its lane (16 vehicles fit in one 64-bit register; the engine's lane-sliding domain also holds up to 64, in four words, for the garage puzzles). Occupancy is rebuilt from MaskAt(v, offset); legality tests the cells the vehicle would move into.";
     public override int Rows => 6;
     public override int Cols => 6;
     public override RegisterSpec RegisterLayout => new(4, _r.Vehicles.Count, 8, "4-bit offset per vehicle");
