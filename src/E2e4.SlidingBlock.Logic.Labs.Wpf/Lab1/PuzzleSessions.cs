@@ -177,7 +177,7 @@ public abstract class PuzzleSession<TState, TMove> : PuzzleSession
         Refresh(false, 0);
     }
 
-    protected static string Row(string name, string value) => $"{name,-26}{value}\n";
+    protected static string Row(string name, string value) => $"{name.PadRight(Math.Max(26, name.Length + 2))}{value}\n";
 }
 
 // ---------------------------------------------------------------------------------------------------------------
