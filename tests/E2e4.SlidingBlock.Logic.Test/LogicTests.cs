@@ -455,6 +455,33 @@ public class PlaySessionTests
         Assert.Equal(start, play.State);
         Assert.Equal(0, play.MoveCount);
     }
+
+    [Fact]
+    public void RedoReplaysUndoneMovesUntilANewMoveIsPlayed()
+    {
+        var play = NewSession(out var domain);
+        Span<NPuzzleMove> buf = stackalloc NPuzzleMove[domain.MaxMoves];
+        domain.GenerateMoves(play.State, buf);
+        play.Apply(buf[0]);
+        var afterFirst = play.State;
+        Assert.False(play.CanRedo);
+        Assert.False(play.Redo());
+        Assert.True(play.Undo());
+        Assert.True(play.CanRedo);
+        Assert.True(play.Redo());
+        Assert.Equal(afterFirst, play.State);
+        Assert.Equal(1, play.MoveCount);
+        Assert.False(play.CanRedo);
+
+        play.Undo();
+        domain.GenerateMoves(play.State, buf);
+        play.Apply(buf[0]);
+        Assert.False(play.CanRedo);
+
+        play.Undo();
+        play.Reset();
+        Assert.False(play.CanRedo);
+    }
 }
 
 public class PolyominoGoalPositionTests

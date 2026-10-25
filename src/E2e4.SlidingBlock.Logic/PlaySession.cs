@@ -10,6 +10,7 @@ public sealed class PlaySession<TState, TMove>
     where TMove : struct, IEquatable<TMove>
 {
     private readonly Stack<TState> _history = new();
+    private readonly Stack<TState> _undone = new();
 
     public PlaySession(ISlidingBlockDomain<TState, TMove> domain, TState start)
     {
@@ -28,6 +29,9 @@ public sealed class PlaySession<TState, TMove>
     public int MoveCount => _history.Count;
 
     public bool CanUndo => _history.Count > 0;
+
+    /// <summary>True if a move has been taken back and no new move has been played since.</summary>
+    public bool CanRedo => _undone.Count > 0;
     public bool IsSolved => Domain.IsGoal(State);
 
     /// <summary>Starts a new game from <paramref name="start"/>, forgetting history.</summary>
@@ -35,6 +39,7 @@ public sealed class PlaySession<TState, TMove>
     {
         State = Start = start;
         _history.Clear();
+        _undone.Clear();
     }
 
     /// <summary>Returns to the position this game started from.</summary>
@@ -44,6 +49,7 @@ public sealed class PlaySession<TState, TMove>
     public void Apply(TMove move)
     {
         _history.Push(State);
+        _undone.Clear();
         State = Domain.ApplyMove(State, move);
     }
 
@@ -51,7 +57,17 @@ public sealed class PlaySession<TState, TMove>
     public bool Undo()
     {
         if (_history.Count == 0) return false;
+        _undone.Push(State);
         State = _history.Pop();
+        return true;
+    }
+
+    /// <summary>Replays the move last taken back; false if there is none.</summary>
+    public bool Redo()
+    {
+        if (_undone.Count == 0) return false;
+        _history.Push(State);
+        State = _undone.Pop();
         return true;
     }
 }
