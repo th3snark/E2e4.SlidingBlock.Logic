@@ -1,4 +1,3 @@
-using E2e4.SlidingBlock.Logic.Labs;
 
 namespace E2e4.SlidingBlock.Logic.Test;
 
@@ -93,13 +92,13 @@ public class GoldenTests
 
     private static ulong Compute(string name) => name switch
     {
-        "npuzzle" => Fingerprint(LabPuzzles.CreatePuzzle15()),
-        "klotski" => Fingerprint(LabPuzzles.CreateKlotski()),
-        "rushhour" => Fingerprint(LabPuzzles.CreateRushHour()),
-        "lab2" => Fingerprint(LabPuzzles.CreateLab2()),
-        "lab3-rotation" => Fingerprint(LabPuzzles.CreateLab3Rotation().Domain),
-        "lab3-carrier" => Fingerprint(LabPuzzles.CreateLab3Carrier().Domain),
-        "lab3-ice" => Fingerprint(LabPuzzles.CreateLab3Ice().Domain),
+        "npuzzle" => Fingerprint(Fixtures.CreatePuzzle15()),
+        "klotski" => Fingerprint(Fixtures.CreateKlotski()),
+        "rushhour" => Fingerprint(Fixtures.CreateRushHour()),
+        "lab2" => Fingerprint(Fixtures.CreateLab2()),
+        "lab3-rotation" => Fingerprint(Fixtures.CreateRotation().Domain),
+        "lab3-carrier" => Fingerprint(Fixtures.CreateCarrier().Domain),
+        "lab3-ice" => Fingerprint(Fixtures.CreateIce().Domain),
         "feature" => Fingerprint(FeatureDomain()),
         "wide" => Fingerprint(WideDomain()),
         "hex" => Fingerprint(HexDomain()),
@@ -139,7 +138,7 @@ public class GoldenTests
     }
 
     [Fact]
-    public void Lab2PathsAreUnchanged() => Assert.Equal("1C1435462F78A74C", $"{PathFingerprint(LabPuzzles.CreateLab2()):X16}");
+    public void Lab2PathsAreUnchanged() => Assert.Equal("1C1435462F78A74C", $"{PathFingerprint(Fixtures.CreateLab2()):X16}");
 
     [Fact]
     public void FeaturePathsAreUnchanged() => Assert.Equal("8B6A539FD0C8B8CD", $"{PathFingerprint(FeatureDomain()):X16}");
@@ -156,7 +155,7 @@ public class GoldenTests
 
     private static NPuzzleState Scrambled()
     {
-        var d = LabPuzzles.CreatePuzzle15();
+        var d = Fixtures.CreatePuzzle15();
         return PuzzleWalk.RandomWalk(d, d.Goal, 40, new Random(15));
     }
 
@@ -172,12 +171,12 @@ public class GoldenTests
     private static ulong ComputeSolve(string name)
     {
         var solver = new PuzzleSolver();
-        var p15 = LabPuzzles.CreatePuzzle15();
+        var p15 = Fixtures.CreatePuzzle15();
         switch (name)
         {
-            case "bfs-klotski": { var d = LabPuzzles.CreateKlotski(); return Fold(solver.SolveBfs(d, d.InitialState)); }
-            case "bfs-rushhour": { var d = LabPuzzles.CreateRushHour(); return Fold(solver.SolveBfs(d, d.InitialState)); }
-            case "bfs-lab2": { var d = LabPuzzles.CreateLab2(); return Fold(solver.SolveBfs(d, d.InitialState)); }
+            case "bfs-klotski": { var d = Fixtures.CreateKlotski(); return Fold(solver.SolveBfs(d, d.InitialState)); }
+            case "bfs-rushhour": { var d = Fixtures.CreateRushHour(); return Fold(solver.SolveBfs(d, d.InitialState)); }
+            case "bfs-lab2": { var d = Fixtures.CreateLab2(); return Fold(solver.SolveBfs(d, d.InitialState)); }
             case "astar-npuzzle": return Fold(solver.SolveAStar(p15, Scrambled(), p15.ManhattanDistance));
             case "ida-npuzzle": return Fold(solver.SolveIdaStar(p15, Scrambled(), p15.ManhattanDistance));
             default: throw new ArgumentOutOfRangeException(nameof(name));
@@ -266,13 +265,13 @@ public class GoldenTests
     {
         long bytes = name switch
         {
-            "npuzzle" => AllocatedByGenerateMoves(LabPuzzles.CreatePuzzle15()),
-            "klotski" => AllocatedByGenerateMoves(LabPuzzles.CreateKlotski()),
-            "rushhour" => AllocatedByGenerateMoves(LabPuzzles.CreateRushHour()),
-            "lab2" => AllocatedByGenerateMoves(LabPuzzles.CreateLab2()),
-            "lab3-rotation" => AllocatedByGenerateMoves(LabPuzzles.CreateLab3Rotation().Domain),
-            "lab3-carrier" => AllocatedByGenerateMoves(LabPuzzles.CreateLab3Carrier().Domain),
-            "lab3-ice" => AllocatedByGenerateMoves(LabPuzzles.CreateLab3Ice().Domain),
+            "npuzzle" => AllocatedByGenerateMoves(Fixtures.CreatePuzzle15()),
+            "klotski" => AllocatedByGenerateMoves(Fixtures.CreateKlotski()),
+            "rushhour" => AllocatedByGenerateMoves(Fixtures.CreateRushHour()),
+            "lab2" => AllocatedByGenerateMoves(Fixtures.CreateLab2()),
+            "lab3-rotation" => AllocatedByGenerateMoves(Fixtures.CreateRotation().Domain),
+            "lab3-carrier" => AllocatedByGenerateMoves(Fixtures.CreateCarrier().Domain),
+            "lab3-ice" => AllocatedByGenerateMoves(Fixtures.CreateIce().Domain),
             "feature" => AllocatedByGenerateMoves(FeatureDomain()),
             "wide" => AllocatedByGenerateMoves(WideDomain()),
             _ => AllocatedByGenerateMoves(HexDomain()),

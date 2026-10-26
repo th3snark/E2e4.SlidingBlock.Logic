@@ -68,14 +68,6 @@ public sealed record EquivalenceGroup<TBitboard>(
 /// <param name="InitialAnchor">The cell of the piece's first (lowest) square at the start.</param>
 public sealed record PieceTemplate(int PieceId, int GroupId, string Label, int InitialAnchor);
 
-/// <summary>
-/// What a map symbol means to the engine. Pieces with the same normalized shape, <see cref="Directions"/>, <see cref="Key"/> and physics share
-/// an equivalence group; <see cref="Key"/> is opaque to the engine and lets a puzzle keep otherwise identical shapes apart.
-/// Appearance (colours, labels) is the consumer's business.
-/// </summary>
-public sealed record PieceKind(string Name, AllowedDirections Directions = AllowedDirections.Both, string Key = "",
-    byte ElevationMask = 0b01, SlidePhysics SlidePhysics = SlidePhysics.ContinuousFloodFill, RoleFlags Roles = RoleFlags.None);
-
 /// <summary>The 64-bit hash steps the packed-register domains share.</summary>
 public static class Hashing
 {

@@ -1,6 +1,6 @@
+using E2e4.SlidingBlock.Logic.Text;
 using System.Numerics;
 using E2e4.SlidingBlock.Logic;
-using E2e4.SlidingBlock.Logic.Labs;
 
 namespace E2e4.SlidingBlock.Logic.Test;
 
@@ -56,7 +56,7 @@ public class LsbNormalizationTests
     [Fact]
     public void AnchorIsTopStemNotBoundingBoxCorner()
     {
-        var d = LabPuzzles.CreateLab2();
+        var d = Fixtures.CreateLab2();
         var s = d.InitialState;
         Assert.Equal(16, BitOperations.TrailingZeroCount(d.Topology.PieceMask(1, s.AnchorOf(1))));
         Assert.Equal(4, BitOperations.TrailingZeroCount(d.Topology.PieceMask(2, s.AnchorOf(2))));
@@ -68,7 +68,7 @@ public class ValidAnchorsTests
     [Fact]
     public void TAndJCannotAnchorInColumnZero()
     {
-        var topo = LabPuzzles.CreateLab2().Topology;
+        var topo = Fixtures.CreateLab2().Topology;
         foreach (int g in new[] { 1, 2 })
             for (int r = 0; r < 5; r++)
                 Assert.False(((topo.Groups[g].ValidAnchorsMask >> (r * 5)) & 1UL) != 0, $"group {g} row {r}");
@@ -77,7 +77,7 @@ public class ValidAnchorsTests
     [Fact]
     public void ValidAnchorsMatchTwoDimensionalGroundTruthAndNeverWrap()
     {
-        var topo = LabPuzzles.CreateLab2().Topology;
+        var topo = Fixtures.CreateLab2().Topology;
         foreach (var g in topo.Groups)
             for (int s = 0; s < 25; s++)
             {
@@ -145,7 +145,7 @@ public class ReachableAnchorsTests
     [Fact]
     public void MultiCellPieceHooksAroundObstaclesOnLabBoard()
     {
-        var d = LabPuzzles.CreateLab2();
+        var d = Fixtures.CreateLab2();
         var s = d.InitialState;
         for (int p = 0; p < 5; p++)
         {
@@ -176,7 +176,7 @@ public class SymmetryTests
     [Fact]
     public void SwappingIdenticalPiecesKeepsGroupAnchorsAndHash()
     {
-        var d = LabPuzzles.CreateLab2();
+        var d = Fixtures.CreateLab2();
         var s = d.InitialState;
         int a = s.AnchorOf(3), b = s.AnchorOf(4);
         // Swap via two moves through a temporary state: set A->B's square is occupied, so rebuild directly.
@@ -194,7 +194,7 @@ public class SymmetryTests
     [Fact]
     public void IncrementalZobristMatchesFullRecompute()
     {
-        var d = LabPuzzles.CreateLab2();
+        var d = Fixtures.CreateLab2();
         var s = d.InitialState;
         var buf = new PolyominoMove[d.MaxMoves];
         var rng = new Random(7);
@@ -216,29 +216,12 @@ public class SymmetryTests
     [Fact]
     public void ZobristTableIsDeterministic()
     {
-        var a = LabPuzzles.CreateLab2().Topology;
-        var b = LabPuzzles.CreateLab2().Topology;
+        var a = Fixtures.CreateLab2().Topology;
+        var b = Fixtures.CreateLab2().Topology;
         for (int g = 0; g < a.Groups.Count; g++)
             for (int cell = 0; cell < a.CellCount; cell++)
                 Assert.Equal(a.ZobristKey(g, cell), b.ZobristKey(g, cell));
     }
-}
-
-/// <summary>Layouts only the engine tests need (the Lab layouts come from <see cref="LabPuzzles"/>).</summary>
-internal static class TestPuzzles
-{
-    private static readonly string[] RushHourDefaultMap =
-    [
-        "BBB..C",
-        "..D..C",
-        "XXD.EC",
-        "F...E.",
-        "F.GGG.",
-        "HHH...",
-    ];
-
-    public static LaneSlideDomain<LaneState16, ulong> RushHourDefault() =>
-        LaneSlide.RushHour(RushHourDefaultMap, LaneVehicle.SymbolsOf(RushHourDefaultMap, leadingLabels: "X"));
 }
 
 public class DomainTests
@@ -246,7 +229,7 @@ public class DomainTests
     [Fact]
     public void NPuzzleSlideIsNibbleXorSwap()
     {
-        var domain = LabPuzzles.CreatePuzzle15();
+        var domain = Fixtures.CreatePuzzle15();
         var s = domain.InitialState;
         Assert.Equal(0, s.BlankIndex);
         var m = s.SlideTileIntoBlank(1);
@@ -265,7 +248,7 @@ public class DomainTests
         var domain = new NPuzzleDomain(goal, goal);
         Assert.Equal(15, goal.BlankIndex);
         Assert.True(domain.IsGoal(goal));
-        Assert.False(domain.IsGoal(LabPuzzles.Puzzle15Solved));
+        Assert.False(domain.IsGoal(Fixtures.Puzzle15Solved));
         Assert.Equal(0, domain.ManhattanDistance(goal));
         var oneAway = goal.SlideTileIntoBlank(14);
         Assert.Equal(1, domain.ManhattanDistance(oneAway));
@@ -274,7 +257,7 @@ public class DomainTests
     [Fact]
     public void RandomWalkStaysReachableAndIsDeterministicPerSeed()
     {
-        var domain = LabPuzzles.CreatePuzzle15();
+        var domain = Fixtures.CreatePuzzle15();
         var a = PuzzleWalk.RandomWalk(domain, domain.Goal, 40, new Random(9));
         var b = PuzzleWalk.RandomWalk(domain, domain.Goal, 40, new Random(9));
         Assert.Equal(a, b);
@@ -285,7 +268,7 @@ public class DomainTests
     [Fact]
     public void NPuzzleIdaStarSolvesScramble()
     {
-        var solved = LabPuzzles.CreatePuzzle15();
+        var solved = Fixtures.CreatePuzzle15();
         var start = PuzzleWalk.RandomWalk(solved, solved.Goal, 25, new Random(3));
         var domain = new NPuzzleDomain(start, solved.Goal);
         var result = new PuzzleSolver().SolveIdaStar(domain, start, domain.ManhattanDistance);
@@ -298,7 +281,7 @@ public class DomainTests
     [Fact]
     public void RushHourDefaultIsSolvableAndOccupancyConsistent()
     {
-        var d = TestPuzzles.RushHourDefault();
+        var d = Fixtures.RushHourDefault();
         var result = new PuzzleSolver().SolveBfs(d, d.InitialState);
         Assert.NotNull(result);
         var s = d.InitialState;
@@ -314,7 +297,7 @@ public class DomainTests
     [Fact]
     public void KlotskiClassicHasOptimalSolutionOf116SingleSteps()
     {
-        var d = LabPuzzles.CreateKlotski();
+        var d = Fixtures.CreateKlotski();
         Assert.Equal(20 - 2, BitOperations.PopCount(d.InitialState.OccupancyMask));
         var result = new PuzzleSolver().SolveBfs(d, d.InitialState);
         Assert.NotNull(result);
@@ -324,7 +307,7 @@ public class DomainTests
     [Fact]
     public void KlotskiSwapOfIdenticalPiecesIsSameState()
     {
-        var d = LabPuzzles.CreateKlotski();
+        var d = Fixtures.CreateKlotski();
         // Pieces 'e' and 'f' are the two adjacent singles in row 3.
         int e = d.Topology.Pieces.First(p => p.Label == "e").PieceId, f = d.Topology.Pieces.First(p => p.Label == "f").PieceId;
         Assert.Equal(d.Topology.Groups[d.Topology.Pieces[e].GroupId], d.Topology.Groups[d.Topology.Pieces[f].GroupId]);
@@ -339,7 +322,7 @@ public class DomainTests
     [Fact]
     public void PolyominoLab2GoalIsSolvable()
     {
-        var d = LabPuzzles.CreateLab2();
+        var d = Fixtures.CreateLab2();
         var result = new PuzzleSolver().SolveBfs(d, d.InitialState);
         Assert.NotNull(result);
         var s = d.InitialState;
@@ -353,7 +336,7 @@ public class LabSpecTests
     [Fact]
     public void Lab1RushHourLayoutMatchesTheBrief()
     {
-        var d = LabPuzzles.CreateRushHour();
+        var d = Fixtures.CreateRushHour();
         var t = d;
         Assert.Equal(8, t.Vehicles.Count);
         (int lane, int offset, int length, bool horizontal)[] expected =
@@ -374,7 +357,7 @@ public class LabSpecTests
     [Fact]
     public void KlotskiShapeClassesFollowTheBrief()
     {
-        var d = LabPuzzles.CreateKlotski();
+        var d = Fixtures.CreateKlotski();
         Assert.Equal(0x9FFFFUL, d.InitialState.OccupancyMask);
         ulong key = d.InitialState.CanonicalShapeKey;
         int Code(int cell) => (int)((key >> (3 * cell)) & 7);
@@ -408,7 +391,7 @@ public class LabSpecTests
     [Fact]
     public void HookDemoPresetNeedsAFourStepHookAroundTheWall()
     {
-        var d = LabPuzzles.CreateLab2();
+        var d = Fixtures.CreateLab2();
         var t = d.Topology;
         int a = t.Pieces.First(p => p.Label == "A").PieceId, j = t.Pieces.First(p => p.Label == "J").PieceId;
         var s = d.InitialState.WithPieceMoved(t, a, 7).WithPieceMoved(t, j, 19);
@@ -423,7 +406,7 @@ public class LabSpecTests
     [Fact]
     public void LabGroupNamesMatchTheBrief()
     {
-        var names = LabPuzzles.CreateLab2().Topology.Groups.Select(g => g.Name).ToArray();
+        var names = Fixtures.CreateLab2().Topology.Groups.Select(g => g.Name).ToArray();
         Assert.Equal(["L-Tromino", "Upward T", "J-Tromino", "1x1 Single"], names);
     }
 }
@@ -432,7 +415,7 @@ public class PlaySessionTests
 {
     private static PlaySession<NPuzzleState, NPuzzleMove> NewSession(out NPuzzleDomain domain)
     {
-        domain = LabPuzzles.CreatePuzzle15();
+        domain = Fixtures.CreatePuzzle15();
         return new PlaySession<NPuzzleState, NPuzzleMove>(domain, PuzzleWalk.RandomWalk(domain, domain.Goal, 12, new Random(5)));
     }
 
@@ -488,7 +471,7 @@ public class PolyominoGoalPositionTests
     [Fact]
     public void GoalCanBeAWholePositionInWhichIdenticalPiecesAreInterchangeable()
     {
-        var lab = LabPuzzles.CreateLab2();
+        var lab = Fixtures.CreateLab2();
         var topo = lab.Topology;
         var domain = new PolyominoDomain<ulong>(topo, lab.InitialState);
         Assert.NotNull(domain.GoalPosition);
@@ -506,7 +489,7 @@ public class PolyominoGoalPositionTests
     [Fact]
     public void GroupsLeftOutOfTheMatchMaskMayEndUpAnywhere()
     {
-        var lab = LabPuzzles.CreateLab2();
+        var lab = Fixtures.CreateLab2();
         var topo = lab.Topology;
         // Only group 0 (the L) has to match: moving the T (group 1) does not matter, moving the L does.
         var domain = new PolyominoDomain<ulong>(topo, lab.InitialState, matchedGroups: 1UL << 0);

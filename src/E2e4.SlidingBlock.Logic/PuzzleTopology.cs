@@ -123,53 +123,6 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBina
     public static PuzzleTopologyBuilder<TBitboard> CreateBuilder(int width, int height, GridGeometry geometry = GridGeometry.Orthogonal4Way) =>
         new(width, height, geometry);
 
-    /// <summary>
-    /// Builds a topology from an ASCII map. '#' is a wall, '.' is empty, every other character is one piece.
-    /// Pieces with the same normalized shape, directions, key and physics share an equivalence group; groups are
-    /// ordered by the legend order.
-    /// </summary>
-    public static PuzzleTopology<TBitboard> FromAsciiMap(IReadOnlyList<string> rows, IReadOnlyList<(char Symbol, PieceKind Kind)> legend,
-        GridGeometry geometry = GridGeometry.Orthogonal4Way)
-    {
-        int height = rows.Count, width = rows[0].Length;
-        var builder = new PuzzleTopologyBuilder<TBitboard>(width, height, geometry);
-        var cellsBySymbol = new Dictionary<char, List<(int r, int c)>>();
-        var order = new List<char>();
-        for (int r = 0; r < height; r++)
-            for (int c = 0; c < width; c++)
-            {
-                char ch = rows[r][c];
-                if (ch == '.') continue;
-                if (ch == '#') { builder.AddWall(r, c); continue; }
-                if (!cellsBySymbol.TryGetValue(ch, out var list)) { cellsBySymbol[ch] = list = []; order.Add(ch); }
-                list.Add((r, c));
-            }
-
-        var groupKeys = new Dictionary<(TBitboard, PieceKind), int>();
-        // Pass 1: create groups in legend order so group ids are predictable.
-        foreach (var (symbol, kind) in legend)
-        {
-            if (!cellsBySymbol.TryGetValue(symbol, out var cells)) continue;
-            var (baseMask, _) = PuzzleTopologyBuilder<TBitboard>.Normalize(cells, width);
-            var key = (baseMask, KeyOf(kind));
-            if (!groupKeys.ContainsKey(key))
-                groupKeys[key] = builder.AddGroup(kind.Name, cells, kind.Directions, kind.ElevationMask, kind.SlidePhysics, kind.Roles);
-        }
-        // Pass 2: pieces in row-major order of first appearance.
-        foreach (char ch in order)
-        {
-            var cells = cellsBySymbol[ch];
-            var kind = legend.First(l => l.Symbol == ch).Kind;
-            var (baseMask, _) = PuzzleTopologyBuilder<TBitboard>.Normalize(cells, width);
-            int anchor = cells.Min(x => x.r * width + x.c);
-            builder.AddPiece(groupKeys[(baseMask, KeyOf(kind))], ch.ToString(), anchor);
-        }
-        return builder.Build();
-    }
-
-    // The display name does not take part in the group identity.
-    private static PieceKind KeyOf(PieceKind kind) => kind with { Name = "" };
-
     private static ulong[,] BuildZobrist(int groups)
     {
         var table = new ulong[Math.Max(groups, 1), ZobristColumns];

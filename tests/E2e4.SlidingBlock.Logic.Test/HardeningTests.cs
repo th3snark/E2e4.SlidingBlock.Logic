@@ -1,3 +1,5 @@
+using E2e4.SlidingBlock.Logic.Text;
+
 namespace E2e4.SlidingBlock.Logic.Test;
 
 /// <summary>Argument checks, solver statuses and the other guards on the public API.</summary>
@@ -192,7 +194,7 @@ public class HardeningTests
     public void PushDomainTakesItsLayoutAsData()
     {
         var data = new PushDomain(5, 1, Enumerable.Range(0, 5), [3], [1], 0);
-        var parsed = new PushDomain(["@1.X."]);
+        var parsed = PushMap.CreateDomain(["@1.X."], Fixtures.CaseSymbols);
         Assert.Equal(parsed.InitialState, data.InitialState);
         Assert.Equal(parsed.Targets, data.Targets);
         Assert.Single(new PuzzleSolver().SolveBfs(data, data.InitialState)!.Moves);
@@ -209,7 +211,7 @@ public class HardeningTests
         Assert.Throws<ArgumentException>(() => new PushDomain(5, 1, [0, 1, 2], [3], [1], 0));     // place on a wall
         Assert.Throws<ArgumentException>(() => new PushDomain(5, 1, floor, [3], [], 0));
         Assert.Throws<ArgumentException>(() => new PushDomain(PushDomain.MaxCells + 1, 1, floor, [3], [1], 0));
-        Assert.Throws<ArgumentException>(() => new PushDomain(Array.Empty<string>()));
+        Assert.Throws<ArgumentException>(() => PushMap.CreateDomain(Array.Empty<string>(), Fixtures.CaseSymbols));
     }
 
     [Fact]
@@ -218,7 +220,7 @@ public class HardeningTests
         var empty = default(PushState);
         Assert.Equal(0, empty.CaseCount);
         Assert.True(empty.Equals(default));
-        Assert.False(empty.Equals(new PushDomain(["@1.X."]).InitialState));
+        Assert.False(empty.Equals(PushMap.CreateDomain(["@1.X."], Fixtures.CaseSymbols).InitialState));
         Assert.Throws<InvalidOperationException>(() => empty.CellOf(0));
     }
 }

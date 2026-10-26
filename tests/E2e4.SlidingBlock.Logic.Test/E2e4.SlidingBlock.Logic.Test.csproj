@@ -20,12 +20,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The Lab layouts are plain C#; testing them here keeps the briefs and the engine in step. -->
-    <Compile Include="..\..\src\E2e4.SlidingBlock.Logic.Labs.Wpf\LabPuzzles.cs" Link="LabPuzzles.cs" />
-    <Compile Include="..\..\src\E2e4.SlidingBlock.Logic.Labs.Wpf\Lab3\RaycastReport.cs" Link="RaycastReport.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\..\src\E2e4.SlidingBlock.Logic\E2e4.SlidingBlock.Logic.csproj" />
   </ItemGroup>
 

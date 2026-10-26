@@ -86,9 +86,6 @@ public sealed class PushDomain : ISlidingBlockDomain<PushState, PushMove>
     private readonly int[] _next;   // cell * 4 + direction (left, right, up, down; d ^ 1 is the opposite way): the floor cell beside it, or -1
     private readonly ulong[] _caseKeys, _regionKeys;
 
-    /// <summary>The symbols of the cases in numbering order: case 1 is '1', case 10 is 'A', and so on (no 'X': that marks a place for a case).</summary>
-    public const string CaseSymbols = "123456789ABCDEFGHIJKLMNOPQRSTUVWYZ";
-
     /// <summary>The most cells a warehouse may have; positions are searched with per-cell scratch space on the stack.</summary>
     public const int MaxCells = 2048;
 
@@ -165,51 +162,6 @@ public sealed class PushDomain : ISlidingBlockDomain<PushState, PushMove>
         ulong caseHash = 0;
         foreach (ushort cell in cellOf) caseHash ^= _caseKeys[cell];
         InitialState = Make(cellOf, (ushort)player, caseHash);
-    }
-
-    /// <summary>
-    /// Reads the warehouse from a map with one string per row: '#' is a wall, ' ' is outside the warehouse, '.' is floor, 'X' is a place for a case,
-    /// '@' is the storeman and a symbol of <see cref="CaseSymbols"/> is a case (numbered 1, 2, 3 and so on without gaps). Rows may differ in length;
-    /// the rest of a short row is outside. There must be as many places as cases.
-    /// </summary>
-    public PushDomain(IReadOnlyList<string> map, bool pruneDeadSquares = true)
-        : this(ParseMap(map), pruneDeadSquares)
-    {
-    }
-
-    private PushDomain(MapData layout, bool pruneDeadSquares)
-        : this(layout.Columns, layout.Rows, layout.Floor, layout.Targets, layout.Cases, layout.Player, pruneDeadSquares)
-    {
-    }
-
-    private readonly record struct MapData(int Columns, int Rows, List<int> Floor, List<int> Targets, List<int> Cases, int Player);
-
-    private static MapData ParseMap(IReadOnlyList<string> map)
-    {
-        ArgumentNullException.ThrowIfNull(map);
-        if (map.Count == 0) throw new ArgumentException("The map is empty.", nameof(map));
-        int columns = map.Max(row => row.Length), rows = map.Count;
-        if (columns == 0) throw new ArgumentException("The map is empty.", nameof(map));
-        List<int> floor = [], targets = [];
-        var cases = new SortedDictionary<int, int>();
-        int player = -1;
-        for (int r = 0; r < rows; r++)
-            for (int c = 0; c < map[r].Length; c++)
-            {
-                char ch = map[r][c];
-                int cell = r * columns + c;
-                if (ch is '#' or ' ') continue;
-                floor.Add(cell);
-                if (ch == 'X') targets.Add(cell);
-                else if (ch == '@') player = cell;
-                else if (CaseSymbols.IndexOf(ch, StringComparison.Ordinal) is int id and >= 0) cases[id] = cell;
-                else if (ch != '.') throw new ArgumentException($"Unknown map symbol '{ch}'.", nameof(map));
-            }
-        if (player < 0) throw new ArgumentException("The map has no storeman.", nameof(map));
-        if (cases.Count == 0) throw new ArgumentException("The map has no cases.", nameof(map));
-        if (cases.Keys.Where((id, i) => id != i).Any()) throw new ArgumentException("The cases must be numbered 1, 2, 3 and so on.", nameof(map));
-        if (cases.Count != targets.Count) throw new ArgumentException("There must be as many places as cases.", nameof(map));
-        return new MapData(columns, rows, floor, targets, [.. cases.Values], player);
     }
 
     /// <summary>Columns of the warehouse.</summary>

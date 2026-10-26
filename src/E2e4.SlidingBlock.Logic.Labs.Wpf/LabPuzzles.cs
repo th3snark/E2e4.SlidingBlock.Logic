@@ -1,9 +1,10 @@
+using E2e4.SlidingBlock.Logic.Text;
+
 namespace E2e4.SlidingBlock.Logic.Labs;
 
 /// <summary>
 /// The puzzles the laboratories play with: layouts, goal positions and group colours. The engine knows none of this; it only
-/// receives the goals as constructor data. Plain C# (no WPF types) so the test project can link this file and check the
-/// layouts against the Lab briefs.
+/// receives the goals as constructor data. Plain C# (no WPF types).
 /// </summary>
 public static class LabPuzzles
 {
@@ -40,7 +41,7 @@ public static class LabPuzzles
     /// <summary>The classic 4x5 layout: one 2x2, four 1x2 vertical, one 2x1 horizontal, four 1x1.</summary>
     public static KlotskiDomain CreateKlotski()
     {
-        var topo = PuzzleTopology<ulong>.FromAsciiMap(KlotskiMap,
+        var topo = TopologyMap.Parse<ulong>(KlotskiMap,
         [
             // Legend order fixes the shape class: 1 = 1x1, 2 = 1x2 vertical, 3 = 2x1 horizontal, 4 = 2x2.
             ('e', new PieceKind("Single 1x1", Key: "single")),
@@ -74,10 +75,14 @@ public static class LabPuzzles
     ];
 
     /// <summary>The symbol of each vehicle of <see cref="RushHourMap"/>, by vehicle index: the red car X first, then B to H.</summary>
-    public static readonly string RushHourSymbols = LaneVehicle.SymbolsOf(RushHourMap, leadingLabels: RushHourRedCar.ToString());
+    public static readonly string RushHourSymbols = LaneDiagram.SymbolsOf(RushHourMap, leadingLabels: RushHourRedCar.ToString());
 
     /// <summary>The red car X is vehicle 0 and has to reach the right edge (offset 4 for a 2-long car); a move is one cell.</summary>
-    public static LaneSlideDomain<LaneState16, ulong> CreateRushHour() => LaneSlide.RushHour(RushHourMap, RushHourSymbols);
+    public static LaneSlideDomain<LaneState16, ulong> CreateRushHour()
+    {
+        var vehicles = LaneDiagram.Parse(RushHourMap, RushHourSymbols);
+        return new LaneSlideDomain<LaneState16, ulong>(vehicles, RushHourMap[0].Length, RushHourMap.Length, 0, RushHourMap[0].Length - vehicles[0].Length, maxStep: 1);
+    }
 
     // ---- Lab 2 (polyominoes) --------------------------------------------------------------------------------
 

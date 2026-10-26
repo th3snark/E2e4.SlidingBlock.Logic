@@ -1,4 +1,3 @@
-using E2e4.SlidingBlock.Logic.Labs;
 
 namespace E2e4.SlidingBlock.Logic.Test;
 

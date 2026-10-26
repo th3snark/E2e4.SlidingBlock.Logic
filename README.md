@@ -18,9 +18,11 @@ var start = PuzzleWalk.RandomWalk(domain, goal, 25, new Random(3));
 SolveResult<NPuzzleMove>? result = new PuzzleSolver().SolveIdaStar(domain, start, domain.ManhattanDistance);
 Console.WriteLine(result?.Moves.Count);
 
-// Rush Hour: the vehicles are read off an ASCII diagram, and the red car (the first symbol) has to reach the far end of its row.
-var symbols = LaneVehicle.SymbolsOf(rows, leadingLabels: "X");
-var rushHour = LaneSlide.RushHour(rows, symbols);
+// Rush Hour: the vehicles are read off a diagram (using E2e4.SlidingBlock.Logic.Text), the red car X is vehicle 0 and has to reach
+// the far end of its row (offset 4 for a car two cells long); a move slides a vehicle one cell.
+string[] diagram = ["CCH..F", "..HB.F", ".XXB..", "D..B..", "DGG...", "..EEE."];
+var vehicles = LaneDiagram.Parse(diagram, LaneDiagram.SymbolsOf(diagram, leadingLabels: "X"));
+var rushHour = new LaneSlideDomain<LaneState16, ulong>(vehicles, columns: 6, rows: 6, goalVehicle: 0, goalOffset: 4, maxStep: 1);
 Console.WriteLine(new PuzzleSolver().SolveBfs(rushHour, rushHour.InitialState)?.Moves.Count);
 ```
 
@@ -32,8 +34,10 @@ Console.WriteLine(new PuzzleSolver().SolveBfs(rushHour, rushHour.InitialState)?.
 - `PushState` and `PushDomain`: Soko warehouse pushing, where the storeman's walking is free, with dead squares and a heuristic.
 - `PolyominoState` and `PolyominoDomain`: non-rectangular pieces (L, T, J, S, Z, U) on a bitboard, with multi-step corner-hook slides and a
   permutation-invariant Zobrist hash.
-- `PuzzleTopology` and `PuzzleTopologyBuilder`: build a board from an ASCII map or relative cell lists, with LSB normalisation and precomputed
+- `PuzzleTopology` and `PuzzleTopologyBuilder`: build a board from relative cell lists, with LSB normalisation and precomputed
   valid-anchor masks.
+- `E2e4.SlidingBlock.Logic.Text`: `TopologyMap`, `LaneDiagram` and `PushMap` read boards, vehicles and warehouses from diagrams (one string
+  per row, with the symbols you choose). The domains themselves take plain data, so a layout can come from anywhere.
 - `PuzzleSolver`: generic BFS, A* and IDA*.
 - `PuzzleWalk` and `PlaySession<TState, TMove>`: a generic random walk (for solvable shuffles) and the undo / reset bookkeeping
   every interactive puzzle needs.

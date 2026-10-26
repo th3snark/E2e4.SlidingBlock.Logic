@@ -7,41 +7,15 @@ namespace E2e4.SlidingBlock.Logic;
 /// A vehicle of a lane-sliding puzzle: a block of cells that slides only along its length. <paramref name="Length"/> is its extent along the
 /// lane and <paramref name="Breadth"/> across it (1 for a car, 2 for a truck); <paramref name="Lane"/> is the row (horizontal) or column
 /// (vertical) of its first cell and <paramref name="InitialOffset"/> the column or row of its first cell at the start.
+/// <see cref="Text.LaneDiagram"/> reads vehicles off a diagram.
 /// </summary>
-public sealed record LaneVehicle(int Index, bool IsHorizontal, int Length, int Breadth, int Lane, int InitialOffset)
-{
-    /// <summary>
-    /// The symbols of a diagram, one per vehicle, ready for <see cref="Parse"/>: every character except <paramref name="empty"/>, in character
-    /// order except that the ones in <paramref name="leadingLabels"/> come first, in that order (so the red car can be vehicle 0).
-    /// </summary>
-    public static string SymbolsOf(IReadOnlyList<string> rows, char empty = '.', string leadingLabels = "") =>
-        string.Concat(rows.SelectMany(r => r).Where(c => c != empty).Distinct()
-            .OrderBy(c => { int i = leadingLabels.IndexOf(c, StringComparison.Ordinal); return i < 0 ? int.MaxValue : i; }).ThenBy(c => c));
-
-    /// <summary>
-    /// Reads the vehicles off a diagram with one string per row. Vehicle <c>i</c> is the rectangle of cells carrying <c>symbols[i]</c>; it slides
-    /// along its longer side (a square one along its columns). Every other character is empty floor.
-    /// </summary>
-    public static IReadOnlyList<LaneVehicle> Parse(IReadOnlyList<string> rows, string symbols)
-    {
-        int rowCount = rows.Count, columns = rows.Count == 0 ? 0 : rows[0].Length;
-        if (rows.Any(r => r.Length != columns)) throw new ArgumentException("The rows of the diagram differ in length.", nameof(rows));
-        var vehicles = new List<LaneVehicle>();
-        for (int v = 0; v < symbols.Length; v++)
-        {
-            var cells = Enumerable.Range(0, rowCount * columns).Where(c => rows[c / columns][c % columns] == symbols[v]).ToList();
-            if (cells.Count == 0) throw new ArgumentException($"Vehicle '{symbols[v]}' is not on the diagram.", nameof(symbols));
-            int minRow = cells.Min(c => c / columns), maxRow = cells.Max(c => c / columns);
-            int minCol = cells.Min(c => c % columns), maxCol = cells.Max(c => c % columns);
-            int width = maxCol - minCol + 1, height = maxRow - minRow + 1;
-            if (width * height != cells.Count) throw new ArgumentException($"Vehicle '{symbols[v]}' is not a rectangle.", nameof(rows));
-            bool horizontal = width > height;
-            vehicles.Add(new LaneVehicle(v, horizontal, horizontal ? width : height, horizontal ? height : width,
-                horizontal ? minRow : minCol, horizontal ? minCol : minRow));
-        }
-        return vehicles;
-    }
-}
+/// <param name="Index">The vehicle number: 0, 1, 2 ... in list order.</param>
+/// <param name="IsHorizontal">True if the vehicle slides along a row.</param>
+/// <param name="Length">Extent along the lane, in cells.</param>
+/// <param name="Breadth">Extent across the lane, in cells.</param>
+/// <param name="Lane">The row (horizontal) or column (vertical) of the vehicle's first cell.</param>
+/// <param name="InitialOffset">The column (horizontal) or row (vertical) of its first cell at the start.</param>
+public sealed record LaneVehicle(int Index, bool IsHorizontal, int Length, int Breadth, int Lane, int InitialOffset);
 
 /// <summary>
 /// A position of a lane-sliding puzzle, packed: where every vehicle stands along its lane, four bits each (lanes are at most 16 cells long).
@@ -326,20 +300,5 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
                 mask |= TBitboard.One << (row * Columns + col);
             }
         return mask;
-    }
-}
-
-/// <summary>Builders for the lane-sliding puzzles that need no cell register type.</summary>
-public static class LaneSlide
-{
-    /// <summary>
-    /// Classic Rush Hour on a diagram of up to 64 cells and 16 vehicles (see <see cref="LaneVehicle.SymbolsOf"/> and <see cref="LaneVehicle.Parse"/>): one cell
-    /// per move, and the puzzle is solved when vehicle 0, the red car (a horizontal one), reaches the far end of its row.
-    /// </summary>
-    public static LaneSlideDomain<LaneState16, ulong> RushHour(IReadOnlyList<string> rows, string symbols)
-    {
-        var vehicles = LaneVehicle.Parse(rows, symbols);
-        if (!vehicles[0].IsHorizontal) throw new ArgumentException("The red car must be horizontal.", nameof(symbols));
-        return new LaneSlideDomain<LaneState16, ulong>(vehicles, rows[0].Length, rows.Count, 0, rows[0].Length - vehicles[0].Length, maxStep: 1);
     }
 }

@@ -1,3 +1,5 @@
+using E2e4.SlidingBlock.Logic.Text;
+
 namespace E2e4.SlidingBlock.Logic.Test;
 
 public class PushDomainTests
@@ -29,7 +31,7 @@ public class PushDomainTests
     [Fact]
     public void ALongPushIsOneMoveAndTheStoremanEndsBesideTheCase()
     {
-        var d = new PushDomain(Corridor);
+        var d = PushMap.CreateDomain(Corridor, Fixtures.CaseSymbols);
         var s = d.InitialState;
         Assert.Equal([10, 11, 12], d.PushesOf(s, 0).Select(m => (int)m.To).Order().ToArray());
         var move = Only(d, s, 0, 12);
@@ -43,7 +45,7 @@ public class PushDomainTests
     [Fact]
     public void TheSolversSolveItInOneMove()
     {
-        var d = new PushDomain(Corridor);
+        var d = PushMap.CreateDomain(Corridor, Fixtures.CaseSymbols);
         var bfs = new PuzzleSolver().SolveBfs(d, d.InitialState)!;
         var astar = new PuzzleSolver().SolveAStar(d, d.InitialState, s => d.Heuristic(s))!;
         Assert.Single(bfs.Moves);
@@ -53,7 +55,7 @@ public class PushDomainTests
     [Fact]
     public void DeadSquaresAreWhereNoPushCanEverTakeACaseToAPlace()
     {
-        var d = new PushDomain(Room);
+        var d = PushMap.CreateDomain(Room, Fixtures.CaseSymbols);
         var alive = Enumerable.Range(0, d.CellCount).Where(c => d.IsFloor(c) && d.IsAlive(c)).ToArray();
         // Only row 2, columns 2 to 4 (cells 16-18): the walls leave nowhere to stand to push a case off any other cell towards the place.
         Assert.Equal([16, 17, 18], alive);
@@ -66,8 +68,8 @@ public class PushDomainTests
     [Fact]
     public void PruningLeavesOutPushesOntoDeadSquaresButNotTheOnesTheStoremanMayMake()
     {
-        var pruned = new PushDomain(Room, pruneDeadSquares: true);
-        var all = new PushDomain(Room, pruneDeadSquares: false);
+        var pruned = PushMap.CreateDomain(Room, Fixtures.CaseSymbols, pruneDeadSquares: true);
+        var all = PushMap.CreateDomain(Room, Fixtures.CaseSymbols, pruneDeadSquares: false);
         var a = new PushMove[pruned.MaxMoves];
         var b = new PushMove[all.MaxMoves];
         int kept = pruned.GenerateMoves(pruned.InitialState, a);
@@ -81,7 +83,7 @@ public class PushDomainTests
     [Fact]
     public void PositionsAreTheSameWhateverTheOrderOfPushesAndWhereverTheStoremanStandsInHisRegion()
     {
-        var d = new PushDomain(TwoCases);
+        var d = PushMap.CreateDomain(TwoCases, Fixtures.CaseSymbols);
         var s = d.InitialState;
         var upperFirst = d.ApplyMove(s, Only(d, s, 0, 4));
         upperFirst = d.ApplyMove(upperFirst, Only(d, upperFirst, 1, 10));
@@ -102,6 +104,6 @@ public class PushDomainTests
     [InlineData("@2.X")]
     public void RejectsABadMap(string row)
     {
-        Assert.Throws<ArgumentException>(() => new PushDomain([row]));
+        Assert.Throws<ArgumentException>(() => PushMap.CreateDomain([row], Fixtures.CaseSymbols));
     }
 }
