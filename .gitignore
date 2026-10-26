@@ -427,7 +427,3 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
-
-# Local assistant guidance (kept on this machine, not in the repository)
-CLAUDE.md
-.claude/
