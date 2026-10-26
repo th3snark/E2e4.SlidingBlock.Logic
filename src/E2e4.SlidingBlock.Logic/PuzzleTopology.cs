@@ -5,10 +5,10 @@ namespace E2e4.SlidingBlock.Logic;
 /// <summary>Immutable puzzle description: board size, walls, equivalence groups, pieces, board cells with state and Zobrist keys.</summary>
 public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>
 {
-    public const ulong ZobristSeed = 0x9E3779B97F4A7C15UL;
+    internal const ulong ZobristSeed = 0x9E3779B97F4A7C15UL;
 
     /// <summary>Columns of <see cref="ZobristTable"/>: enough for a <see cref="UInt128"/> board.</summary>
-    public const int ZobristColumns = 128;
+    internal const int ZobristColumns = 128;
 
     internal PuzzleTopology(int width, int height, GridGeometry geometry, TBitboard walls, EquivalenceGroup<TBitboard>[] groups,
         PieceTemplate[] pieces, DirectionalDiode[] diodes, PressurePlateRule<TBitboard>[] plates, Partition[] partitions)
@@ -30,6 +30,11 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBina
             EntryTable[d] = Grid.EntryMask<TBitboard>(d, width);
         }
         ZobristTable = BuildZobrist(groups.Length);
+        Groups = Array.AsReadOnly(groups);
+        Pieces = Array.AsReadOnly(pieces);
+        Diodes = Array.AsReadOnly(diodes);
+        PressurePlates = Array.AsReadOnly(plates);
+        Partitions = Array.AsReadOnly(partitions);
         _forbiddenEntry = BuildForbiddenEntry();
         _validByDir = BuildValidAnchorsByDir();
     }
@@ -53,26 +58,50 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBina
 
     internal ReadOnlySpan<int> DeltaTable => _deltas;
 
+    /// <summary>Columns of the board.</summary>
     public int Width { get; }
-    public int Height { get; }
-    public GridGeometry Geometry { get; }
-    public int CellCount => Width * Height;
-    public int DirectionCount => _deltas.Length;
-    public TBitboard StaticWallsMask { get; }
-    public IReadOnlyList<EquivalenceGroup<TBitboard>> Groups => GroupTable;
-    public IReadOnlyList<PieceTemplate> Pieces => PieceTable;
-    public IReadOnlyList<DirectionalDiode> Diodes => DiodeTable;
-    public IReadOnlyList<PressurePlateRule<TBitboard>> PressurePlates => PlateTable;
 
-    /// <summary>The immovable partitions between cells, each in its canonical form (see <see cref="Partition"/>).</summary>
-    public IReadOnlyList<Partition> Partitions => PartitionTable;
+    /// <summary>Rows of the board.</summary>
+    public int Height { get; }
+
+    /// <summary>How the cells touch: four neighbours or six.</summary>
+    public GridGeometry Geometry { get; }
+
+    /// <summary>Cells on the board: <see cref="Width"/> times <see cref="Height"/>.</summary>
+    public int CellCount => Width * Height;
+
+    /// <summary>The number of directions a step can take: 4 on an orthogonal board, 6 on a hex one.</summary>
+    public int DirectionCount => _deltas.Length;
+
+    /// <summary>Bit c is set when cell c is a wall.</summary>
+    public TBitboard StaticWallsMask { get; }
+
+    /// <summary>The shape classes, indexed by group id. Read-only.</summary>
+    public IReadOnlyList<EquivalenceGroup<TBitboard>> Groups { get; }
+
+    /// <summary>The pieces, indexed by piece id. Read-only.</summary>
+    public IReadOnlyList<PieceTemplate> Pieces { get; }
+
+    /// <summary>The one-way cells. Read-only.</summary>
+    public IReadOnlyList<DirectionalDiode> Diodes { get; }
+
+    /// <summary>The pressure-plate rules. Read-only.</summary>
+    public IReadOnlyList<PressurePlateRule<TBitboard>> PressurePlates { get; }
+
+    /// <summary>The immovable partitions between cells, each in its canonical form (see <see cref="Partition"/>). Read-only.</summary>
+    public IReadOnlyList<Partition> Partitions { get; }
 
     /// <summary>
     /// Bit s is set iff a step in <paramref name="direction"/> may never enter cell s: it is a diode that refuses that direction, or the step
     /// would cross a partition. Which cell a step comes from is fixed by the cell and the direction, so this is exact for partitions.
     /// </summary>
     public TBitboard ForbiddenEntryCells(int direction) => _forbiddenEntry[direction];
-    public ulong[,] ZobristTable { get; }
+
+    // Indexed [group, cell]; the hot paths read it directly.
+    internal ulong[,] ZobristTable { get; }
+
+    /// <summary>The Zobrist key of a piece of group <paramref name="groupId"/> anchored on <paramref name="cell"/>; a position's hash is the XOR of its pieces' keys.</summary>
+    public ulong ZobristKey(int groupId, int cell) => ZobristTable[groupId, cell];
 
     /// <summary>
     /// Bit s is set iff s is a valid anchor of the group and moving the group into s along <paramref name="direction"/> does not enter a diode
@@ -87,8 +116,10 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBina
     /// <summary>Cell index change of a one-step move per direction: -1, +1, -W, +W (and -W + 1, +W - 1 on a hex board).</summary>
     public ReadOnlySpan<int> GetDirectionDeltas() => _deltas;
 
+    /// <summary>The cells piece <paramref name="pieceId"/> covers if its <em>starting</em> shape is anchored on <paramref name="anchor"/> (a rotated piece has another shape).</summary>
     public TBitboard PieceMask(int pieceId, int anchor) => Groups[Pieces[pieceId].GroupId].BaseMask << anchor;
 
+    /// <summary>Starts describing a board of <paramref name="width"/> x <paramref name="height"/> cells.</summary>
     public static PuzzleTopologyBuilder<TBitboard> CreateBuilder(int width, int height, GridGeometry geometry = GridGeometry.Orthogonal4Way) =>
         new(width, height, geometry);
 
@@ -211,6 +242,7 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBina
     }
 }
 
+/// <summary>Describes a board, its shape classes and its pieces, and builds the immutable <see cref="PuzzleTopology{TBitboard}"/>.</summary>
 public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>
 {
     private sealed record GroupDef(string Name, IReadOnlyList<(int dRow, int dCol)> Cells, TBitboard Base, AllowedDirections Dirs,
@@ -232,23 +264,33 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     private readonly List<PressurePlateRule<TBitboard>> _plates = [];
     private readonly List<Partition> _partitions = [];
 
+    /// <summary>
+    /// Starts describing a board of <paramref name="width"/> x <paramref name="height"/> cells.
+    /// </summary>
+    /// <param name="width">Columns.</param>
+    /// <param name="height">Rows.</param>
+    /// <param name="geometry">How the cells touch.</param>
     public PuzzleTopologyBuilder(int width, int height, GridGeometry geometry = GridGeometry.Orthogonal4Way)
     {
-        if (width <= 0 || height <= 0 || width * height > Grid.BitWidth<TBitboard>())
+        if (width <= 0 || height <= 0 || (long)width * height > Grid.BitWidth<TBitboard>())
             throw new ArgumentOutOfRangeException(nameof(width), $"Board must fit in {Grid.BitWidth<TBitboard>()} bits.");
         _width = width;
         _height = height;
         _geometry = geometry;
     }
 
+    /// <summary>Makes cell (<paramref name="row"/>, <paramref name="col"/>) a wall.</summary>
     public PuzzleTopologyBuilder<TBitboard> AddWall(int row, int col)
     {
+        CheckCell(row, col);
         _walls |= TBitboard.One << (row * _width + col);
         return this;
     }
 
+    /// <summary>Makes cell (<paramref name="row"/>, <paramref name="col"/>) one-way: a piece may enter it only by the directions set in <paramref name="allowedEntryDirectionsMask"/> (bit d is direction d).</summary>
     public PuzzleTopologyBuilder<TBitboard> AddDiode(int row, int col, byte allowedEntryDirectionsMask)
     {
+        CheckCell(row, col);
         _diodes.Add(new DirectionalDiode(row * _width + col, allowedEntryDirectionsMask));
         return this;
     }
@@ -259,7 +301,7 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     /// </summary>
     public PuzzleTopologyBuilder<TBitboard> AddPartition(int row, int col, int direction)
     {
-        if ((uint)row >= (uint)_height || (uint)col >= (uint)_width) throw new ArgumentOutOfRangeException(nameof(row), "The cell is not on the board.");
+        CheckCell(row, col);
         if ((uint)direction >= (uint)Grid.DirectionCount(_geometry)) throw new ArgumentOutOfRangeException(nameof(direction));
         int cell = row * _width + col;
         if (!Grid.StepStaysOnBoard(cell, direction, _width, _width * _height))
@@ -270,6 +312,13 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
         return this;
     }
 
+    private void CheckCell(int row, int col)
+    {
+        if ((uint)row >= (uint)_height) throw new ArgumentOutOfRangeException(nameof(row), "The cell is not on the board.");
+        if ((uint)col >= (uint)_width) throw new ArgumentOutOfRangeException(nameof(col), "The cell is not on the board.");
+    }
+
+    /// <summary>Adds a plate: while a piece on an elevation in <paramref name="triggerElevationMask"/> covers a trigger cell, the gate cells open (or, if not <paramref name="normallyClosed"/>, close).</summary>
     public PuzzleTopologyBuilder<TBitboard> AddPressurePlate(TBitboard triggerCellsMask, TBitboard gateCellsMask, byte triggerElevationMask = 0b01,
         bool normallyClosed = true)
     {
@@ -277,6 +326,7 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
         return this;
     }
 
+    /// <summary>Adds a shape class from the cells it covers (row and column offsets) and returns its group id.</summary>
     public int AddGroup(string name, IEnumerable<(int dRow, int dCol)> cells, AllowedDirections directions = AllowedDirections.Both,
         byte elevationMask = 0b01, SlidePhysics physics = SlidePhysics.ContinuousFloodFill, RoleFlags roles = RoleFlags.None)
     {
@@ -292,7 +342,9 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     public IReadOnlyList<int> AddRotatableGroup(string name, IEnumerable<(int dRow, int dCol)> cells, AllowedDirections directions = AllowedDirections.Both,
         byte elevationMask = 0b01, SlidePhysics physics = SlidePhysics.ContinuousFloodFill, RoleFlags roles = RoleFlags.None)
     {
+        ArgumentNullException.ThrowIfNull(cells);
         var start = cells.Distinct().ToList();
+        if (start.Count == 0) throw new ArgumentException("A piece needs at least one cell.", nameof(cells));
         int minR = start.Min(c => c.dRow), minC = start.Min(c => c.dCol);
         start = start.Select(c => (c.dRow - minR, c.dCol - minC)).ToList();
         int n = Math.Max(start.Max(c => c.dRow), start.Max(c => c.dCol)) + 1;
@@ -327,12 +379,16 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
         return ids;
     }
 
+    /// <summary>Places a piece of group <paramref name="groupId"/> with its anchor on <paramref name="initialAnchor"/> and returns its piece id.</summary>
     public int AddPiece(int groupId, string label, int initialAnchor)
     {
+        if ((uint)groupId >= (uint)_groups.Count) throw new ArgumentOutOfRangeException(nameof(groupId), "No such group has been added.");
         _pieces.Add(new PieceTemplate(_pieces.Count, groupId, label, initialAnchor));
         return _pieces.Count - 1;
     }
 
+    /// <summary>Checks the description and returns the immutable topology.</summary>
+    /// <exception cref="InvalidOperationException">A piece starts on an invalid anchor or overlaps a wall or another piece.</exception>
     public PuzzleTopology<TBitboard> Build()
     {
         var groups = new List<EquivalenceGroup<TBitboard>>();
@@ -408,6 +464,7 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     /// </summary>
     public static (TBitboard BaseMask, IReadOnlyList<(int dRow, int dCol)> RelativeCells) Normalize(IEnumerable<(int dRow, int dCol)> cells, int boardWidth)
     {
+        ArgumentNullException.ThrowIfNull(cells);
         var list = cells.Distinct().OrderBy(c => c.dRow).ThenBy(c => c.dCol).ToList();
         if (list.Count == 0) throw new ArgumentException("A piece needs at least one cell.", nameof(cells));
         int minR = list.Min(c => c.dRow), minC = list.Min(c => c.dCol), maxC = list.Max(c => c.dCol);

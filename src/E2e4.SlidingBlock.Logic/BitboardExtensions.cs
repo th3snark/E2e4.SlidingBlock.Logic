@@ -18,14 +18,19 @@ public static class BitboardExtensions
         /// <summary>Number of set bits.</summary>
         public int BitCount => int.CreateTruncating(T.PopCount(mask));
 
+        /// <summary>True if bit <paramref name="index"/> is set.</summary>
         public bool HasBit(int index) => ((mask >> index) & T.One) != T.Zero;
 
+        /// <summary>The mask as <c>0x</c> and upper-case hex digits; <paramref name="digits"/> defaults to the full width of the type.</summary>
         public string ToHex(int digits = -1) =>
             "0x" + mask.ToString("X" + (digits < 0 ? Grid.BitWidth<T>() / 4 : digits).ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
 
+        /// <summary>The low <paramref name="bits"/> bits, most significant first, with an underscore between groups of <paramref name="groupSize"/> (0 for no groups).</summary>
         public string ToBinary(int bits, int groupSize = 4)
         {
-            var sb = new StringBuilder(bits + bits / groupSize);
+            ArgumentOutOfRangeException.ThrowIfNegative(bits);
+            ArgumentOutOfRangeException.ThrowIfNegative(groupSize);
+            var sb = new StringBuilder(groupSize > 0 ? bits + bits / groupSize : bits);
             for (int i = bits - 1; i >= 0; i--)
             {
                 sb.Append(((mask >> i) & T.One) != T.Zero ? '1' : '0');

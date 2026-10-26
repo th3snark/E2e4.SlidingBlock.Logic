@@ -437,7 +437,7 @@ public partial class Lab2View : UserControl
         sb.AppendLine(title);
         sb.AppendLine(CultureInfo.InvariantCulture, $"  {"PreviousHash:",-30}  0x{previous:X16}");
         foreach (var (g, anchor, add) in terms)
-            sb.AppendLine(CultureInfo.InvariantCulture, $"^ {$"ZobristTable[{g}, {anchor}]:",-30}  0x{_t.ZobristTable[g, anchor]:X16}  ({(add ? "Add new anchor" : "Remove old anchor")})");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"^ {$"ZobristTable[{g}, {anchor}]:",-30}  0x{_t.ZobristKey(g, anchor):X16}  ({(add ? "Add new anchor" : "Remove old anchor")})");
         sb.AppendLine(new string('-', 62));
         sb.Append(CultureInfo.InvariantCulture, $"= {"New ZobristHash:",-30}  0x{result:X16}");
         return sb.ToString();

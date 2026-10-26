@@ -11,6 +11,9 @@ public static class PuzzleWalk
     public static TState RandomWalk<TState, TMove>(ISlidingBlockDomain<TState, TMove> domain, TState start, int steps, Random rng)
         where TState : struct, IEquatable<TState>
     {
+        ArgumentNullException.ThrowIfNull(domain);
+        ArgumentNullException.ThrowIfNull(rng);
+        ArgumentOutOfRangeException.ThrowIfNegative(steps);
         var buffer = new TMove[domain.MaxMoves];
         var state = start;
         var previous = start;

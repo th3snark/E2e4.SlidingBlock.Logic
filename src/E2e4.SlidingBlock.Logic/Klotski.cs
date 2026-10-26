@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 namespace E2e4.SlidingBlock.Logic;
 
 [InlineArray(10)]
-public struct KlotskiAnchorBuffer
+internal struct KlotskiAnchorBuffer
 {
     private byte _element0;
 }
@@ -16,10 +16,17 @@ public struct KlotskiAnchorBuffer
 /// </summary>
 public readonly struct KlotskiState : IEquatable<KlotskiState>
 {
+    /// <summary>The most cells a board may have: the shape key spends 3 bits on each of them.</summary>
+    public const int MaxCells = 21;
+
     private readonly KlotskiAnchorBuffer _anchors;
 
+    /// <summary>Reads the starting position from the pieces of <paramref name="topology"/>.</summary>
+    /// <exception cref="ArgumentException">More than 10 pieces, more than 7 shapes, or more than 21 cells (the key has 3 bits per cell in 64).</exception>
     public KlotskiState(PuzzleTopology<ulong> topology)
     {
+        ArgumentNullException.ThrowIfNull(topology);
+        if (topology.Width * topology.Height > MaxCells) throw new ArgumentException($"At most {MaxCells} cells fit the 64-bit shape key.");
         if (topology.Pieces.Count > 10) throw new ArgumentException("At most 10 pieces.");
         if (topology.Groups.Count > 7) throw new ArgumentException("At most 7 shape classes fit in 3 bits.");
         var anchors = new KlotskiAnchorBuffer();
@@ -43,9 +50,13 @@ public readonly struct KlotskiState : IEquatable<KlotskiState>
         CanonicalShapeKey = key;
     }
 
+    /// <summary>Bit c is set when a piece covers cell c.</summary>
     public ulong OccupancyMask { get; }
+
+    /// <summary>Three bits per cell holding the shape class of the piece on it, so equal keys mean the same position up to swapping identical pieces.</summary>
     public ulong CanonicalShapeKey { get; }
 
+    /// <summary>The anchor cell of piece <paramref name="pieceId"/>.</summary>
     public int AnchorOf(int pieceId) => _anchors[pieceId];
 
     /// <summary>Moves a piece (already validated) and updates occupancy and the shape key with XORs.</summary>
@@ -79,20 +90,47 @@ public readonly struct KlotskiState : IEquatable<KlotskiState>
         return r;
     }
 
+    /// <inheritdoc/>
     public bool Equals(KlotskiState other) => CanonicalShapeKey == other.CanonicalShapeKey;
+
+    /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is KlotskiState s && Equals(s);
+
+    /// <summary>True if both positions have the same canonical shape key.</summary>
     public static bool operator ==(KlotskiState left, KlotskiState right) => left.Equals(right);
+
+    /// <summary>True if the positions differ.</summary>
     public static bool operator !=(KlotskiState left, KlotskiState right) => !left.Equals(right);
+
+    /// <inheritdoc/>
     public override int GetHashCode() => CanonicalShapeKey.GetHashCode();
 }
 
+/// <summary>Piece <see cref="Piece"/> steps one cell from anchor <see cref="From"/> to anchor <see cref="To"/>.</summary>
+/// <param name="Piece">The piece id.</param>
+/// <param name="From">Anchor cell before the move.</param>
+/// <param name="To">Anchor cell after the move.</param>
 public readonly record struct KlotskiMove(byte Piece, byte From, byte To);
 
+/// <summary>
+/// Klotski rules: pieces of any shape step one cell at a time on a board of at most <see cref="KlotskiState.MaxCells"/> cells. Only walls and
+/// the per-shape valid anchors are honoured; diodes, partitions, elevation and plates of the topology are ignored (use
+/// <see cref="PolyominoDomain{TBitboard}"/> for those).
+/// </summary>
 public sealed class KlotskiDomain : ISlidingBlockDomain<KlotskiState, KlotskiMove>
 {
     /// <summary>The puzzle is solved when piece <paramref name="masterPieceId"/> sits on <paramref name="goalAnchor"/>.</summary>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="masterPieceId"/> is not a piece of the topology.</exception>
+    /// <exception cref="ArgumentException">The master piece shares its shape with another piece (the position key could not tell them apart).</exception>
     public KlotskiDomain(PuzzleTopology<ulong> topology, int masterPieceId, int goalAnchor)
     {
+        ArgumentNullException.ThrowIfNull(topology);
+        ArgumentOutOfRangeException.ThrowIfNegative(masterPieceId);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(masterPieceId, topology.Pieces.Count);
+        int masterGroup = topology.PieceTable[masterPieceId].GroupId;
+        foreach (var p in topology.PieceTable)
+            if (p.PieceId != masterPieceId && p.GroupId == masterGroup)
+                throw new ArgumentException("The master piece must have a shape of its own.", nameof(masterPieceId));
         Topology = topology;
         MasterPieceId = masterPieceId;
         GoalAnchor = goalAnchor;
@@ -103,14 +141,25 @@ public sealed class KlotskiDomain : ISlidingBlockDomain<KlotskiState, KlotskiMov
 
     private readonly ulong[] _spreadBase;
 
+    /// <summary>The board and pieces.</summary>
     public PuzzleTopology<ulong> Topology { get; }
+
+    /// <summary>The piece that has to reach <see cref="GoalAnchor"/>.</summary>
     public int MasterPieceId { get; }
+
+    /// <summary>The anchor cell that solves the puzzle for the master piece.</summary>
     public int GoalAnchor { get; }
+
+    /// <inheritdoc/>
     public KlotskiState InitialState { get; }
+
+    /// <inheritdoc/>
     public int MaxMoves => Topology.Pieces.Count * 4;
 
+    /// <inheritdoc/>
     public bool IsGoal(in KlotskiState state) => state.AnchorOf(MasterPieceId) == GoalAnchor;
 
+    /// <inheritdoc/>
     public int GenerateMoves(in KlotskiState state, Span<KlotskiMove> moveBuffer)
     {
         int w = Topology.Width, n = 0;
@@ -138,8 +187,10 @@ public sealed class KlotskiDomain : ISlidingBlockDomain<KlotskiState, KlotskiMov
         return n;
     }
 
+    /// <inheritdoc/>
     public KlotskiState ApplyMove(in KlotskiState state, in KlotskiMove move) =>
         state.WithPieceMoved(Topology, _spreadBase[Topology.PieceTable[move.Piece].GroupId], move.Piece, move.To);
 
+    /// <inheritdoc/>
     public ulong GetHashCode64(in KlotskiState state) => Hashing.Mix(state.CanonicalShapeKey);
 }

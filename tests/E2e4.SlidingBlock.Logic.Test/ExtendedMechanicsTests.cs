@@ -19,7 +19,7 @@ internal static class Cells
     public static ulong HashOf<T>(PuzzleTopology<T> topology, PolyominoState<T> state) where T : unmanaged, IBinaryInteger<T>, IUnsignedNumber<T>
     {
         ulong h = 0;
-        foreach (var p in topology.Pieces) h ^= topology.ZobristTable[state.GroupOf(p.PieceId), state.AnchorOf(p.PieceId)];
+        foreach (var p in topology.Pieces) h ^= topology.ZobristKey(state.GroupOf(p.PieceId), state.AnchorOf(p.PieceId));
         return h;
     }
 }
@@ -41,7 +41,7 @@ public class WideBoardAndHexTests
         var domain = new PolyominoDomain<UInt128>(topo, 0, 70);
         var s = domain.InitialState;
         Assert.Equal(topo.Groups[0].BaseMask << 95, s.OccupancyMask);
-        Assert.Equal(topo.ZobristTable[0, 95], s.ZobristHash);
+        Assert.Equal(topo.ZobristKey(0, 95), s.ZobristHash);
 
         Span<PolyominoMove> moves = stackalloc PolyominoMove[domain.MaxMoves];
         int n = domain.GenerateMoves(s, moves);
@@ -49,7 +49,7 @@ public class WideBoardAndHexTests
         Assert.Contains(new PolyominoMove(0, 70), moves[..n].ToArray());
 
         var moved = domain.ApplyMove(s, new PolyominoMove(0, 70));
-        Assert.Equal(topo.ZobristTable[0, 70], moved.ZobristHash);
+        Assert.Equal(topo.ZobristKey(0, 70), moved.ZobristHash);
         Assert.Equal(topo.Groups[0].BaseMask << 70, moved.OccupancyMask);
         Assert.True(domain.IsGoal(moved));
         Assert.Equal(Cells.HashOf(topo, moved), moved.ZobristHash);

@@ -136,7 +136,7 @@ public class Lab3CarrierTests
         var s = mode.Domain.InitialState;
         var move = Lab3Helpers.MovesOf(mode, s, Carrier).Single(m => m.DirectionIndex == 1);
         ulong expected = s.ZobristHash;
-        foreach (var d in move.AsSpan()) expected ^= topo.ZobristTable[d.OldGroupId, d.OldAnchor] ^ topo.ZobristTable[d.NewGroupId, d.NewAnchor];
+        foreach (var d in move.AsSpan()) expected ^= topo.ZobristKey(d.OldGroupId, d.OldAnchor) ^ topo.ZobristKey(d.NewGroupId, d.NewAnchor);
         s = mode.Domain.ApplyMove(s, move);
         Assert.Equal(expected, s.ZobristHash);
         Assert.Equal(Cells.HashOf(topo, s), s.ZobristHash);

@@ -600,8 +600,8 @@ public partial class Lab3View : UserControl
         sb.AppendLine(CultureInfo.InvariantCulture, $"  {"PreviousHash:",-32}  0x{previous:X16}");
         foreach (var d in deltas)
         {
-            sb.AppendLine(CultureInfo.InvariantCulture, $"^ {$"ZobristTable[{d.OldGroupId}, {d.OldAnchor}]:",-32}  0x{T.ZobristTable[d.OldGroupId, d.OldAnchor]:X16}  (remove old)");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"^ {$"ZobristTable[{d.NewGroupId}, {d.NewAnchor}]:",-32}  0x{T.ZobristTable[d.NewGroupId, d.NewAnchor]:X16}  (add new)");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"^ {$"ZobristTable[{d.OldGroupId}, {d.OldAnchor}]:",-32}  0x{T.ZobristKey(d.OldGroupId, d.OldAnchor):X16}  (remove old)");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"^ {$"ZobristTable[{d.NewGroupId}, {d.NewAnchor}]:",-32}  0x{T.ZobristKey(d.NewGroupId, d.NewAnchor):X16}  (add new)");
         }
         sb.AppendLine(new string('-', 64));
         sb.Append(CultureInfo.InvariantCulture, $"= {"New ZobristHash:",-32}  0x{result:X16}");

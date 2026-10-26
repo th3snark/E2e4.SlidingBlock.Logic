@@ -7,6 +7,7 @@ namespace E2e4.SlidingBlock.Logic;
 /// <summary>One piece changing group and/or anchor as part of a <see cref="CompositeMove"/>.</summary>
 public readonly record struct PieceDelta(byte PieceId, byte OldGroupId, byte NewGroupId, byte OldAnchor, byte NewAnchor);
 
+/// <summary>Inline storage for the changes of a <see cref="CompositeMove"/>; it holds <see cref="CompositeMove.MaxPieces"/> of them without allocating.</summary>
 [InlineArray(CompositeMove.MaxPieces)]
 public struct MoveDeltaBuffer
 {
@@ -25,11 +26,14 @@ public struct CompositeMove : IEquatable<CompositeMove>
     /// <summary>-1 for a rotation, 0..5 for a one-step slide in that direction, -2 for a multi-step slide or glide.</summary>
     public sbyte DirectionIndex;
 
+    /// <summary>The changes; only the first <see cref="Count"/> are meaningful. Read them through <see cref="AsSpan"/>.</summary>
     public MoveDeltaBuffer Deltas;
 
+    /// <summary>The changes of this move.</summary>
     [UnscopedRef]
     public ReadOnlySpan<PieceDelta> AsSpan() => ((ReadOnlySpan<PieceDelta>)Deltas)[..Count];
 
+    /// <inheritdoc/>
     public readonly bool Equals(CompositeMove other)
     {
         if (Count != other.Count || DirectionIndex != other.DirectionIndex) return false;
@@ -38,8 +42,10 @@ public struct CompositeMove : IEquatable<CompositeMove>
         return true;
     }
 
+    /// <inheritdoc/>
     public override readonly bool Equals(object? obj) => obj is CompositeMove m && Equals(m);
 
+    /// <inheritdoc/>
     public override readonly int GetHashCode()
     {
         var h = new HashCode();
@@ -49,7 +55,9 @@ public struct CompositeMove : IEquatable<CompositeMove>
         return h.ToHashCode();
     }
 
+    /// <summary>True if both moves change the same pieces in the same way.</summary>
     public static bool operator ==(CompositeMove left, CompositeMove right) => left.Equals(right);
+    /// <summary>True if the moves differ.</summary>
     public static bool operator !=(CompositeMove left, CompositeMove right) => !left.Equals(right);
 
     internal static CompositeMove Single(int pieceId, int group, int oldAnchor, int newAnchor, int direction) =>
@@ -78,6 +86,12 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
     {
     }
 
+    /// <summary>
+    /// Plays on <paramref name="topology"/> and is solved when <paramref name="goal"/> is reached.
+    /// </summary>
+    /// <param name="topology">The board and pieces.</param>
+    /// <param name="goal">When the puzzle is solved.</param>
+    /// <param name="maxPushDepth">How many pieces deep a push chains: 1 moves only what the pusher touches directly.</param>
     public CompositeDomain(PuzzleTopology<TBitboard> topology, PolyominoGoal<TBitboard> goal, int maxPushDepth = 1)
     {
         Topology = topology;
@@ -86,21 +100,30 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
         InitialState = PolyominoState<TBitboard>.FromTopology(topology);
     }
 
+    /// <summary>The board and pieces.</summary>
     public PuzzleTopology<TBitboard> Topology { get; }
+    /// <summary>When the puzzle is solved.</summary>
     public PolyominoGoal<TBitboard> Goal { get; }
+    /// <summary>How many pieces deep a push chains.</summary>
     public int MaxPushDepth { get; }
+    /// <inheritdoc/>
     public PolyominoState<TBitboard> InitialState { get; }
+    /// <inheritdoc/>
     public int MaxMoves => Topology.Pieces.Count * (Topology.CellCount + 8);
 
+    /// <inheritdoc/>
     public bool IsGoal(in PolyominoState<TBitboard> state) => Goal.IsReached(state);
+    /// <inheritdoc/>
     public ulong GetHashCode64(in PolyominoState<TBitboard> state) => state.ZobristHash;
 
+    /// <inheritdoc/>
     public PolyominoState<TBitboard> ApplyMove(in PolyominoState<TBitboard> state, in CompositeMove move)
     {
         var m = move;
         return state.WithDeltas(Topology, m.AsSpan());
     }
 
+    /// <inheritdoc/>
     public int GenerateMoves(in PolyominoState<TBitboard> state, Span<CompositeMove> moveBuffer)
     {
         var topo = Topology;

@@ -205,7 +205,7 @@ public class SymmetryTests
             ulong h = 0, occ = 0;
             foreach (var p in d.Topology.Pieces)
             {
-                h ^= d.Topology.ZobristTable[p.GroupId, s.AnchorOf(p.PieceId)];
+                h ^= d.Topology.ZobristKey(p.GroupId, s.AnchorOf(p.PieceId));
                 occ |= d.Topology.PieceMask(p.PieceId, s.AnchorOf(p.PieceId));
             }
             Assert.Equal(h, s.ZobristHash);
@@ -216,9 +216,11 @@ public class SymmetryTests
     [Fact]
     public void ZobristTableIsDeterministic()
     {
-        var a = LabPuzzles.CreateLab2().Topology.ZobristTable;
-        var b = LabPuzzles.CreateLab2().Topology.ZobristTable;
-        Assert.Equal(a.Cast<ulong>(), b.Cast<ulong>());
+        var a = LabPuzzles.CreateLab2().Topology;
+        var b = LabPuzzles.CreateLab2().Topology;
+        for (int g = 0; g < a.Groups.Count; g++)
+            for (int cell = 0; cell < a.CellCount; cell++)
+                Assert.Equal(a.ZobristKey(g, cell), b.ZobristKey(g, cell));
     }
 }
 
@@ -517,12 +519,12 @@ public class PolyominoGoalPositionTests
     public void StateHoldsSixteenGroups()
     {
         var b = PuzzleTopology<ulong>.CreateBuilder(4, 4);
-        for (int g = 0; g < GroupAnchorBuffer<ulong>.Length; g++)
+        for (int g = 0; g < PolyominoState<ulong>.MaxGroups; g++)
         {
             int group = b.AddGroup($"g{g}", [(0, 0)]);
             b.AddPiece(group, $"p{g}", g);
         }
         var state = PolyominoState<ulong>.FromTopology(b.Build());
-        for (int g = 0; g < GroupAnchorBuffer<ulong>.Length; g++) Assert.Equal(1UL << g, state.GroupAnchorsOf(g));
+        for (int g = 0; g < PolyominoState<ulong>.MaxGroups; g++) Assert.Equal(1UL << g, state.GroupAnchorsOf(g));
     }
 }

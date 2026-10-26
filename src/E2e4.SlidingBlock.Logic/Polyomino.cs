@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 namespace E2e4.SlidingBlock.Logic;
 
 [InlineArray(Length)]
-public struct GroupAnchorBuffer<TBitboard> where TBitboard : unmanaged
+internal struct GroupAnchorBuffer<TBitboard> where TBitboard : unmanaged
 {
     /// <summary>The most equivalence groups a <see cref="PolyominoState{TBitboard}"/> can hold.</summary>
     public const int Length = 16;
@@ -13,7 +13,7 @@ public struct GroupAnchorBuffer<TBitboard> where TBitboard : unmanaged
 }
 
 [InlineArray(Length)]
-public struct PieceAnchorBuffer
+internal struct PieceAnchorBuffer
 {
     /// <summary>The most pieces a <see cref="PolyominoState{TBitboard}"/> can hold.</summary>
     public const int Length = 16;
@@ -36,14 +36,23 @@ public struct LayerOccupancyBuffer<T> where T : unmanaged
 public struct PolyominoState<TBitboard> : IEquatable<PolyominoState<TBitboard>>
     where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>
 {
+    /// <summary>The most equivalence groups a position can hold.</summary>
+    public const int MaxGroups = 16;
+
+    /// <summary>The most pieces a position can hold.</summary>
+    public const int MaxPieces = 16;
+
     private GroupAnchorBuffer<TBitboard> _groupAnchors;
     private PieceAnchorBuffer _pieceAnchors;
     private PieceAnchorBuffer _pieceGroups;
 
+    /// <summary>The position with every piece of <paramref name="topology"/> on its initial anchor.</summary>
+    /// <exception cref="ArgumentException">The topology has more than <see cref="MaxGroups"/> groups or <see cref="MaxPieces"/> pieces.</exception>
     public static PolyominoState<TBitboard> FromTopology(PuzzleTopology<TBitboard> topology)
     {
-        if (topology.Groups.Count > GroupAnchorBuffer<TBitboard>.Length) throw new ArgumentException($"At most {GroupAnchorBuffer<TBitboard>.Length} equivalence groups.");
-        if (topology.Pieces.Count > PieceAnchorBuffer.Length) throw new ArgumentException($"At most {PieceAnchorBuffer.Length} pieces.");
+        ArgumentNullException.ThrowIfNull(topology);
+        if (topology.Groups.Count > MaxGroups) throw new ArgumentException($"At most {MaxGroups} equivalence groups.");
+        if (topology.Pieces.Count > MaxPieces) throw new ArgumentException($"At most {MaxPieces} pieces.");
         var s = new PolyominoState<TBitboard>();
         foreach (var p in topology.Pieces)
         {
@@ -60,11 +69,13 @@ public struct PolyominoState<TBitboard> : IEquatable<PolyominoState<TBitboard>>
     /// <summary>Occupancy per elevation layer; <see cref="TotalOccupancy"/> is their union.</summary>
     public LayerOccupancyBuffer<TBitboard> LayerOccupancy { get; private set; }
 
+    /// <summary>The cells covered on either layer.</summary>
     public readonly TBitboard TotalOccupancy => LayerOccupancy[0] | LayerOccupancy[1];
 
     /// <summary>All occupied cells whatever the layer (same as <see cref="TotalOccupancy"/>).</summary>
     public readonly TBitboard OccupancyMask => TotalOccupancy;
 
+    /// <summary>The Zobrist hash of the position, kept up to date as pieces move. Identical pieces can be swapped without changing it.</summary>
     public ulong ZobristHash { get; private set; }
 
     /// <summary>
@@ -94,7 +105,9 @@ public struct PolyominoState<TBitboard> : IEquatable<PolyominoState<TBitboard>>
         return cell < topology.CellCount ? cell : -1;
     }
 
+    /// <summary>Bit c is set when a piece of group <paramref name="groupId"/> is anchored on cell c.</summary>
     public readonly TBitboard GroupAnchorsOf(int groupId) => _groupAnchors[groupId];
+    /// <summary>The cell the first square of piece <paramref name="pieceId"/> stands on.</summary>
     public readonly int AnchorOf(int pieceId) => _pieceAnchors[pieceId];
 
     /// <summary>The group a piece currently belongs to (changes when a piece rotates).</summary>
@@ -151,6 +164,7 @@ public struct PolyominoState<TBitboard> : IEquatable<PolyominoState<TBitboard>>
         ZobristHash ^= topology.ZobristTable[oldGroup, old] ^ topology.ZobristTable[newGroup, newAnchor];
     }
 
+    /// <inheritdoc/>
     public readonly bool Equals(PolyominoState<TBitboard> other)
     {
         if (ZobristHash != other.ZobristHash) return false;
@@ -159,9 +173,13 @@ public struct PolyominoState<TBitboard> : IEquatable<PolyominoState<TBitboard>>
         return true;
     }
 
+    /// <inheritdoc/>
     public override readonly bool Equals(object? obj) => obj is PolyominoState<TBitboard> s && Equals(s);
+    /// <inheritdoc/>
     public override readonly int GetHashCode() => (int)(ZobristHash ^ (ZobristHash >> 32));
+    /// <summary>True if both positions have the same groups on the same anchors.</summary>
     public static bool operator ==(PolyominoState<TBitboard> left, PolyominoState<TBitboard> right) => left.Equals(right);
+    /// <summary>True if the positions differ.</summary>
     public static bool operator !=(PolyominoState<TBitboard> left, PolyominoState<TBitboard> right) => !left.Equals(right);
 
     private static TBitboard FreeAnchors(int startAnchor, TBitboard baseMask, TBitboard validAnchorsMask, TBitboard otherOccupancy)
@@ -450,6 +468,11 @@ internal static class MoveGen<TBitboard> where TBitboard : unmanaged, IBinaryInt
     }
 }
 
+/// <summary>
+/// The rules of a polyomino puzzle: pieces of any shape slide through free cells (one cell, any distance or until blocked, as their group says)
+/// on a board with walls, one-way cells, partitions, elevation layers and pressure plates. Pieces of one group are interchangeable.
+/// </summary>
+/// <typeparam name="TBitboard"><see cref="ulong"/> for boards of up to 64 cells, <see cref="UInt128"/> for up to 128.</typeparam>
 public sealed class PolyominoDomain<TBitboard> : ISlidingBlockDomain<PolyominoState<TBitboard>, PolyominoMove>
     where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>
 {
@@ -478,25 +501,32 @@ public sealed class PolyominoDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
         InitialState = PolyominoState<TBitboard>.FromTopology(topology);
     }
 
+    /// <summary>When the puzzle is solved.</summary>
     public PolyominoGoal<TBitboard> Goal { get; }
 
+    /// <summary>The board and pieces.</summary>
     public PuzzleTopology<TBitboard> Topology { get; }
 
     /// <summary>Goal of the single-group constructor; -1 when the goal is a whole position (<see cref="GoalPosition"/>).</summary>
     public int GoalGroupId => Goal.GroupId;
+    /// <summary>Anchor of the single-group goal; meaningful when <see cref="GoalGroupId"/> is not -1.</summary>
     public int GoalAnchor => Goal.Anchor;
 
     /// <summary>The goal position when the domain was built with one, otherwise null.</summary>
     public PolyominoState<TBitboard>? GoalPosition => Goal.Position;
 
+    /// <inheritdoc/>
     public PolyominoState<TBitboard> InitialState { get; }
+    /// <inheritdoc/>
     public int MaxMoves => Topology.Pieces.Count * Topology.CellCount;
 
+    /// <inheritdoc/>
     public bool IsGoal(in PolyominoState<TBitboard> state) => Goal.IsReached(state);
 
     /// <summary>The cells closed gates make solid in <paramref name="state"/>.</summary>
     public TBitboard ActiveDynamicWalls(in PolyominoState<TBitboard> state) => MoveGen<TBitboard>.ActiveDynamicWalls(Topology, state);
 
+    /// <summary>The cells piece <paramref name="pieceId"/> can slide to in one move from where it stands.</summary>
     public TBitboard ReachableFor(in PolyominoState<TBitboard> state, int pieceId) =>
         MoveGen<TBitboard>.Reachable(Topology, state, pieceId, MoveGen<TBitboard>.ActiveDynamicWalls(Topology, state));
 
@@ -529,6 +559,7 @@ public sealed class PolyominoDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
         return n;
     }
 
+    /// <inheritdoc/>
     public int GenerateMoves(in PolyominoState<TBitboard> state, Span<PolyominoMove> moveBuffer)
     {
         int n = 0;
@@ -546,8 +577,10 @@ public sealed class PolyominoDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
         return n;
     }
 
+    /// <inheritdoc/>
     public PolyominoState<TBitboard> ApplyMove(in PolyominoState<TBitboard> state, in PolyominoMove move) =>
         state.WithPieceMoved(Topology, move.PieceId, move.TargetAnchor);
 
+    /// <inheritdoc/>
     public ulong GetHashCode64(in PolyominoState<TBitboard> state) => state.ZobristHash;
 }

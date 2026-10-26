@@ -20,10 +20,12 @@ public readonly struct PushState : IEquatable<PushState>
         Hash = hash;
     }
 
-    public int CaseCount => _cases.Length;
+    /// <summary>How many cases the position holds; 0 for <c>default</c>.</summary>
+    public int CaseCount => _cases?.Length ?? 0;
 
     /// <summary>The cell of a case.</summary>
-    public int CellOf(int id) => _cases[id];
+    /// <exception cref="InvalidOperationException">This is <c>default</c>, not a position of a <see cref="PushDomain"/>.</exception>
+    public int CellOf(int id) => (_cases ?? throw new InvalidOperationException("This is not a position of a PushDomain."))[id];
 
     /// <summary>The cell the storeman stands on.</summary>
     public ushort Player { get; }
@@ -33,10 +35,13 @@ public readonly struct PushState : IEquatable<PushState>
 
     internal ulong CaseHash { get; }
 
+    /// <summary>A 64-bit hash of the cases' cells and the storeman's region.</summary>
     public ulong Hash { get; }
 
+    /// <inheritdoc/>
     public bool Equals(PushState other)
     {
+        if (_cases is null || other._cases is null) return _cases is null && other._cases is null;
         if (Hash != other.Hash || Region != other.Region || _cases.Length != other._cases.Length) return false;
         Span<ushort> a = stackalloc ushort[_cases.Length], b = stackalloc ushort[_cases.Length];
         _cases.CopyTo(a);
@@ -46,23 +51,33 @@ public readonly struct PushState : IEquatable<PushState>
         return a.SequenceEqual(b);
     }
 
+    /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is PushState s && Equals(s);
+
+    /// <inheritdoc/>
     public override int GetHashCode() => (int)(Hash ^ (Hash >> 32));
+
+    /// <summary>True if both positions have the same cases on the same cells and the storeman can walk to the same region.</summary>
     public static bool operator ==(PushState left, PushState right) => left.Equals(right);
+
+    /// <summary>True if the positions differ.</summary>
     public static bool operator !=(PushState left, PushState right) => !left.Equals(right);
 }
 
 /// <summary>
 /// Push case <paramref name="Case"/> to cell <paramref name="To"/>, in as many pushes as it takes: the storeman walks round to wherever he needs to
-/// stand, and ends on <paramref name="PlayerAt"/>, the cell the case was last pushed from. This is Hordern's first definition of a move.
+/// stand, and ends on <paramref name="PlayerAt"/>, the cell the case was last pushed from.
 /// </summary>
+/// <param name="Case">The case that is pushed.</param>
+/// <param name="To">The cell it ends on.</param>
+/// <param name="PlayerAt">The cell the storeman ends on.</param>
 public readonly record struct PushMove(byte Case, ushort To, ushort PlayerAt);
 
 /// <summary>
 /// The rules of a Soko puzzle: the storeman walks anywhere that is free, pushes one case at a time into a free cell and never pulls. One move is
-/// all the pushes of one case in a row, so the storeman's walking costs nothing, as in the book. The engine's polyomino domain holds at most 16
-/// pieces on 128 cells and the warehouses are far bigger, so this domain carries its own position and plugs into the engine's
-/// <see cref="PlaySession{TState,TMove}"/> and solvers all the same. The puzzle is solved when every case stands on a place marked X.
+/// all the pushes of one case in a row, so the storeman's walking costs nothing. The polyomino domain holds at most 16 pieces on 128 cells,
+/// which is too small for a warehouse, so this domain carries its own position (a heap array: unlike the bitboard domains, applying a move
+/// allocates) and plugs into <see cref="PlaySession{TState,TMove}"/> and the solvers all the same. The puzzle is solved when every case stands on a place.
 /// </summary>
 public sealed class PushDomain : ISlidingBlockDomain<PushState, PushMove>
 {
@@ -74,39 +89,58 @@ public sealed class PushDomain : ISlidingBlockDomain<PushState, PushMove>
     /// <summary>The symbols of the cases in numbering order: case 1 is '1', case 10 is 'A', and so on (no 'X': that marks a place for a case).</summary>
     public const string CaseSymbols = "123456789ABCDEFGHIJKLMNOPQRSTUVWYZ";
 
+    /// <summary>The most cells a warehouse may have; positions are searched with per-cell scratch space on the stack.</summary>
+    public const int MaxCells = 2048;
+
     /// <summary>
-    /// Reads the warehouse from a map with one string per row: '#' is a wall, ' ' is outside the warehouse, '.' is floor, 'X' is a place for a case,
-    /// '@' is the storeman and a symbol of <see cref="CaseSymbols"/> is a case (numbered 1, 2, 3 and so on without gaps). Rows may differ in length;
-    /// the rest of a short row is outside. There must be as many places as cases.
+    /// Creates the rules from the layout as data. Cells are numbered row by row: <c>row * columns + column</c>. Every cell named in
+    /// <paramref name="targets"/>, <paramref name="cases"/> and <paramref name="player"/> must be floor. Case <c>i</c> starts on <c>cases[i]</c>; there must be
+    /// as many places as cases. The puzzle is solved when every case stands on a place.
     /// </summary>
-    public PushDomain(IReadOnlyList<string> map, bool pruneDeadSquares = true)
+    /// <exception cref="ArgumentException">The layout is empty, has more than <see cref="MaxCells"/> cells or 256 cases, puts something off the floor, or has a different number of places and cases.</exception>
+    public PushDomain(int columns, int rows, IEnumerable<int> floor, IEnumerable<int> targets, IReadOnlyList<int> cases, int player, bool pruneDeadSquares = true)
     {
-        Columns = map.Max(row => row.Length);
-        Rows = map.Count;
-        int cells = Columns * Rows;
+        ArgumentOutOfRangeException.ThrowIfLessThan(columns, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(rows, 1);
+        ArgumentNullException.ThrowIfNull(floor);
+        ArgumentNullException.ThrowIfNull(targets);
+        ArgumentNullException.ThrowIfNull(cases);
+        if ((long)columns * rows > MaxCells) throw new ArgumentException($"The warehouse has at most {MaxCells} cells.");
+        Columns = columns;
+        Rows = rows;
+        int cells = columns * rows;
         PruneDeadSquares = pruneDeadSquares;
         _floor = new bool[cells];
         _target = new bool[cells];
-        var cases = new SortedDictionary<int, int>();
-        int player = -1;
-        for (int r = 0; r < Rows; r++)
-            for (int c = 0; c < map[r].Length; c++)
-            {
-                char ch = map[r][c];
-                int cell = r * Columns + c;
-                if (ch is '#' or ' ') continue;
-                _floor[cell] = true;
-                if (ch == 'X') _target[cell] = true;
-                else if (ch == '@') player = cell;
-                else if (CaseSymbols.IndexOf(ch, StringComparison.Ordinal) is int id and >= 0) cases[id] = cell;
-                else if (ch != '.') throw new ArgumentException($"Unknown map symbol '{ch}'.", nameof(map));
-            }
-        if (player < 0) throw new ArgumentException("The map has no storeman.", nameof(map));
-        if (cases.Count == 0) throw new ArgumentException("The map has no cases.", nameof(map));
-        if (cases.Keys.Where((id, i) => id != i).Any()) throw new ArgumentException("The cases must be numbered 1, 2, 3 and so on.", nameof(map));
-        if (cases.Count != _target.Count(t => t)) throw new ArgumentException("There must be as many places as cases.", nameof(map));
+        foreach (int cell in floor) _floor[CheckedCell(cell, nameof(floor))] = true;
+        int targetCount = 0;
+        foreach (int cell in targets)
+        {
+            if (!_floor[CheckedCell(cell, nameof(targets))]) throw new ArgumentException($"Place {cell} is not floor.", nameof(targets));
+            if (_target[cell]) throw new ArgumentException($"Place {cell} is listed twice.", nameof(targets));
+            _target[cell] = true;
+            targetCount++;
+        }
+        if (!_floor[CheckedCell(player, nameof(player))]) throw new ArgumentException("The storeman is not on the floor.", nameof(player));
+        if (cases.Count == 0) throw new ArgumentException("There are no cases.", nameof(cases));
+        if (cases.Count > byte.MaxValue + 1) throw new ArgumentException("At most 256 cases.", nameof(cases));
+        if (cases.Count != targetCount) throw new ArgumentException("There must be as many places as cases.", nameof(cases));
         CaseCount = cases.Count;
+        var cellOf = new ushort[CaseCount];
+        var taken = new bool[cells];
+        for (int id = 0; id < cellOf.Length; id++)
+        {
+            int cell = cases[id];
+            if (!_floor[CheckedCell(cell, nameof(cases))]) throw new ArgumentException($"Case {id} is not on the floor.", nameof(cases));
+            if (taken[cell]) throw new ArgumentException($"Two cases are on cell {cell}.", nameof(cases));
+            taken[cell] = true;
+            cellOf[id] = (ushort)cell;
+        }
+        if (taken[player]) throw new ArgumentException("The storeman stands on a case.", nameof(player));
         Targets = [.. Enumerable.Range(0, cells).Where(i => _target[i])];
+
+        int CheckedCell(int cell, string name) =>
+            cell >= 0 && cell < cells ? cell : throw new ArgumentException($"Cell {cell} is outside the warehouse.", name);
 
         _next = new int[cells * 4];
         ReadOnlySpan<(int Row, int Col)> steps = [(0, -1), (0, 1), (-1, 0), (1, 0)];
@@ -128,19 +162,63 @@ public sealed class PushDomain : ISlidingBlockDomain<PushState, PushMove>
         }
         _distance = FindPushDistances();
 
-        var cellOf = new ushort[CaseCount];
         ulong caseHash = 0;
-        foreach (var (id, cell) in cases)
-        {
-            cellOf[id] = (ushort)cell;
-            caseHash ^= _caseKeys[cell];
-        }
+        foreach (ushort cell in cellOf) caseHash ^= _caseKeys[cell];
         InitialState = Make(cellOf, (ushort)player, caseHash);
     }
 
+    /// <summary>
+    /// Reads the warehouse from a map with one string per row: '#' is a wall, ' ' is outside the warehouse, '.' is floor, 'X' is a place for a case,
+    /// '@' is the storeman and a symbol of <see cref="CaseSymbols"/> is a case (numbered 1, 2, 3 and so on without gaps). Rows may differ in length;
+    /// the rest of a short row is outside. There must be as many places as cases.
+    /// </summary>
+    public PushDomain(IReadOnlyList<string> map, bool pruneDeadSquares = true)
+        : this(ParseMap(map), pruneDeadSquares)
+    {
+    }
+
+    private PushDomain(MapData layout, bool pruneDeadSquares)
+        : this(layout.Columns, layout.Rows, layout.Floor, layout.Targets, layout.Cases, layout.Player, pruneDeadSquares)
+    {
+    }
+
+    private readonly record struct MapData(int Columns, int Rows, List<int> Floor, List<int> Targets, List<int> Cases, int Player);
+
+    private static MapData ParseMap(IReadOnlyList<string> map)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        if (map.Count == 0) throw new ArgumentException("The map is empty.", nameof(map));
+        int columns = map.Max(row => row.Length), rows = map.Count;
+        if (columns == 0) throw new ArgumentException("The map is empty.", nameof(map));
+        List<int> floor = [], targets = [];
+        var cases = new SortedDictionary<int, int>();
+        int player = -1;
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < map[r].Length; c++)
+            {
+                char ch = map[r][c];
+                int cell = r * columns + c;
+                if (ch is '#' or ' ') continue;
+                floor.Add(cell);
+                if (ch == 'X') targets.Add(cell);
+                else if (ch == '@') player = cell;
+                else if (CaseSymbols.IndexOf(ch, StringComparison.Ordinal) is int id and >= 0) cases[id] = cell;
+                else if (ch != '.') throw new ArgumentException($"Unknown map symbol '{ch}'.", nameof(map));
+            }
+        if (player < 0) throw new ArgumentException("The map has no storeman.", nameof(map));
+        if (cases.Count == 0) throw new ArgumentException("The map has no cases.", nameof(map));
+        if (cases.Keys.Where((id, i) => id != i).Any()) throw new ArgumentException("The cases must be numbered 1, 2, 3 and so on.", nameof(map));
+        if (cases.Count != targets.Count) throw new ArgumentException("There must be as many places as cases.", nameof(map));
+        return new MapData(columns, rows, floor, targets, [.. cases.Values], player);
+    }
+
+    /// <summary>Columns of the warehouse.</summary>
     public int Columns { get; }
+    /// <summary>Rows of the warehouse.</summary>
     public int Rows { get; }
+    /// <summary>How many cases there are.</summary>
     public int CaseCount { get; }
+    /// <summary>Cells of the warehouse: columns times rows. A cell is <c>row * Columns + column</c>.</summary>
     public int CellCount => Columns * Rows;
 
     /// <summary>The cells marked for a case, lowest first.</summary>
@@ -149,16 +227,21 @@ public sealed class PushDomain : ISlidingBlockDomain<PushState, PushMove>
     /// <summary>When set, <see cref="GenerateMoves"/> leaves out pushes that leave a case where no push can ever take it to a place (for the solvers).</summary>
     public bool PruneDeadSquares { get; }
 
+    /// <inheritdoc/>
     public PushState InitialState { get; }
 
+    /// <inheritdoc/>
     public int MaxMoves => CaseCount * CellCount * 4;
 
+    /// <summary>True if the cell is floor (not a wall and not outside).</summary>
     public bool IsFloor(int cell) => _floor[cell];
+    /// <summary>True if the cell is a place for a case.</summary>
     public bool IsTarget(int cell) => _target[cell];
 
     /// <summary>True if a case on <paramref name="cell"/> could still be pushed to a place if nothing else were in the way.</summary>
     public bool IsAlive(int cell) => _distance[cell] >= 0;
 
+    /// <inheritdoc/>
     public bool IsGoal(in PushState state)
     {
         for (int i = 0; i < state.CaseCount; i++)
@@ -178,8 +261,10 @@ public sealed class PushDomain : ISlidingBlockDomain<PushState, PushMove>
     /// <summary>The pushes a lone case on <paramref name="cell"/> needs to reach a place if nothing else were in the way, or -1 if no push can.</summary>
     public int PushDistance(int cell) => _distance[cell];
 
+    /// <inheritdoc/>
     public ulong GetHashCode64(in PushState state) => state.Hash;
 
+    /// <inheritdoc/>
     public PushState ApplyMove(in PushState state, in PushMove move)
     {
         var cases = new ushort[state.CaseCount];
@@ -189,6 +274,7 @@ public sealed class PushDomain : ISlidingBlockDomain<PushState, PushMove>
         return Make(cases, move.PlayerAt, caseHash);
     }
 
+    /// <inheritdoc/>
     public int GenerateMoves(in PushState state, Span<PushMove> moveBuffer)
     {
         int n = 0;

@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace E2e4.SlidingBlock.Logic;
 
+/// <summary>How the cells of a board touch.</summary>
 public enum GridGeometry : byte
 {
     /// <summary>Cardinal deltas: -1, +1, -W, +W.</summary>
@@ -15,18 +16,27 @@ public enum GridGeometry : byte
 /// <summary>How a group travels: one cell, any distance by flood fill, or gliding until blocked.</summary>
 public enum SlidePhysics : byte
 {
+    /// <summary>A move is one cell.</summary>
     SingleStep = 0,
+    /// <summary>A move takes the piece to anywhere it can reach through free cells.</summary>
     ContinuousFloodFill = 1,
+    /// <summary>A move glides the piece in one direction until something stops it.</summary>
     FrictionlessRaycast = 2,
 }
 
+/// <summary>What a group does to other pieces when it moves; the flags combine.</summary>
 [Flags]
 public enum RoleFlags : byte
 {
+    /// <summary>The group does nothing special.</summary>
     None = 0,
+    /// <summary>Moving the group pushes pieces in its way.</summary>
     Pusher = 1 << 0,
+    /// <summary>Pieces can be pushed by a group with <see cref="Pusher"/>.</summary>
     Pushable = 1 << 1,
+    /// <summary>The group carries the pieces inside its hollow shape along with it.</summary>
     HollowCarrier = 1 << 2,
+    /// <summary>The group drags touching magnetic pieces along.</summary>
     Magnetic = 1 << 3,
 }
 
@@ -36,9 +46,13 @@ public readonly record struct DirectionalDiode(int CellIndex, byte AllowedEntryD
 /// <summary>The engine's direction numbers (bit d of a diode mask, the <see cref="Partition.Direction"/> of a partition).</summary>
 public static class GridDirection
 {
+    /// <summary>One cell towards column 0.</summary>
     public const int Left = 0;
+    /// <summary>One cell towards the last column.</summary>
     public const int Right = 1;
+    /// <summary>One row towards row 0.</summary>
     public const int Up = 2;
+    /// <summary>One row towards the last row.</summary>
     public const int Down = 3;
 
     /// <summary>Hex grids only: up and to the right (-W + 1).</summary>

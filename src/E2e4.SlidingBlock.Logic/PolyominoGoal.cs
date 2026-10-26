@@ -35,13 +35,16 @@ public sealed class PolyominoGoal<TBitboard> where TBitboard : unmanaged, IBinar
     /// <summary>Group of the single-group goal; -1 when the goal is a whole position.</summary>
     public int GroupId { get; }
 
+    /// <summary>Anchor of the single-group goal; -1 when the goal is a whole position.</summary>
     public int Anchor { get; }
 
+    /// <summary>True if the goal is a whole position rather than one group on one anchor.</summary>
     public bool HasPosition { get; }
 
     /// <summary>The goal position when there is one, otherwise null.</summary>
     public PolyominoState<TBitboard>? Position => HasPosition ? _position : null;
 
+    /// <summary>True if <paramref name="state"/> meets the goal.</summary>
     public bool IsReached(in PolyominoState<TBitboard> state)
     {
         if (!HasPosition) return state.GroupAnchorsOf(GroupId) == TBitboard.One << Anchor;

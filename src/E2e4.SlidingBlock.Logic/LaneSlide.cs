@@ -55,36 +55,48 @@ public interface ILaneState<TState> : IEquatable<TState> where TState : struct, 
     /// <summary>The position of a vehicle along its lane: the column (horizontal) or row (vertical) of its first cell.</summary>
     int OffsetOf(int vehicle);
 
+    /// <summary>The position with <paramref name="vehicle"/> moved to <paramref name="offset"/> along its lane.</summary>
     TState WithOffset(int vehicle, int offset);
 
     /// <summary>One 64-bit word of the packed offsets: word 0 holds vehicles 0 to 15, word 1 vehicles 16 to 31, and so on.</summary>
     ulong Word(int index);
 
+    /// <summary>A 64-bit hash of the position.</summary>
     ulong Hash();
 }
 
-/// <summary>A position of up to 16 vehicles, in one 64-bit word (Rush Hour).</summary>
+/// <summary>A position of up to 16 vehicles, in one 64-bit word.</summary>
 public readonly struct LaneState16 : ILaneState<LaneState16>
 {
     private readonly ulong _word;
 
     private LaneState16(ulong word) => _word = word;
 
+    /// <inheritdoc/>
     public static int Capacity => 16;
 
+    /// <inheritdoc/>
     public ulong Word(int index) => _word;
+    /// <inheritdoc/>
     public int OffsetOf(int vehicle) => (int)((_word >> (4 * vehicle)) & 0xF);
-    public LaneState16 WithOffset(int vehicle, int offset) => new((_word & ~(0xFUL << (4 * vehicle))) | ((ulong)offset << (4 * vehicle)));
+    /// <inheritdoc/>
+    public LaneState16 WithOffset(int vehicle, int offset) => new((_word & ~(0xFUL << (4 * vehicle))) | ((ulong)(offset & 0xF) << (4 * vehicle)));
+    /// <inheritdoc/>
     public ulong Hash() => Hashing.Mix(_word);
 
+    /// <inheritdoc/>
     public bool Equals(LaneState16 other) => _word == other._word;
+    /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is LaneState16 s && Equals(s);
+    /// <inheritdoc/>
     public override int GetHashCode() => _word.GetHashCode();
+    /// <summary>True if both positions have every vehicle at the same offset.</summary>
     public static bool operator ==(LaneState16 left, LaneState16 right) => left.Equals(right);
+    /// <summary>True if the positions differ.</summary>
     public static bool operator !=(LaneState16 left, LaneState16 right) => !left.Equals(right);
 }
 
-/// <summary>A position of up to 64 vehicles, in four 64-bit words (the garages).</summary>
+/// <summary>A position of up to 64 vehicles, in four 64-bit words.</summary>
 public readonly struct LaneState64 : ILaneState<LaneState64>
 {
     private readonly ulong _w0, _w1, _w2, _w3;
@@ -97,15 +109,19 @@ public readonly struct LaneState64 : ILaneState<LaneState64>
         _w3 = w3;
     }
 
+    /// <inheritdoc/>
     public static int Capacity => 64;
 
+    /// <inheritdoc/>
     public ulong Word(int index) => Unsafe.Add(ref Unsafe.AsRef(in _w0), index & 3);   // the four words are laid out in order
+    /// <inheritdoc/>
     public int OffsetOf(int vehicle) => (int)((Word(vehicle >> 4) >> (4 * (vehicle & 15))) & 0xF);
 
+    /// <inheritdoc/>
     public LaneState64 WithOffset(int vehicle, int offset)
     {
         int shift = 4 * (vehicle & 15);
-        ulong Replace(ulong word) => (word & ~(0xFUL << shift)) | ((ulong)offset << shift);
+        ulong Replace(ulong word) => (word & ~(0xFUL << shift)) | ((ulong)(offset & 0xF) << shift);
         return (vehicle >> 4) switch
         {
             0 => new LaneState64(Replace(_w0), _w1, _w2, _w3),
@@ -115,12 +131,18 @@ public readonly struct LaneState64 : ILaneState<LaneState64>
         };
     }
 
+    /// <inheritdoc/>
     public ulong Hash() => Hashing.Mix(_w0, _w1, _w2, _w3);
 
+    /// <inheritdoc/>
     public bool Equals(LaneState64 other) => _w0 == other._w0 && _w1 == other._w1 && _w2 == other._w2 && _w3 == other._w3;
+    /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is LaneState64 s && Equals(s);
+    /// <inheritdoc/>
     public override int GetHashCode() => Hash().GetHashCode();
+    /// <summary>True if both positions have every vehicle at the same offset.</summary>
     public static bool operator ==(LaneState64 left, LaneState64 right) => left.Equals(right);
+    /// <summary>True if the positions differ.</summary>
     public static bool operator !=(LaneState64 left, LaneState64 right) => !left.Equals(right);
 }
 
@@ -129,11 +151,11 @@ public readonly record struct LaneMove(byte Vehicle, byte Offset);
 
 /// <summary>
 /// The rules of vehicles that slide forwards or backwards along their length, never sideways or round a corner: Rush Hour, garages, shunting
-/// yards. A move takes one vehicle through free cells, up to <c>maxStep</c> cells; <c>1</c> is Rush Hour's one cell at a time and the default
-/// (any distance is one move) is the way Hordern counts the garage puzzles. The position is the packed lane offsets (like the engine's old
-/// Rush Hour domain, but four bits each) in <typeparamref name="TState"/>: <see cref="LaneState16"/> for up to 16 vehicles, <see cref="LaneState64"/>
-/// for up to 64, far past the polyomino domain's 16 pieces. <typeparamref name="TBitboard"/> is the board's cell register, as for the polyomino domain: <see cref="ulong"/> for boards of up to 64
-/// cells (Rush Hour), <see cref="UInt128"/> for up to 128 (the garages). The puzzle is solved when the goal vehicle reaches the goal offset.
+/// yards. A move takes one vehicle through free cells, up to <c>maxStep</c> cells; <c>1</c> counts one cell at a time and the default
+/// counts any distance as one move. The position is the packed lane offsets, four bits each, in <typeparamref name="TState"/>:
+/// <see cref="LaneState16"/> for up to 16 vehicles, <see cref="LaneState64"/> for up to 64, far past the polyomino domain's 16 pieces.
+/// <typeparamref name="TBitboard"/> is the board's cell register, as for the polyomino domain: <see cref="ulong"/> for boards of up to 64
+/// cells, <see cref="UInt128"/> for up to 128. The puzzle is solved when the goal vehicle reaches the goal offset.
 /// </summary>
 public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TState, LaneMove>
     where TState : struct, ILaneState<TState>
@@ -145,6 +167,16 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
     private readonly int _count;
     private readonly int[] _maxOffset;
 
+    /// <summary>
+    /// Creates the rules.
+    /// </summary>
+    /// <param name="vehicles">The vehicles, numbered 0, 1, 2 ... in list order. The list is copied.</param>
+    /// <param name="columns">Columns of the board.</param>
+    /// <param name="rows">Rows of the board.</param>
+    /// <param name="goalVehicle">The vehicle that has to reach <paramref name="goalOffset"/>.</param>
+    /// <param name="goalOffset">The offset along its lane that solves the puzzle for the goal vehicle.</param>
+    /// <param name="maxStep">The most cells a vehicle slides in one move.</param>
+    /// <exception cref="ArgumentException">A vehicle is malformed, outside the board, in the way of another at the start, or there are too many.</exception>
     public LaneSlideDomain(IReadOnlyList<LaneVehicle> vehicles, int columns, int rows, int goalVehicle, int goalOffset, int maxStep = int.MaxValue)
     {
         if (vehicles.Count == 0) throw new ArgumentException("There must be at least one vehicle.", nameof(vehicles));
@@ -152,6 +184,7 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
         if (columns * rows > Grid.BitWidth<TBitboard>()) throw new ArgumentException($"The board has at most {Grid.BitWidth<TBitboard>()} cells.");
         ArgumentOutOfRangeException.ThrowIfLessThan(maxStep, 1);
         if (goalVehicle < 0 || goalVehicle >= vehicles.Count) throw new ArgumentOutOfRangeException(nameof(goalVehicle));
+        vehicles = [.. vehicles];
         Vehicles = vehicles;
         Columns = columns;
         Rows = rows;
@@ -161,6 +194,14 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
         _maxOffset = [.. vehicles.Select(v => (v.IsHorizontal ? columns : rows) - v.Length)];
         if (_maxOffset.Any(m => m < 0 || m > 15)) throw new ArgumentException("A vehicle does not fit its lane, or the lane is longer than 16 cells.", nameof(vehicles));
         if (goalOffset < 0 || goalOffset > _maxOffset[goalVehicle]) throw new ArgumentOutOfRangeException(nameof(goalOffset));
+        for (int i = 0; i < vehicles.Count; i++)
+        {
+            var v = vehicles[i];
+            if (v.Index != i) throw new ArgumentException($"Vehicle {i} has index {v.Index}: the indexes must be 0, 1, 2, ... in list order.", nameof(vehicles));
+            if (v.Length < 1 || v.Breadth < 1) throw new ArgumentException($"Vehicle {i} has no area.", nameof(vehicles));
+            if (v.Lane < 0 || v.Lane + v.Breadth > (v.IsHorizontal ? rows : columns)) throw new ArgumentException($"Vehicle {i} is outside the board across its lane.", nameof(vehicles));
+            if (v.InitialOffset < 0 || v.InitialOffset > _maxOffset[i]) throw new ArgumentException($"Vehicle {i} starts outside its lane.", nameof(vehicles));
+        }
         _count = vehicles.Count;
         _masks = new TBitboard[_count * Stride];
         _forward = new TBitboard[_count * Stride];
@@ -175,21 +216,35 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
                 _backward[i] = o > 0 ? _masks[i - 1] & ~_masks[i] : ~TBitboard.Zero;
             }
         var state = default(TState);
-        foreach (var v in vehicles) state = state.WithOffset(v.Index, v.InitialOffset);
+        var covered = TBitboard.Zero;
+        foreach (var v in vehicles)
+        {
+            state = state.WithOffset(v.Index, v.InitialOffset);
+            var mask = _masks[v.Index * Stride + v.InitialOffset];
+            if ((covered & mask) != TBitboard.Zero) throw new ArgumentException($"Vehicle {v.Index} overlaps another at the start.", nameof(vehicles));
+            covered |= mask;
+        }
         InitialState = state;
         MaxMoves = vehicles.Sum(v => 2 * Math.Min(_maxOffset[v.Index], maxStep));
     }
 
+    /// <summary>The vehicles, indexed by vehicle number.</summary>
     public IReadOnlyList<LaneVehicle> Vehicles { get; }
+    /// <summary>Columns of the board.</summary>
     public int Columns { get; }
+    /// <summary>Rows of the board.</summary>
     public int Rows { get; }
+    /// <summary>The vehicle that has to reach <see cref="GoalOffset"/>.</summary>
     public int GoalVehicle { get; }
+    /// <summary>The offset along its lane at which the goal vehicle solves the puzzle.</summary>
     public int GoalOffset { get; }
 
     /// <summary>The most cells a vehicle slides in one move.</summary>
     public int MaxStep { get; }
 
+    /// <inheritdoc/>
     public TState InitialState { get; }
+    /// <inheritdoc/>
     public int MaxMoves { get; }
 
     /// <summary>The last offset a vehicle can have along its lane.</summary>
@@ -217,8 +272,10 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
         for (int o = at - 1; o >= down && (_masks[baseIndex + o] & others) == TBitboard.Zero; o--) yield return o;
     }
 
+    /// <inheritdoc/>
     public bool IsGoal(in TState state) => state.OffsetOf(GoalVehicle) == GoalOffset;
 
+    /// <inheritdoc/>
     public int GenerateMoves(in TState state, Span<LaneMove> moveBuffer)
     {
         int n = 0;
@@ -253,8 +310,10 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
     }
 
 
+    /// <inheritdoc/>
     public TState ApplyMove(in TState state, in LaneMove move) => state.WithOffset(move.Vehicle, move.Offset);
 
+    /// <inheritdoc/>
     public ulong GetHashCode64(in TState state) => state.Hash();
 
     private TBitboard MaskOf(LaneVehicle v, int offset)
