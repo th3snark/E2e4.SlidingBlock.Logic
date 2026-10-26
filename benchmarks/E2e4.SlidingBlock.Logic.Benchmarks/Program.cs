@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using E2e4.SlidingBlock.Logic;
-using E2e4.SlidingBlock.Logic.Labs;
+using E2e4.SlidingBlock.Logic.Benchmarks;
 
 // dotnet run -c Release --project benchmarks/E2e4.SlidingBlock.Logic.Benchmarks
 // Best of several runs; allocation is the managed bytes one run allocates on this thread.
@@ -24,12 +24,12 @@ foreach (var (name, run) in Scenarios())
 static IEnumerable<(string, Action)> Scenarios()
 {
     var solver = new PuzzleSolver();
-    var klotski = LabPuzzles.CreateKlotski();
-    var rush = LabPuzzles.CreateRushHour();
-    var lab2 = LabPuzzles.CreateLab2();
-    var p15 = LabPuzzles.CreatePuzzle15();
-    var ice = LabPuzzles.CreateLab3Ice().Domain;
-    var carrier = LabPuzzles.CreateLab3Carrier().Domain;
+    var klotski = Fixtures.CreateKlotski();
+    var rush = Fixtures.CreateRushHour();
+    var lab2 = Fixtures.CreateLab2();
+    var p15 = Fixtures.CreatePuzzle15();
+    var ice = Fixtures.CreateIce().Domain;
+    var carrier = Fixtures.CreateCarrier().Domain;
     var hard15 = PuzzleWalk.RandomWalk(p15, p15.Goal, 200, new Random(3));
 
     yield return ("BFS Klotski (81 moves)", () => solver.SolveBfs(klotski, klotski.InitialState));
