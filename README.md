@@ -2,8 +2,8 @@
 
 <img src="assets/icon.png" alt="E2e4.SlidingBlock.Logic icon" width="96" height="96" align="right">
 
-A small, dependency-free sliding block puzzle engine for .NET: zero-allocation, bitboard-driven state structs and generic solvers
-for the N-puzzle, Klotski, Rush Hour and general polyominoes. It targets `net10.0`. Install from NuGet:
+A small, dependency-free sliding block puzzle engine for .NET: bitboard-driven state structs with allocation-free move generation, and generic
+solvers, for the N-puzzle, Klotski, Rush Hour, Soko-style pushing and general polyominoes. It targets `net10.0` (the current LTS) only. Install from NuGet:
 `E2e4.SlidingBlock.Logic`.
 
 Every puzzle is an `ISlidingBlockDomain<TState, TMove>` (initial state, goal test, move generation, move application and a 64-bit state hash),
@@ -38,14 +38,15 @@ Console.WriteLine(new PuzzleSolver().SolveBfs(rushHour, rushHour.InitialState)?.
   valid-anchor masks.
 - `E2e4.SlidingBlock.Logic.Text`: `TopologyMap`, `LaneDiagram` and `PushMap` read boards, vehicles and warehouses from diagrams (one string
   per row, with the symbols you choose). The domains themselves take plain data, so a layout can come from anywhere.
-- `PuzzleSolver`: generic BFS, A* and IDA*.
-- `PuzzleWalk` and `PlaySession<TState, TMove>`: a generic random walk (for solvable shuffles) and the undo / reset bookkeeping
+- `PuzzleSolver`: generic BFS, A* and IDA*, with a node limit and cancellation; the `out SolveStatus` overloads say whether a search found nothing because
+  the puzzle is unsolvable or because it hit the limit.
+- `PuzzleWalk` and `PlaySession<TState, TMove>`: a generic random walk (for solvable shuffles) and the undo, redo and reset bookkeeping
   every interactive puzzle needs.
 
-The engine contains no puzzle: no layouts, no goal positions, no colours. A puzzle (the sibling `E2e4.SlidingBlock.Puzzles` app, or the
-Labs) defines its layout and goal and hands them to the domain as data.
+The engine contains no puzzle: no layouts, no goal positions, no colours. The application that uses it defines its layouts and goals and hands them to
+the domains as data (`LabPuzzles` in the Labs is an example).
 
-`E2e4.SlidingBlock.Logic.Labs.Wpf` in the repository is a WPF application with two laboratories that show the bitboards and the solvers
+`E2e4.SlidingBlock.Logic.Labs.Wpf` in the repository is a WPF application with three laboratories that show the bitboards and the solvers
 working. It is not part of the package.
 
 ## Documentation
@@ -59,7 +60,7 @@ hashing, with diagrams) are in [docs](https://github.com/th3snark/E2e4.SlidingBl
 dotnet test E2e4.SlidingBlock.Logic.slnx
 ```
 
-See [SECURITY.md](https://github.com/th3snark/E2e4.SlidingBlock.Logic/blob/master/SECURITY.md) to report a vulnerability.
+See [CONTRIBUTING.md](https://github.com/th3snark/E2e4.SlidingBlock.Logic/blob/master/CONTRIBUTING.md) to help, [CHANGELOG.md](https://github.com/th3snark/E2e4.SlidingBlock.Logic/blob/master/CHANGELOG.md) for what changed, and [SECURITY.md](https://github.com/th3snark/E2e4.SlidingBlock.Logic/blob/master/SECURITY.md) to report a vulnerability.
 
 ## Licence
 

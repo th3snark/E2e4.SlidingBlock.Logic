@@ -63,7 +63,7 @@ public static class LabPuzzles
 
     public const char RushHourRedCar = 'X';
 
-    /// <summary>The 8-vehicle layout from the Lab 1 brief (vehicles v0..v7 are X, B..H).</summary>
+    /// <summary>The 8-vehicle layout of Lab 1 (vehicles v0..v7 are X, B..H).</summary>
     public static readonly string[] RushHourMap =
     [
         "CCH..F",

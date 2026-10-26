@@ -1,7 +1,7 @@
 <#
 Rasterises assets\icon.svg to assets\icon.png (256x256), the NuGet package icon.
 Run from this folder with Windows PowerShell:  powershell -STA -File Build-Icon.ps1
-Supports the SVG subset used in icon.svg: rect and circle with fill and fill-opacity (same renderer as E2e4.Chess Branding\Build-Icons.ps1).
+Supports the SVG subset used in icon.svg: rect and circle with fill and fill-opacity.
 #>
 Add-Type -AssemblyName PresentationCore, WindowsBase
 $ErrorActionPreference = 'Stop'

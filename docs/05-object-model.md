@@ -26,17 +26,20 @@ classDiagram
         +RandomWalk()
     }
     class PlaySession~TState,TMove~ {
-        +Apply() Undo() Reset()
+        +Apply() Undo() Redo() Reset()
     }
-    class PuzzleTopology {
+    class PuzzleTopology~TBitboard~ {
         +Width, Height
         +StaticWallsMask
         +Groups
         +Pieces
-        +ZobristTable
-        +FromAsciiMap()
+        +ZobristKey()
     }
-    class PuzzleTopologyBuilder {
+    class TopologyMap {
+        <<static, Text>>
+        +Parse()
+    }
+    class PuzzleTopologyBuilder~TBitboard~ {
         +AddWall()
         +AddGroup()
         +AddPiece()
@@ -56,6 +59,7 @@ classDiagram
         +InitialAnchor
     }
     PuzzleTopologyBuilder --> PuzzleTopology : builds
+    TopologyMap ..> PuzzleTopologyBuilder : reads a diagram into
     PuzzleTopology o-- EquivalenceGroup
     PuzzleTopology o-- PieceTemplate
     PuzzleSolver ..> ISlidingBlockDomain : solves any
@@ -73,11 +77,15 @@ classDiagram
 
 ## 5.1a What the engine does not know
 
-Goals are data. `NPuzzleDomain(initial, goal)`, `KlotskiDomain(topology, masterPieceId, goalAnchor)`, `LaneSlideDomain<TState, TBitboard>(vehicles, columns, rows, goalVehicle, goalOffset, maxStep)` (`LaneState16` or `LaneState64` for the position; `ulong` for up to 64 cells, `UInt128` for up to 128) (Rush Hour is `LaneSlide.RushHour(rows, symbols)`)
-and `PolyominoDomain(topology, goalGroupId, goalAnchor)` (or `PolyominoDomain(topology, goalPosition)` for a whole-position goal where identical pieces are interchangeable, optionally ignoring some groups; both build a `PolyominoGoal`, which `CompositeDomain` takes too) receive the answer from the puzzle that uses them. The engine has no layouts
+Goals are data. `NPuzzleDomain(initial, goal)`, `KlotskiDomain(topology, masterPieceId, goalAnchor)`, `LaneSlideDomain<TState, TBitboard>(vehicles, columns, rows, goalVehicle, goalOffset, maxStep)` (`LaneState16` or `LaneState64` for the position; `ulong` for up to 64 cells, `UInt128` for up to 128; Rush Hour is `maxStep: 1` with the red car as the goal vehicle),
+`PushDomain(columns, rows, floor, targets, cases, player)`
+and `PolyominoDomain<TBitboard>(topology, goalGroupId, goalAnchor)` (or `PolyominoDomain(topology, goalPosition)` for a whole-position goal where identical pieces are interchangeable, optionally ignoring some groups; both build a `PolyominoGoal`, which `CompositeDomain` takes too) receive the answer from the puzzle that uses them. The engine has no layouts
 (the classic Klotski map, the Rush Hour boards), no notion of where the blank belongs, no goal-relative heuristic baked into a state
 (`NPuzzleDomain.ManhattanDistance` is measured against the goal it was given) and no colours. Layouts and goals live in the puzzle
-definitions of the consumers (`E2e4.SlidingBlock.Puzzles.Core`; `LabPuzzles` in the Labs).
+definitions of the application that uses the engine (`LabPuzzles` in the Labs is one).
+
+The `E2e4.SlidingBlock.Logic.Text` namespace reads diagrams (one string per row) into those data: `TopologyMap.Parse`, `LaneDiagram.Parse` and
+`PushMap.Parse`. The symbols are parameters, so no map convention is built in, and the domains themselves never see a string.
 
 ## 5.2 Topology types
 
@@ -86,12 +94,13 @@ definitions of the consumers (`E2e4.SlidingBlock.Puzzles.Core`; `LabPuzzles` in 
 | `AllowedDirections` | `None`, `Horizontal`, `Vertical`, `Both` |
 | `EquivalenceGroup` | Interchangeable pieces: LSB-normalised `BaseMask`, `ValidAnchorsMask`, directions, anchor-relative cells |
 | `PieceTemplate` | One physical piece: id, group, label, initial anchor |
-| `PuzzleTopology` | Board size, wall mask, groups, pieces, Zobrist table; factory from an ASCII map |
-| `PuzzleTopologyBuilder` | Builds a topology from relative cell lists; validates anchors and overlaps; computes the masks |
-| `LaneVehicle` | One vehicle of a lane-sliding puzzle: lane, length, breadth, start offset; `Parse` reads them off a diagram |
+| `PuzzleTopology<TBitboard>` | Board size, wall mask, groups, pieces, one-way cells, partitions and plates (all read-only), and the Zobrist keys |
+| `PuzzleTopologyBuilder<TBitboard>` | Builds a topology from relative cell lists; validates cells, anchors and overlaps; computes the masks |
+| `LaneVehicle` | One vehicle of a lane-sliding puzzle: lane, length, breadth, start offset |
 
-ASCII maps use `#` for a wall, `.` for empty, and any other character for one piece; a legend maps characters to a `PieceKind` (name, directions and an opaque key; appearance such as colour is the consumer's business).
-Pieces whose normalised shape, directions and role match join the same group.
+`TopologyMap.Parse` reads a diagram: by default `#` is a wall, `.` is empty and any other character is one piece; a legend maps characters to a
+`PieceKind` (name, directions and an opaque key; appearance such as colour is the consumer's business).
+Pieces whose normalised shape, directions and role match join the same group. `LaneDiagram.Parse` reads vehicles the same way, and `PushMap.Parse` a Soko warehouse.
 
 ## 5.3 State types
 
@@ -122,11 +131,12 @@ flowchart LR
     D[ISlidingBlockDomain] --> B[SolveBfs<br/>optimal, Klotski and Rush Hour]
     D --> A[SolveAStar<br/>needs admissible heuristic]
     D --> I[SolveIdaStar<br/>memory-light, 15-puzzle with Manhattan]
-    B & A & I --> R["SolveResult(Moves, NodesExpanded)"]
+    B & A & I --> R["SolveResult(Moves, NodesExpanded)<br/>or null + SolveStatus"]
 ```
 
-All three accept a `CancellationToken`; `PuzzleSolver.MaxNodes` bounds the search and returns `null` when it is hit. IDA* avoids
-immediately returning to the parent state by comparing states for equality, so it works with any domain.
+All three accept a `CancellationToken` (cancelling throws `OperationCanceledException`). `PuzzleSolver.MaxNodes` bounds the search, and a search that finds nothing returns
+`null`; the overloads with an `out SolveStatus` tell `Unsolvable` (the reachable positions ran out) from `NodeLimit` (the search stopped first).
+IDA* avoids immediately returning to the parent state by comparing states for equality, so it works with any domain.
 
 ## 5.6 Move generation in one picture (polyominoes)
 

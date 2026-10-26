@@ -334,7 +334,7 @@ public class DomainTests
 public class LabSpecTests
 {
     [Fact]
-    public void Lab1RushHourLayoutMatchesTheBrief()
+    public void RushHourFixtureReadsTheExpectedVehicles()
     {
         var d = Fixtures.CreateRushHour();
         var t = d;
@@ -355,7 +355,7 @@ public class LabSpecTests
     }
 
     [Fact]
-    public void KlotskiShapeClassesFollowTheBrief()
+    public void KlotskiShapeClassesFollowTheLegendOrder()
     {
         var d = Fixtures.CreateKlotski();
         Assert.Equal(0x9FFFFUL, d.InitialState.OccupancyMask);
@@ -404,7 +404,7 @@ public class LabSpecTests
     }
 
     [Fact]
-    public void LabGroupNamesMatchTheBrief()
+    public void PolyominoGroupsFollowTheOrderTheyWereAdded()
     {
         var names = Fixtures.CreateLab2().Topology.Groups.Select(g => g.Name).ToArray();
         Assert.Equal(["L-Tromino", "Upward T", "J-Tromino", "1x1 Single"], names);

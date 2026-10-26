@@ -69,7 +69,7 @@ public class Lab3RotationTests
     }
 
     [Fact]
-    public void RingMasksMatchTheBrief()
+    public void RotationRingHasTheExpectedMasksAndDeltas()
     {
         var groups = Fixtures.CreateRotation().Domain.Topology.Groups.Take(4).ToArray();
         Assert.Equal([0xC1UL, 0x43UL, 0x83UL, 0x61UL], groups.Select(g => g.BaseMask));

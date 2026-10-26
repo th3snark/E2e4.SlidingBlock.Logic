@@ -1,5 +1,7 @@
 # 7. References
 
+- Hordern, E. (1986). *Sliding Piece Puzzles.* Oxford University Press. The classification of sliding puzzles (chapters A to J) that the engine's
+  mechanics are measured against; see [the roadmap](roadmap.md).
 - Zobrist, A. L. (1970). *A New Hashing Method with Application for Game Playing.* Technical Report #88, Computer Sciences Department,
   University of Wisconsin. Foundation for incremental XOR state hashing by piece-type equivalence class.
 - Korf, R. E., & Felner, A. (2002). *Disjoint Pattern Database Heuristics.* Artificial Intelligence, 134(1-2), 9-22. Nibble-packed
