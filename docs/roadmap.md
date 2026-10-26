@@ -8,7 +8,8 @@ puzzle; the layouts themselves belong to the application that uses the engine, n
 ## 1. Hordern's categories
 
 Hordern sorts his puzzles into sliding block puzzles (chapters A to G), Soko (H), railway shunting (J) and puzzles with plungers or levers
-where pieces move in groups ([Rob's Puzzle Page](https://robspuzzlepage.com/sliding.htm) summarises the classification).
+where pieces move in groups ([Rob's Puzzle Page](https://robspuzzlepage.com/sliding.htm) summarises the classification). The chapter descriptions
+below come from that page and other secondary sources, not from the book itself, so check them against the book before relying on them.
 
 | Chapter | Content | Coverage | What is missing |
 |---------|---------|----------|-----------------|
@@ -66,7 +67,47 @@ disk-backed search.
 | 3 | **Hardest-puzzle generator** | Medium to high | Medium | Fogleman enumerated every Rush Hour position and kept the farthest from any goal in their cluster ([michaelfogleman.com/rush](https://michaelfogleman.com/rush)). The layout enumerator would live outside the engine. |
 | 4 | **Solution post-processing** | Medium | Low | Shorten or recount a found solution under another metric by replaying it. |
 
-## 5. Other libraries
+## 5. Limits of the current design
+
+Each of these is deliberate today (a packed layout, a fixed-size buffer or a safety cap) and would be lifted by a larger representation.
+
+| Limit | Where | Lifting it |
+|-------|-------|------------|
+| 21 cells, 10 pieces, 7 shape classes | `KlotskiState`: the canonical key spends 3 bits per cell of a `ulong` | A `UInt128` key, or a hash-based canonical form. |
+| 16 pieces, 16 groups; 64 or 128 cells | `PolyominoState<TBitboard>`: fixed-size inline buffers | Larger buffers cost every position more bytes (about 184 bytes today, 328 on a `UInt128` board). |
+| Lanes of 16 cells, 64 vehicles, 128 cells | `LaneSlideDomain`: 4-bit offsets packed into `ulong` words | Wider offsets, or a second packing for long lanes. |
+| 2048 cells, 256 cases; the position allocates | `PushDomain`: per-call scratch space lives on the stack, and the position is a heap array, so `ApplyMove` allocates | An inline or pooled position would make Soko search allocation-free and allow bigger warehouses. |
+| No memory limit | `PuzzleSolver`: `MaxNodes` counts expanded nodes, but BFS and A* keep every position they generate, so a limit of millions of nodes can mean gigabytes. IDA* recurses once per move of the solution and prunes only the move back to the parent | A limit in bytes (or stored positions) and a `SolveStatus` for it. |
+| Weak hashes cluster | `PuzzleSolver`'s table is indexed by the upper 32 bits of `GetHashCode64` | Mix the hash in the table, so a domain with a poor hash still spreads. |
+| `PuzzleTopology.PieceMask` uses the piece's starting shape | A piece that has rotated covers cells of another group | A state-aware variant, `PolyominoState.MaskOf(piece)`. |
+| `PlaySession.Apply` trusts the move | It does not check that the move is legal | An optional check against `GenerateMoves`. |
+| The Labs have no tests of their own | The glide-report wording is tested against a copy in the test project | A small test project for the Labs, or leaving the Labs as a demonstration. |
+
+## 6. API tidy-ups to settle before 1.0
+
+While the version is below 1.0.0 these can still change without a breaking-change release.
+
+- **Diagnostic members that are public only because the Labs and the tests need them:** `NPuzzleState.SlideMask`, `KlotskiState.SpreadCells` and
+  `CanonicalShapeKey`, `PolyominoState.ComputeZobrist`, `PolyominoDomain.TraceRaycast` with `RaycastTrace`, `PuzzleTopology.ForbiddenEntryCells` and
+  `GetDirectionDeltas`. They belong in a `Diagnostics` namespace, or behind an explicit friend assembly.
+- **`BitboardExtensions` extends every unsigned integer type**, so `using E2e4.SlidingBlock.Logic;` puts `Lsb`, `ToHex` and the rest on `byte`, `uint` and
+  `ulong` everywhere. Moving it to a `Diagnostics` namespace would make it opt-in.
+- **The flood-fill helpers `FindReachableAnchors` and `ReconstructHookPath`** are static members of `PolyominoState`; they would sit better in their own static class.
+- **Argument checks still missing:** `PolyominoGoal(groupId, anchor)` (a group of 16 or more, an anchor off the board), `CompositeDomain`'s `maxPushDepth`, and
+  null checks on the remaining domain constructors.
+- **Moves and states:** `CompositeMove` has public mutable fields and magic values in `DirectionIndex` (-1 for a rotation, -2 for a multi-step slide); a
+  readonly struct and an enum would be safer. `PolyominoState<TBitboard>` is a large struct that is not `readonly`, and the heuristic delegates take it by value.
+- **Inconsistent constraints:** `PlaySession` requires `TMove : IEquatable<TMove>` but `ISlidingBlockDomain` does not; `LaneSlideDomain.ReachableOffsets`
+  takes the state by value where the rest of the domain takes `in`.
+- **Naming:** the hash is `GetHashCode64`, `ILaneState.Hash()`, `PushState.Hash` and `ZobristHash`; the board size is `Width` and `Height` in a topology but
+  `Columns` and `Rows` elsewhere; a piece is `PieceId`, `Piece`, `Vehicle` or `Case`; `OccupancyMask` and `TotalOccupancy` are the same thing;
+  `PolyominoDomain.GoalGroupId`, `GoalAnchor` and `GoalPosition` repeat `Goal`; the `NPuzzle` types are 4x4 only behind general names.
+- **Weak typing:** `GridDirection` is a set of `int` constants rather than an enum, and `EquivalenceGroup<TBitboard>` is a public record whose invariants
+  (a normalised mask, valid anchors) can be broken with `new` or `with`.
+- **After the first release:** set `PackageValidationBaselineVersion` so a breaking change is caught when the package is packed, and check
+  `IsAotCompatible` with a trimmed or native-AOT publish of a small sample.
+
+## 7. Other libraries
 
 There is no generic, reusable sliding-block library on NuGet, npm, PyPI or crates.io that this engine could be measured against: what exists solves one
 puzzle. The nearest peers are Soko-only (`sokoenginepy`, the Rust crate `soukoban`), Spaans's 2009 BFS/A*/IDA* solver ([spec-cs.pdf](https://www.pvv.ntnu.no/%7Espaans/spec-cs.pdf)) and Fogleman's Rush Hour work. What they have that this engine lacks is pattern databases,
@@ -74,6 +115,7 @@ whole-space analysis and generation, and Soko deadlock detection. The engine's r
 
 ## Suggested order
 
+0. Before 1.0: the API tidy-ups in section 6, since they are the changes that would break users later.
 1. Move metrics and weighted edges, then bidirectional BFS.
 2. A state-space explorer and distance tables.
 3. A size-generic N-puzzle with linear conflict and pattern databases.
