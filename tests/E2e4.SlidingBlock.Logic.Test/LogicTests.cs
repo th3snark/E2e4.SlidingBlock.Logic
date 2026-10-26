@@ -22,7 +22,7 @@ public class LsbNormalizationTests
     [InlineData("J", 0x31UL)]
     public void KnownBaseMasksOnFiveWideBoard(string shape, ulong expected)
     {
-        var (mask, _) = PuzzleTopologyBuilder.Normalize(Shapes[shape], 5);
+        var (mask, _) = PuzzleTopologyBuilder<ulong>.Normalize(Shapes[shape], 5);
         Assert.Equal(expected, mask);
     }
 
@@ -37,7 +37,7 @@ public class LsbNormalizationTests
     {
         for (int width = 3; width <= 8; width++)
         {
-            var (mask, rel) = PuzzleTopologyBuilder.Normalize(Shapes[shape], width);
+            var (mask, rel) = PuzzleTopologyBuilder<ulong>.Normalize(Shapes[shape], width);
             Assert.Equal(1UL, mask & 1UL);
             Assert.Equal(0, BitOperations.TrailingZeroCount(mask));
             Assert.Equal((0, 0), rel[0]);
@@ -104,7 +104,7 @@ public class ReachableAnchorsTests
     public void FindsCornerHookDestinations()
     {
         // 1x1 piece at (0,0), block at (0,1): (1,1) is reachable only by going down then right.
-        ulong reach = PolyominoState.FindReachableAnchors(0, 1UL, All9, 1UL << 1, W);
+        ulong reach = PolyominoState<ulong>.FindReachableAnchors(0, 1UL, All9, 1UL << 1, W);
         Assert.True((reach >> 4 & 1) != 0, "hook destination (1,1)");
         Assert.True((reach >> 3 & 1) != 0);
         Assert.True((reach >> 8 & 1) != 0);
@@ -115,7 +115,7 @@ public class ReachableAnchorsTests
     [Fact]
     public void RejectsBlockedCorners()
     {
-        ulong reach = PolyominoState.FindReachableAnchors(0, 1UL, All9, (1UL << 1) | (1UL << 3), W);
+        ulong reach = PolyominoState<ulong>.FindReachableAnchors(0, 1UL, All9, (1UL << 1) | (1UL << 3), W);
         Assert.Equal(0UL, reach);
     }
 
@@ -123,23 +123,23 @@ public class ReachableAnchorsTests
     public void DoesNotWrapAcrossRows()
     {
         // 3-wide board, piece at (0,2); +1 shift would wrap to (1,0) which must not be reached directly.
-        ulong reach = PolyominoState.FindReachableAnchors(2, 1UL, All9, (1UL << 5) | (1UL << 1), W);
+        ulong reach = PolyominoState<ulong>.FindReachableAnchors(2, 1UL, All9, (1UL << 5) | (1UL << 1), W);
         Assert.Equal(0UL, reach);
     }
 
     [Fact]
     public void RespectsAllowedDirections()
     {
-        ulong horiz = PolyominoState.FindReachableAnchors(0, 1UL, All9, 0, W, AllowedDirections.Horizontal);
+        ulong horiz = PolyominoState<ulong>.FindReachableAnchors(0, 1UL, All9, 0, W, AllowedDirections.Horizontal);
         Assert.Equal(0b110UL, horiz);
     }
 
     [Fact]
     public void HookPathIsContiguousAndAvoidsObstacles()
     {
-        var path = PolyominoState.ReconstructHookPath(0, 4, 1UL, All9, 1UL << 1, W);
+        var path = PolyominoState<ulong>.ReconstructHookPath(0, 4, 1UL, All9, 1UL << 1, W);
         Assert.Equal(new[] { 0, 3, 4 }, path);
-        Assert.Empty(PolyominoState.ReconstructHookPath(0, 4, 1UL, All9, (1UL << 1) | (1UL << 3), W));
+        Assert.Empty(PolyominoState<ulong>.ReconstructHookPath(0, 4, 1UL, All9, (1UL << 1) | (1UL << 3), W));
     }
 
     [Fact]
@@ -156,7 +156,7 @@ public class ReachableAnchorsTests
             for (ulong r = reach; r != 0; r &= r - 1)
             {
                 int target = BitOperations.TrailingZeroCount(r);
-                var path = PolyominoState.ReconstructHookPath(a, target, g.BaseMask, g.ValidAnchorsMask, other, 5);
+                var path = PolyominoState<ulong>.ReconstructHookPath(a, target, g.BaseMask, g.ValidAnchorsMask, other, 5);
                 Assert.Equal(a, path[0]);
                 Assert.Equal(target, path[^1]);
                 foreach (int step in path) Assert.Equal(0UL, (g.BaseMask << step) & other);
@@ -235,7 +235,7 @@ internal static class TestPuzzles
         "HHH...",
     ];
 
-    public static LaneSlideDomain RushHourDefault() =>
+    public static LaneSlideDomain<LaneState16, ulong> RushHourDefault() =>
         LaneSlide.RushHour(RushHourDefaultMap, LaneVehicle.SymbolsOf(RushHourDefaultMap, leadingLabels: "X"));
 }
 
@@ -389,8 +389,8 @@ public class LabSpecTests
         // 3x3 board, 1x1 piece at 0, blocker at 4: 8 is reachable only by turning a corner.
         const ulong All9 = 0x1FFUL;
         var parent = new sbyte[9];
-        ulong reach = PolyominoState.FindReachableAnchors(0, 1UL, All9, 1UL << 4, 3, parent, out ulong straight, out ulong hook);
-        Assert.Equal(reach, PolyominoState.FindReachableAnchors(0, 1UL, All9, 1UL << 4, 3));
+        ulong reach = PolyominoState<ulong>.FindReachableAnchors(0, 1UL, All9, 1UL << 4, 3, parent, out ulong straight, out ulong hook);
+        Assert.Equal(reach, PolyominoState<ulong>.FindReachableAnchors(0, 1UL, All9, 1UL << 4, 3));
         Assert.Equal(straight | hook, reach);
         Assert.Equal(0UL, straight & hook);
         Assert.NotEqual(0UL, straight & (1UL << 2)); // same row, no corner
@@ -400,7 +400,7 @@ public class LabSpecTests
         rebuilt.Add(0);
         rebuilt.Reverse();
         Assert.Equal(5, rebuilt.Count); // 0, 1, 2, 5, 8 or 0, 3, 6, 7, 8
-        Assert.Equal(PolyominoState.ReconstructHookPath(0, 8, 1UL, All9, 1UL << 4, 3).Count, rebuilt.Count);
+        Assert.Equal(PolyominoState<ulong>.ReconstructHookPath(0, 8, 1UL, All9, 1UL << 4, 3).Count, rebuilt.Count);
     }
 
     [Fact]
@@ -413,9 +413,9 @@ public class LabSpecTests
         var g = t.Groups[t.Pieces[a].GroupId];
         ulong other = s.OccupancyMask ^ (g.BaseMask << 7);
         var parent = new sbyte[25];
-        PolyominoState.FindReachableAnchors(7, g.BaseMask, g.ValidAnchorsMask, other, 5, parent, out _, out ulong hook);
+        PolyominoState<ulong>.FindReachableAnchors(7, g.BaseMask, g.ValidAnchorsMask, other, 5, parent, out _, out ulong hook);
         Assert.NotEqual(0UL, hook & (1UL << 17));
-        Assert.Equal([7, 8, 13, 18, 17], PolyominoState.ReconstructHookPath(7, 17, g.BaseMask, g.ValidAnchorsMask, other, 5));
+        Assert.Equal([7, 8, 13, 18, 17], PolyominoState<ulong>.ReconstructHookPath(7, 17, g.BaseMask, g.ValidAnchorsMask, other, 5));
     }
 
     [Fact]
@@ -488,7 +488,7 @@ public class PolyominoGoalPositionTests
     {
         var lab = LabPuzzles.CreateLab2();
         var topo = lab.Topology;
-        var domain = new PolyominoDomain(topo, lab.InitialState);
+        var domain = new PolyominoDomain<ulong>(topo, lab.InitialState);
         Assert.NotNull(domain.GoalPosition);
         Assert.Equal(-1, domain.GoalGroupId);
         Assert.True(domain.IsGoal(domain.InitialState));
@@ -507,7 +507,7 @@ public class PolyominoGoalPositionTests
         var lab = LabPuzzles.CreateLab2();
         var topo = lab.Topology;
         // Only group 0 (the L) has to match: moving the T (group 1) does not matter, moving the L does.
-        var domain = new PolyominoDomain(topo, lab.InitialState, matchedGroups: 1UL << 0);
+        var domain = new PolyominoDomain<ulong>(topo, lab.InitialState, matchedGroups: 1UL << 0);
         Assert.True(domain.IsGoal(lab.InitialState));
         Assert.True(domain.IsGoal(lab.InitialState.WithPieceMoved(topo, 1, 22)));
         Assert.False(domain.IsGoal(lab.InitialState.WithPieceMoved(topo, 0, 22)));
@@ -516,13 +516,13 @@ public class PolyominoGoalPositionTests
     [Fact]
     public void StateHoldsSixteenGroups()
     {
-        var b = PuzzleTopology.CreateBuilder(4, 4);
-        for (int g = 0; g < GroupAnchorBuffer.Length; g++)
+        var b = PuzzleTopology<ulong>.CreateBuilder(4, 4);
+        for (int g = 0; g < GroupAnchorBuffer<ulong>.Length; g++)
         {
             int group = b.AddGroup($"g{g}", [(0, 0)]);
             b.AddPiece(group, $"p{g}", g);
         }
-        var state = PolyominoState.FromTopology(b.Build());
-        for (int g = 0; g < GroupAnchorBuffer.Length; g++) Assert.Equal(1UL << g, state.GroupAnchorsOf(g));
+        var state = PolyominoState<ulong>.FromTopology(b.Build());
+        for (int g = 0; g < GroupAnchorBuffer<ulong>.Length; g++) Assert.Equal(1UL << g, state.GroupAnchorsOf(g));
     }
 }

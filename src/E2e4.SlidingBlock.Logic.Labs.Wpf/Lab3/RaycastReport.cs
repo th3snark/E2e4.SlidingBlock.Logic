@@ -10,7 +10,7 @@ public static class RaycastReport
     private static readonly string[] Names = ["Left", "Right", "Up", "Down"];
 
     /// <summary>The glide of <paramref name="pieceId"/> in every direction its group allows; a glide of zero steps means the piece cannot move that way.</summary>
-    public static IReadOnlyList<RaycastMoveResult> For(PolyominoDomain domain, in PolyominoState state, int pieceId)
+    public static IReadOnlyList<RaycastMoveResult> For(PolyominoDomain<ulong> domain, in PolyominoState<ulong> state, int pieceId)
     {
         var topo = domain.Topology;
         Span<RaycastTrace<ulong>> traces = stackalloc RaycastTrace<ulong>[6];

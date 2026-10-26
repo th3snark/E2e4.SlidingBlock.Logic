@@ -10,7 +10,7 @@ for the N-puzzle, Klotski, Rush Hour and polyominoes. `PROMPT.md` is the origina
 ## Layout
 
 - `src/E2e4.SlidingBlock.Logic/` — the library (`net10.0`): `ISlidingBlockDomain` (`Abstractions.cs`), the per-puzzle state and domain types
-  (`NPuzzle.cs`, `Klotski.cs`, `RushHour.cs`, `LaneSlide.cs` (`LaneSlideDomain<TState, TBitboard>`: vehicles sliding along lanes, up to 64 on 128 cells; any distance can be one move), `Push.cs` (Soko warehouse pushing with free walking, dead squares and a heuristic), `Polyomino.cs`, `PolyominoGoal.cs`), `PuzzleTopology`, `GridGeometry.cs`, `CompositeMove.cs` (rotation, push, carry; see `docs/extended-mechanics.md`), `Aliases.cs` (the `ulong` names of the generic polyomino types), `PuzzleSolver`, `PuzzleWalk`, `PlaySession` and `BitboardExtensions`.
+  (`NPuzzle.cs`, `Klotski.cs`, `RushHour.cs`, `LaneSlide.cs` (`LaneSlideDomain<TState, TBitboard>`: vehicles sliding along lanes, up to 64 on 128 cells; any distance can be one move), `Push.cs` (Soko warehouse pushing with free walking, dead squares and a heuristic), `Polyomino.cs`, `PolyominoGoal.cs`), `PuzzleTopology`, `GridGeometry.cs`, `CompositeMove.cs` (rotation, push, carry; see `docs/extended-mechanics.md`), `PuzzleSolver`, `PuzzleWalk`, `PlaySession` and `BitboardExtensions`.
 - `src/E2e4.SlidingBlock.Logic.Labs.Wpf/` — WPF application with the three laboratories (`Lab1`, `Lab2`, `Lab3`). `LabPuzzles.cs` holds the layouts, goals and colours they play (plain C#, linked into the test project along with `Lab3/RaycastReport.cs`). Private, not packed; it sets
   `EnableWindowsTargeting` so the Linux CI runners can build it.
 - `tests/E2e4.SlidingBlock.Logic.Test/` — xUnit tests (net10.0).

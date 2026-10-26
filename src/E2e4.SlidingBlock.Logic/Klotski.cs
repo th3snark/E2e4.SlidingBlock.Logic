@@ -18,7 +18,7 @@ public readonly struct KlotskiState : IEquatable<KlotskiState>
 {
     private readonly KlotskiAnchorBuffer _anchors;
 
-    public KlotskiState(PuzzleTopology topology)
+    public KlotskiState(PuzzleTopology<ulong> topology)
     {
         if (topology.Pieces.Count > 10) throw new ArgumentException("At most 10 pieces.");
         if (topology.Groups.Count > 7) throw new ArgumentException("At most 7 shape classes fit in 3 bits.");
@@ -49,14 +49,14 @@ public readonly struct KlotskiState : IEquatable<KlotskiState>
     public int AnchorOf(int pieceId) => _anchors[pieceId];
 
     /// <summary>Moves a piece (already validated) and updates occupancy and the shape key with XORs.</summary>
-    public KlotskiState WithPieceMoved(PuzzleTopology topology, int pieceId, int newAnchor) =>
+    public KlotskiState WithPieceMoved(PuzzleTopology<ulong> topology, int pieceId, int newAnchor) =>
         WithPieceMoved(topology, SpreadCells(topology.GroupTable[topology.PieceTable[pieceId].GroupId].BaseMask), pieceId, newAnchor);
 
     /// <summary>
-    /// As <see cref="WithPieceMoved(PuzzleTopology,int,int)"/> with the spread base mask of the piece's group already at hand:
+    /// As <see cref="WithPieceMoved(PuzzleTopology{ulong},int,int)"/> with the spread base mask of the piece's group already at hand:
     /// spreading a mask moved by a cells equals spreading it and shifting by 3a, so no bit loop is needed.
     /// </summary>
-    internal KlotskiState WithPieceMoved(PuzzleTopology topology, ulong spreadBase, int pieceId, int newAnchor)
+    internal KlotskiState WithPieceMoved(PuzzleTopology<ulong> topology, ulong spreadBase, int pieceId, int newAnchor)
     {
         int g = topology.PieceTable[pieceId].GroupId, old = _anchors[pieceId];
         ulong baseMask = topology.GroupTable[g].BaseMask;
@@ -91,7 +91,7 @@ public readonly record struct KlotskiMove(byte Piece, byte From, byte To);
 public sealed class KlotskiDomain : ISlidingBlockDomain<KlotskiState, KlotskiMove>
 {
     /// <summary>The puzzle is solved when piece <paramref name="masterPieceId"/> sits on <paramref name="goalAnchor"/>.</summary>
-    public KlotskiDomain(PuzzleTopology topology, int masterPieceId, int goalAnchor)
+    public KlotskiDomain(PuzzleTopology<ulong> topology, int masterPieceId, int goalAnchor)
     {
         Topology = topology;
         MasterPieceId = masterPieceId;
@@ -103,7 +103,7 @@ public sealed class KlotskiDomain : ISlidingBlockDomain<KlotskiState, KlotskiMov
 
     private readonly ulong[] _spreadBase;
 
-    public PuzzleTopology Topology { get; }
+    public PuzzleTopology<ulong> Topology { get; }
     public int MasterPieceId { get; }
     public int GoalAnchor { get; }
     public KlotskiState InitialState { get; }
@@ -128,7 +128,7 @@ public sealed class KlotskiDomain : ISlidingBlockDomain<KlotskiState, KlotskiMov
         return n;
     }
 
-    private static int TryAdd(Span<KlotskiMove> buf, int n, int piece, int from, int to, EquivalenceGroup g, ulong other, bool edgeOk)
+    private static int TryAdd(Span<KlotskiMove> buf, int n, int piece, int from, int to, EquivalenceGroup<ulong> g, ulong other, bool edgeOk)
     {
         // ValidAnchorsMask replaces sentinel walls; (to >= 0) guards the shift for negative targets.
         if (!edgeOk || to < 0 || to > 63) return n;

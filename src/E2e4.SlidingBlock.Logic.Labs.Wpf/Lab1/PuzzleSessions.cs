@@ -376,9 +376,9 @@ public sealed class KlotskiSession : PuzzleSession<KlotskiState, KlotskiMove>
 // ---------------------------------------------------------------------------------------------------------------
 public sealed class RushHourSession : PuzzleSession<LaneState16, LaneMove>
 {
-    private readonly LaneSlideDomain _r;
+    private readonly LaneSlideDomain<LaneState16, ulong> _r;
 
-    private RushHourSession(LaneSlideDomain d) : base(d)
+    private RushHourSession(LaneSlideDomain<LaneState16, ulong> d) : base(d)
     {
         _r = d;
         Reset();

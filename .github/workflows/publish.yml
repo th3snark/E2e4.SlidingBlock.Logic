@@ -11,7 +11,7 @@ on:
 jobs:
   publish:
     environment: nuget  # waits for the owner's approval before the job (and so the nuget.org login) runs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read

@@ -17,10 +17,10 @@ public partial class Lab2View : UserControl
     private const double Cell = 88;
     private const int N = 5;
 
-    private readonly PolyominoDomain _d = LabPuzzles.CreateLab2();
+    private readonly PolyominoDomain<ulong> _d = LabPuzzles.CreateLab2();
     private readonly Dictionary<int, Canvas> _visuals = [];
-    private PuzzleTopology _t = null!;
-    private PolyominoState _state;
+    private PuzzleTopology<ulong> _t = null!;
+    private PolyominoState<ulong> _state;
     private int _selected = -1;
     private bool _busy;
     private int _moves;
@@ -31,7 +31,7 @@ public partial class Lab2View : UserControl
     private readonly Stack<Entry> _history = new();
 
     /// <summary>One undoable action: the state before it and the piece trajectories it animated.</summary>
-    private sealed record Entry(PolyominoState Before, int MovesBefore, List<(int piece, IReadOnlyList<int> path)> Jobs);
+    private sealed record Entry(PolyominoState<ulong> Before, int MovesBefore, List<(int piece, IReadOnlyList<int> path)> Jobs);
 
     public Lab2View()
     {
@@ -101,7 +101,7 @@ public partial class Lab2View : UserControl
     }
 
     /// <summary>Merged outline of a polyomino with its anchor cell at the local origin (cells inset only on exposed sides).</summary>
-    private static Geometry FootprintGeometry(EquivalenceGroup g, double inset = 2)
+    private static Geometry FootprintGeometry(EquivalenceGroup<ulong> g, double inset = 2)
     {
         var set = g.RelativeCells.ToHashSet();
         Geometry? union = null;
@@ -232,7 +232,7 @@ public partial class Lab2View : UserControl
         _ => Color.FromRgb(0xFB, 0x92, 0x3C),
     };
 
-    private (ulong other, EquivalenceGroup g, int anchor) Context(int pieceId)
+    private (ulong other, EquivalenceGroup<ulong> g, int anchor) Context(int pieceId)
     {
         var g = _t.Groups[_t.Pieces[pieceId].GroupId];
         int a = _state.AnchorOf(pieceId);
@@ -280,7 +280,7 @@ public partial class Lab2View : UserControl
         for (ulong r = reach; r != 0; r &= r - 1)
         {
             int target = BitOperations.TrailingZeroCount(r);
-            var path = PolyominoState.ReconstructHookPath(a, target, g.BaseMask, g.ValidAnchorsMask, other, N, g.Directions);
+            var path = PolyominoState<ulong>.ReconstructHookPath(a, target, g.BaseMask, g.ValidAnchorsMask, other, N, g.Directions);
             if (path.Count < 2) continue;
             string kind = Classify(path);
             var color = KindColor(kind);
@@ -352,7 +352,7 @@ public partial class Lab2View : UserControl
         _hoverPath = null;
     }
 
-    private string AnchorReason(EquivalenceGroup g, int anchor)
+    private string AnchorReason(EquivalenceGroup<ulong> g, int anchor)
     {
         int ar = anchor / N, ac = anchor % N;
         var sb = new StringBuilder();
@@ -443,7 +443,7 @@ public partial class Lab2View : UserControl
         return sb.ToString();
     }
 
-    private ulong RecomputedHash(in PolyominoState state) => state.ComputeZobrist(_t);
+    private ulong RecomputedHash(in PolyominoState<ulong> state) => state.ComputeZobrist(_t);
 
     private void MoveSelected(int target, IReadOnlyList<int> path)
     {
@@ -493,7 +493,7 @@ public partial class Lab2View : UserControl
         var m = buf[Random.Shared.Next(n)];
         _selected = m.PieceId;
         var (other, g, a) = Context(m.PieceId);
-        MoveSelected(m.TargetAnchor, PolyominoState.ReconstructHookPath(a, m.TargetAnchor, g.BaseMask, g.ValidAnchorsMask, other, N, g.Directions));
+        MoveSelected(m.TargetAnchor, PolyominoState<ulong>.ReconstructHookPath(a, m.TargetAnchor, g.BaseMask, g.ValidAnchorsMask, other, N, g.Directions));
     }
 
     /// <summary>Moves the 1x1 block A above the wall and clears the right-hand side, so reaching anchor 17 needs a 4-step hook around the wall.</summary>
@@ -636,7 +636,7 @@ public partial class Lab2View : UserControl
             var piece = _t.Pieces[_selected];
             ulong shifted = g.BaseMask << a, valid = g.ValidAnchorsMask;
             var parent = new sbyte[N * N];
-            ulong reach = PolyominoState.FindReachableAnchors(a, g.BaseMask, valid, other, N, parent, out ulong straight, out ulong hook, g.Directions);
+            ulong reach = PolyominoState<ulong>.FindReachableAnchors(a, g.BaseMask, valid, other, N, parent, out ulong straight, out ulong hook, g.Directions);
             string offsets = string.Join("  ", g.RelativeCells.Select(c => $"({c.dRow},{c.dCol})->{N * c.dRow + c.dCol}"));
             sb.AppendLine(CultureInfo.InvariantCulture, $"Piece                 {piece.Label}  (PieceId {piece.PieceId})  {g.Name}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"EquivalenceGroupId    {g.GroupId}");

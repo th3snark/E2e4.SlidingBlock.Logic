@@ -11,7 +11,6 @@
 
   <ItemGroup>
     <Compile Include="..\..\src\E2e4.SlidingBlock.Logic.Labs.Wpf\LabPuzzles.cs" Link="LabPuzzles.cs" />
-    <Compile Include="..\..\src\E2e4.SlidingBlock.Logic\Aliases.cs" Link="Aliases.cs" />
     <ProjectReference Include="..\..\src\E2e4.SlidingBlock.Logic\E2e4.SlidingBlock.Logic.csproj" />
   </ItemGroup>
 

@@ -1,8 +1,8 @@
 # Extended polyomino mechanics
 
 The polyomino types are generic over the bitboard: `PuzzleTopology<TBitboard>`, `PolyominoState<TBitboard>`, `PolyominoDomain<TBitboard>`
-with `TBitboard` = `ulong` (up to 64 cells) or `UInt128` (up to 128 cells). `Aliases.cs` keeps the short `ulong` names (`PuzzleTopology`,
-`PolyominoState`, ...) for 64-bit boards; link it into a project that uses them.
+with `TBitboard` = `ulong` (up to 64 cells) or `UInt128` (up to 128 cells). Write the type argument out (`PolyominoDomain<ulong>`), or add your own
+`global using PolyominoDomain = E2e4.SlidingBlock.Logic.PolyominoDomain<ulong>;` for 64-bit boards.
 
 | Feature | Where | Idea |
 |---------|-------|------|

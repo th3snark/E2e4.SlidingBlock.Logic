@@ -4,14 +4,14 @@ namespace E2e4.SlidingBlock.Logic.Test;
 
 internal static class Lab3Helpers
 {
-    public static CompositeMove[] MovesOf(LabPuzzles.Lab3Mode mode, PolyominoState s, int pieceId)
+    public static CompositeMove[] MovesOf(LabPuzzles.Lab3Mode mode, PolyominoState<ulong> s, int pieceId)
     {
         var buffer = new CompositeMove[mode.Domain.MaxMoves];
         int n = mode.Domain.GenerateMoves(s, buffer);
         return buffer.Take(n).Where(m => m.AsSpan()[0].PieceId == pieceId).ToArray();
     }
 
-    public static PolyominoState Play(LabPuzzles.Lab3Mode mode, PolyominoState s, int pieceId, int direction) =>
+    public static PolyominoState<ulong> Play(LabPuzzles.Lab3Mode mode, PolyominoState<ulong> s, int pieceId, int direction) =>
         mode.Domain.ApplyMove(s, MovesOf(mode, s, pieceId).Single(m => m.DirectionIndex == direction));
 
     public static void AssertSolvable(LabPuzzles.Lab3Mode mode)
@@ -28,7 +28,7 @@ public class Lab3RotationTests
 {
     private const int Master = 0, BlockerA = 1;
 
-    private static CompositeMove? Rotation(LabPuzzles.Lab3Mode mode, PolyominoState s, bool clockwise)
+    private static CompositeMove? Rotation(LabPuzzles.Lab3Mode mode, PolyominoState<ulong> s, bool clockwise)
     {
         var g = mode.Domain.Topology.Groups[s.GroupOf(Master)];
         int next = clockwise ? g.NextCwGroupId : g.NextCcwGroupId;

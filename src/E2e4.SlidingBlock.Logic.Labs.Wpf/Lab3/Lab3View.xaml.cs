@@ -19,7 +19,7 @@ public partial class Lab3View : UserControl
     private const int Bits = N * N;
 
     private readonly LabPuzzles.Lab3Mode[] _modes = [LabPuzzles.CreateLab3Rotation(), LabPuzzles.CreateLab3Carrier(), LabPuzzles.CreateLab3Ice()];
-    private readonly PlaySession<PolyominoState, CompositeMove>[]? _sessions;
+    private readonly PlaySession<PolyominoState<ulong>, CompositeMove>[]? _sessions;
     private readonly string[] _xor = ["No action yet.", "No action yet.", "No action yet."];
     private readonly string[] _lastTable = ["", "", ""];
     private readonly ulong[] _lastCluster = new ulong[3];
@@ -32,14 +32,14 @@ public partial class Lab3View : UserControl
     public Lab3View()
     {
         InitializeComponent();
-        _sessions = [.. _modes.Select(m => new PlaySession<PolyominoState, CompositeMove>(m.Domain, m.Domain.InitialState))];
+        _sessions = [.. _modes.Select(m => new PlaySession<PolyominoState<ulong>, CompositeMove>(m.Domain, m.Domain.InitialState))];
         LoadMode(0);
     }
 
     private LabPuzzles.Lab3Mode M => _modes[_mode];
-    private PuzzleTopology T => M.Domain.Topology;
-    private PlaySession<PolyominoState, CompositeMove> S => _sessions![_mode];
-    private PolyominoState State => S.State;
+    private PuzzleTopology<ulong> T => M.Domain.Topology;
+    private PlaySession<PolyominoState<ulong>, CompositeMove> S => _sessions![_mode];
+    private PolyominoState<ulong> State => S.State;
 
     private static Point Pos(int anchor) => new(anchor % N * Cell, anchor / N * Cell);
     private static Point Center(int anchor) => new(anchor % N * Cell + Cell / 2, anchor / N * Cell + Cell / 2);
@@ -131,7 +131,7 @@ public partial class Lab3View : UserControl
     }
 
     /// <summary>Merged outline of a polyomino with its anchor cell at the local origin (cells inset only on exposed sides).</summary>
-    private static Geometry FootprintGeometry(EquivalenceGroup g, double inset = 2)
+    private static Geometry FootprintGeometry(EquivalenceGroup<ulong> g, double inset = 2)
     {
         var set = g.RelativeCells.ToHashSet();
         Geometry? union = null;
@@ -251,9 +251,9 @@ public partial class Lab3View : UserControl
         return null;
     }
 
-    private static ulong FootprintOf(PuzzleTopology t, PieceDelta d) => t.Groups[d.NewGroupId].BaseMask << d.NewAnchor;
+    private static ulong FootprintOf(PuzzleTopology<ulong> t, PieceDelta d) => t.Groups[d.NewGroupId].BaseMask << d.NewAnchor;
 
-    private IReadOnlyList<int> PathFor(PolyominoState before, PieceDelta d, int moveCount)
+    private IReadOnlyList<int> PathFor(PolyominoState<ulong> before, PieceDelta d, int moveCount)
     {
         if (d.OldGroupId != d.NewGroupId) return [d.OldAnchor];
         if (moveCount == 1 && T.Groups[d.OldGroupId].SlidePhysics == SlidePhysics.ContinuousFloodFill)
@@ -590,7 +590,7 @@ public partial class Lab3View : UserControl
         return l.Count == 0 ? "-" : string.Join(",", l);
     }
 
-    private ulong RecomputedHash(in PolyominoState state) => state.ComputeZobrist(T);
+    private ulong RecomputedHash(in PolyominoState<ulong> state) => state.ComputeZobrist(T);
 
     private string Derivation(CompositeMove move, ulong previous, ulong result)
     {
@@ -699,7 +699,7 @@ public partial class Lab3View : UserControl
         _ => $"glider on anchor {M.Goal.GoalAnchor}",
     };
 
-    private string ExtraReadout(EquivalenceGroup g, int anchor, ulong pieceMask)
+    private string ExtraReadout(EquivalenceGroup<ulong> g, int anchor, ulong pieceMask)
     {
         var sb = new StringBuilder();
         switch (_mode)

@@ -35,9 +35,9 @@ public class GoldenTests
         return h ^ (ulong)seen.Count;
     }
 
-    internal static PolyominoDomain FeatureDomain()
+    internal static PolyominoDomain<ulong> FeatureDomain()
     {
-        var b = PuzzleTopology.CreateBuilder(5, 5);
+        var b = PuzzleTopology<ulong>.CreateBuilder(5, 5);
         b.AddWall(2, 2);
         b.AddDiode(1, 3, 0b0010);
         b.AddPressurePlate(1UL << 20, 1UL << 7);
@@ -50,7 +50,7 @@ public class GoldenTests
         b.AddPiece(high, "u", 13);
         b.AddPiece(tall, "t", 15);
         b.AddPiece(horiz, "g", 24);
-        return new PolyominoDomain(b.Build(), dom, 18);
+        return new PolyominoDomain<ulong>(b.Build(), dom, 18);
     }
 
     internal static PolyominoDomain<UInt128> WideDomain()
@@ -65,16 +65,16 @@ public class GoldenTests
         return new PolyominoDomain<UInt128>(b.Build(), dom, 0);
     }
 
-    internal static PolyominoDomain HexDomain()
+    internal static PolyominoDomain<ulong> HexDomain()
     {
-        var b = PuzzleTopology.CreateBuilder(4, 4, GridGeometry.HexagonalAxial);
+        var b = PuzzleTopology<ulong>.CreateBuilder(4, 4, GridGeometry.HexagonalAxial);
         b.AddWall(1, 1);
         int one = b.AddGroup("one", [(0, 0)]);
         int dom = b.AddGroup("domino", [(0, 0), (0, 1)]);
         b.AddPiece(one, "a", 0);
         b.AddPiece(one, "b", 15);
         b.AddPiece(dom, "d", 9);
-        return new PolyominoDomain(b.Build(), dom, 0);
+        return new PolyominoDomain<ulong>(b.Build(), dom, 0);
     }
 
     public static TheoryData<string, ulong> Expected => new()
@@ -112,7 +112,7 @@ public class GoldenTests
 
 
     /// <summary>Reachable sets, straight/hook split, parent maps and animated paths from several positions of the Lab 2 and feature boards.</summary>
-    private static ulong PathFingerprint(PolyominoDomain domain)
+    private static ulong PathFingerprint(PolyominoDomain<ulong> domain)
     {
         var buffer = new PolyominoMove[domain.MaxMoves];
         var state = domain.InitialState;
@@ -129,7 +129,7 @@ public class GoldenTests
                 var g = topo.Groups[state.GroupOf(p.PieceId)];
                 int a = state.AnchorOf(p.PieceId);
                 ulong other = state.OccupancyMask ^ (g.BaseMask << a);
-                ulong reach = PolyominoState.FindReachableAnchors(a, g.BaseMask, g.ValidAnchorsMask, other, topo.Width, parent, out ulong straight, out ulong hook, g.Directions);
+                ulong reach = PolyominoState<ulong>.FindReachableAnchors(a, g.BaseMask, g.ValidAnchorsMask, other, topo.Width, parent, out ulong straight, out ulong hook, g.Directions);
                 h = (h ^ reach ^ (straight << 1) ^ (hook << 2)) * 1099511628211UL;
                 for (int c = 0; c < topo.CellCount; c++) h = (h ^ (ulong)(byte)parent[c]) * 1099511628211UL;
             }
