@@ -1,0 +1,5 @@
+Copyright (c) 2026 GitHub: th3snark (E2e4).
+
+E2e4.SlidingBlock.Logic is released under the MIT licence, see LICENSE. It has no package dependencies.
+
+The tests use no recorded data: the puzzles are the classic public ones (N-puzzle, Klotski, Rush Hour) and positions written for the tests.

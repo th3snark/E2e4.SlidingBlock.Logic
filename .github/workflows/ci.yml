@@ -1,0 +1,60 @@
+name: CI
+
+# Manual only, to save Actions minutes: `gh workflow run ci.yml --ref <branch>` (Windows minutes cost double).
+on:
+  workflow_dispatch:
+    inputs:
+      ubuntu-26:
+        description: Also test on ubuntu-26.04
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.ubuntu-26 && '["ubuntu-24.04","ubuntu-26.04","windows-latest"]' || '["ubuntu-24.04","windows-latest"]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: 10.0.x
+          cache: true
+          cache-dependency-path: Directory.Packages.props
+      - name: Check formatting
+        if: runner.os == 'Windows'
+        run: dotnet format whitespace E2e4.SlidingBlock.Logic.slnx --verify-no-changes
+      - name: Check type keywords
+        if: runner.os == 'Windows'
+        run: dotnet format style E2e4.SlidingBlock.Logic.slnx --verify-no-changes --diagnostics IDE0049 --severity warn
+      - name: Test
+        run: dotnet test E2e4.SlidingBlock.Logic.slnx --configuration Release
+      - name: Check for vulnerable packages
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          dotnet list E2e4.SlidingBlock.Logic.slnx package --vulnerable --include-transitive 2>&1 | tee vulnerable.txt
+          if grep -q 'has the following vulnerable packages' vulnerable.txt; then
+            echo 'A dependency has a known vulnerability.'
+            exit 1
+          fi
+      - name: Pack
+        run: dotnet pack src/E2e4.SlidingBlock.Logic/E2e4.SlidingBlock.Logic.csproj --configuration Release --no-build --output artifacts
+      - name: No package dependencies (and so no GPL) in the package
+        if: runner.os == 'Linux'
+        run: |
+          if unzip -p artifacts/E2e4.SlidingBlock.Logic.*.nupkg E2e4.SlidingBlock.Logic.nuspec | grep '<dependency '; then
+            echo "The library must have no package dependencies."
+            exit 1
+          fi

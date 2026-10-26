@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Title>E2e4 Sliding Block Logic</Title>
+    <Product>E2e4 Sliding Block Logic</Product>
+    <Description>Bitboard engine with allocation-free move generation, and solvers (BFS, A*, IDA*), for sliding block puzzles: N-puzzle, Klotski, Rush Hour, Soko pushing and polyominoes.</Description>
+    <PackageTags>sliding-puzzle;sliding-block;n-puzzle;klotski;rush-hour;sokoban;polyomino;bitboard;solver</PackageTags>
+    <PackageReleaseNotes>See https://github.com/th3snark/E2e4.SlidingBlock.Logic/releases for what changed in each version.</PackageReleaseNotes>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageProjectUrl>https://github.com/th3snark/E2e4.SlidingBlock.Logic</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/th3snark/E2e4.SlidingBlock.Logic</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <EnablePackageValidation>true</EnablePackageValidation>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\assets\icon.png" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- nuget.org renders neither raw HTML nor relative paths, and shows images only from allowed hosts (raw.githubusercontent.com is one).
+       The packed README is a copy whose icon <img> is a Markdown image on a raw URL pinned to the release tag, and whose repo-relative links are
+       absolute links to that tag (GitHub keeps the original). -->
+  <Target Name="PackReadme" BeforeTargets="_GetPackageFiles;GenerateNuspec">
+    <PropertyGroup>
+      <RepoBlob>https://github.com/th3snark/E2e4.SlidingBlock.Logic/blob/v$(Version)/</RepoBlob>
+      <RepoRaw>https://raw.githubusercontent.com/th3snark/E2e4.SlidingBlock.Logic/v$(Version)/</RepoRaw>
+      <PackedReadme>$(MSBuildProjectDirectory)/$(IntermediateOutputPath)nuget/README.md</PackedReadme>
+      <PackedReadmeText>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../../README.md'))</PackedReadmeText>
+      <PackedReadmeText>$([System.Text.RegularExpressions.Regex]::Replace('$(PackedReadmeText)', '(?m)^&lt;img src="([^"]+)" alt="([^"]*)"[^\r\n]*', '![$2]($(RepoRaw)$1)'))</PackedReadmeText>
+      <PackedReadmeText>$([System.Text.RegularExpressions.Regex]::Replace('$(PackedReadmeText)', '\]\((?!https?:|#)([^)]+)\)', ']($(RepoBlob)$1)'))</PackedReadmeText>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(PackedReadme)" Lines="$([MSBuild]::Escape('$(PackedReadmeText)'))" Overwrite="true" />
+    <ItemGroup>
+      <None Include="$(PackedReadme)" Pack="true" PackagePath="\" />
+    </ItemGroup>
+  </Target>
+
+</Project>

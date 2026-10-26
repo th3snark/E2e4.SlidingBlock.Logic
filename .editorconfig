@@ -1,0 +1,51 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+# Every file uses file-scoped namespaces; CI checks it with dotnet format style (the compiler does not report IDE0049).
+csharp_style_namespace_declarations = file_scoped:warning
+# Predefined type keywords (int, string) rather than framework names (Int32, String); the build enforces it.
+dotnet_style_predefined_type_for_locals_parameters_members = true
+dotnet_style_predefined_type_for_member_access = true
+dotnet_diagnostic.IDE0049.severity = warning
+
+# AnalysisLevel is latest-recommended (Directory.Build.props). These rules are downgraded to suggestions because
+# acting on them would cost more than it gains here:
+# - CS1591: documentation is required on the library's public API (a warning, hence an error, in the folder section below) but not elsewhere.
+# - CA1711, CA1707: naming conventions that clash with ...EventHandler delegates and xUnit Test_Names.
+# - CA1861: constant array arguments, which only occur in test data.
+# - CA1822, CA1859: members kept as instance members / abstract return types on purpose.
+# - CA1000: the generic bitboard types expose their factories and flood fills as statics. CA1051: CompositeMove is a plain move record with public fields.
+dotnet_diagnostic.CS1591.severity = suggestion
+dotnet_diagnostic.CA1711.severity = suggestion
+dotnet_diagnostic.CA1707.severity = suggestion
+dotnet_diagnostic.CA1861.severity = suggestion
+dotnet_diagnostic.CA1822.severity = suggestion
+dotnet_diagnostic.CA1859.severity = suggestion
+dotnet_diagnostic.CA1000.severity = suggestion
+dotnet_diagnostic.CA1051.severity = suggestion
+
+# Interfaces start with I.
+dotnet_naming_rule.interfaces_begin_with_i.severity = suggestion
+dotnet_naming_rule.interfaces_begin_with_i.symbols = interfaces
+dotnet_naming_rule.interfaces_begin_with_i.style = begins_with_i
+dotnet_naming_symbols.interfaces.applicable_kinds = interface
+dotnet_naming_style.begins_with_i.required_prefix = I
+dotnet_naming_style.begins_with_i.capitalization = pascal_case
+
+[src/E2e4.SlidingBlock.Logic/**.cs]
+dotnet_diagnostic.CS1591.severity = warning
+
+[*.{csproj,props,targets,proj,nuspec,config,slnx,yml}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

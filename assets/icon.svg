@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The E2e4.SlidingBlock.Logic package icon: the E2e4 dark frame, a Klotski-style sliding block board (a large 2x2 block, tall and wide
+     blocks, two empty squares left to slide into) and the same Logic badge as E2e4.Chess.Logic (a 3x3 bitboard fragment), so it
+     reads as part of the E2e4 family. Only rect and circle elements with fill and fill-opacity are used, so Build-Icon.ps1 can
+     rasterise it with WPF. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect x="0" y="0" width="256" height="256" rx="44" fill="#4a3426" />
+  <rect x="28" y="28" width="200" height="200" rx="8" fill="#2b1f17" />
+  <rect x="31" y="31" width="44" height="94" rx="7" fill="#769656" />
+  <rect x="81" y="31" width="94" height="94" rx="9" fill="#c0392b" />
+  <rect x="181" y="31" width="44" height="94" rx="7" fill="#769656" />
+  <rect x="31" y="131" width="44" height="44" rx="7" fill="#eeeed2" />
+  <rect x="81" y="131" width="94" height="44" rx="7" fill="#f6f669" />
+  <rect x="181" y="131" width="44" height="44" rx="7" fill="#eeeed2" />
+  <rect x="31" y="181" width="44" height="44" rx="7" fill="#eeeed2" />
+  <!-- Badge: E2e4.Chess.Logic badge (Logic) -->
+  <circle cx="208" cy="208" r="40" fill="#4a3426" />
+  <circle cx="208" cy="208" r="34" fill="#1f9d8a" />
+  <rect x="192.5" y="192.5" width="9" height="9" rx="1.5" fill="#ffffff" />
+  <rect x="203.5" y="192.5" width="9" height="9" rx="1.5" fill="#ffffff" fill-opacity="0.35" />
+  <rect x="214.5" y="192.5" width="9" height="9" rx="1.5" fill="#ffffff" />
+  <rect x="192.5" y="203.5" width="9" height="9" rx="1.5" fill="#ffffff" fill-opacity="0.35" />
+  <rect x="203.5" y="203.5" width="9" height="9" rx="1.5" fill="#ffffff" />
+  <rect x="214.5" y="203.5" width="9" height="9" rx="1.5" fill="#ffffff" fill-opacity="0.35" />
+  <rect x="192.5" y="214.5" width="9" height="9" rx="1.5" fill="#ffffff" />
+  <rect x="203.5" y="214.5" width="9" height="9" rx="1.5" fill="#ffffff" fill-opacity="0.35" />
+  <rect x="214.5" y="214.5" width="9" height="9" rx="1.5" fill="#ffffff" />
+</svg>
