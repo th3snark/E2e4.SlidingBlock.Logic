@@ -96,4 +96,23 @@ public class ShuntingMapTests
         Assert.Throws<ArgumentException>(() => ShuntingMap.Parse(Fork, "EE"));
         Assert.Throws<ArgumentException>(() => ShuntingMap.Parse(Fork, "E.W"));
     }
+
+    [Fact]
+    public void SeveralGoalLinesLetGroupsShareSlots()
+    {
+        string[] map =
+        [
+            "track 3",
+            "join 0.1 1.0",
+            "join 1.1 2.0",
+            "start EW.",
+            "goal .EE",
+            "goal .WW",
+        ];
+        var domain = ShuntingMap.CreateDomain<ulong>(map, "EW", engines: "E");
+
+        var solution = new PuzzleSolver().SolveDijkstra(domain, domain.InitialState);
+
+        Assert.Equal(1, ShuntingCost.Primary(solution!.Cost));
+    }
 }

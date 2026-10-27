@@ -27,7 +27,7 @@ public sealed record ShuntingLayout(ShuntingTrack Track, IReadOnlyList<ShuntingG
 /// <item><term><c>turntable 1,2 0,1</c></term><description>a turntable whose bridge is the listed slots and whose alignments are numbered from 0; the second list says for each alignment whether the bridge lies turned round (1) or not (0).</description></item>
 /// <item><term><c>join 0.1 1.0</c></term><description>joins two slot ends; a third word <c>@T.A</c> makes the join exist only in alignment A of turntable T.</description></item>
 /// <item><term><c>start E.WW..</c></term><description>one character per slot: the symbol of the piece standing there, or the empty symbol.</description></item>
-/// <item><term><c>goal ....W.</c></term><description>the same, for the slots a group must end on; groups left out are free.</description></item>
+/// <item><term><c>goal ....W.</c></term><description>the same, for the slots a group must end on; groups left out are free. Several <c>goal</c> lines add up, which lets two groups share slots.</description></item>
 /// <item><term><c>front E 0</c></term><description>the end each piece of a group faces at the start, in slot order (default 1).</description></item>
 /// <item><term><c>heading W</c></term><description>makes a wagon group track which way it faces.</description></item>
 /// <item><term><c>allow W 0,1,2</c></term><description>the only slots a group may enter.</description></item>
@@ -92,7 +92,8 @@ public static class ShuntingMap
     {
         private ShuntingTrackBuilder? _track;
         private int _slots;
-        private string? _start, _goal;
+        private string? _start;
+        private readonly List<string> _goals = [];
         private readonly Dictionary<char, int[]> _fronts = [];
         private readonly Dictionary<char, int[]> _allowed = [];
         private readonly HashSet<char> _heading = [];
@@ -137,7 +138,7 @@ public static class ShuntingMap
                     break;
                 case "goal":
                     Expect(words, 2);
-                    _goal = Diagram(words[1]);
+                    _goals.Add(Diagram(words[1]));
                     break;
                 case "front":
                     Expect(words, 3);
@@ -204,13 +205,10 @@ public static class ShuntingMap
                 });
             }
             var goals = new List<ShuntingGroupGoal>();
-            if (_goal is not null)
+            for (int g = 0; g < symbols.Length; g++)
             {
-                for (int g = 0; g < symbols.Length; g++)
-                {
-                    int[] at = Slots(_goal, symbols[g]);
-                    if (at.Length > 0) goals.Add(new ShuntingGroupGoal(g, at));
-                }
+                int[] at = [.. _goals.SelectMany(goal => Slots(goal, symbols[g])).Distinct().Order()];
+                if (at.Length > 0) goals.Add(new ShuntingGroupGoal(g, at));
             }
             return new ShuntingLayout(_track.Build(), groups, new ShuntingGoal(goals) { Fronts = _faces }, _align);
         }
