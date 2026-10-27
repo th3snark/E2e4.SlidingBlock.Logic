@@ -109,3 +109,14 @@ public interface ISlidingBlockDomain<TState, TMove> where TState : struct, IEqua
     /// <summary>A 64-bit hash of the position; equal positions give equal hashes.</summary>
     ulong GetHashCode64(in TState state);
 }
+
+/// <summary>
+/// A domain whose moves have different costs, for puzzles that do not count every move as one (for example a railway engine run, which counts
+/// once however many slots it covers). The cost may depend on the position the move starts from, so anything it needs, such as the engine that
+/// moved last, must be part of <typeparamref name="TState"/>. Only the weighted solvers read it; BFS, A* and IDA* still count every move as one.
+/// </summary>
+public interface IWeightedDomain<TState, TMove> : ISlidingBlockDomain<TState, TMove> where TState : struct, IEquatable<TState>
+{
+    /// <summary>The cost of <paramref name="move"/> played from <paramref name="state"/>; never negative. Costs of a path add up.</summary>
+    long MoveCost(in TState state, in TMove move);
+}
