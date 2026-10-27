@@ -150,4 +150,24 @@ internal static class Fixtures
         var goal = new PolyominoDomain<ulong>(b.Build(), glider, 20);
         return new Mode(goal, new CompositeDomain<ulong>(goal));
     }
+
+    // ---- Shunting -------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// A small yard: a main line 0-4, a siding 5-7 forking off slot 2, an engine behind two wagons, and the goal of getting wagon A to the end of
+    /// the main line.
+    /// </summary>
+    public static ShuntingDomain<ulong> CreateYard() => ShuntingMap.CreateDomain<ulong>(
+    [
+        "track 8",
+        "join 0.1 1.0",
+        "join 1.1 2.0",
+        "join 2.1 3.0",
+        "join 3.1 4.0",
+        "join 2.1 5.0",
+        "join 5.1 6.0",
+        "join 6.1 7.0",
+        "start EAB.....",
+        "goal ....A...",
+    ], "EAB", engines: "E");
 }
