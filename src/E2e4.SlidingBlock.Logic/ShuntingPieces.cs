@@ -27,6 +27,21 @@ public sealed record ShuntingGroup(string Name, bool IsEngine, IReadOnlyList<int
 
     /// <summary>True if the goal or the rules depend on which way the pieces face. Always true for engines.</summary>
     public bool TrackHeading { get; init; }
+
+    /// <summary>False for a wagon that has lost its couplers: it can be pushed but never pulled. True by default.</summary>
+    public bool CanBePulled { get; init; } = true;
+
+    /// <summary>
+    /// Groups with the same non-negative unit number are permanently joined: an engine never pulls part of such a unit and leaves the rest behind.
+    /// The default, -1, means the group is in no unit.
+    /// </summary>
+    public int Unit { get; init; } = -1;
+
+    /// <summary>For an engine: false if it has no coupler at its front, so it cannot pull anything while it drives rear first. True by default.</summary>
+    public bool FrontCoupler { get; init; } = true;
+
+    /// <summary>For an engine: the most pieces besides itself it may push and pull together in one step; null means no limit.</summary>
+    public int? MaxCarried { get; init; }
 }
 
 /// <summary>The slots a group must end on: every piece of group <paramref name="Group"/> must stand on one of <paramref name="Slots"/>.</summary>

@@ -31,6 +31,10 @@ public sealed record ShuntingLayout(ShuntingTrack Track, IReadOnlyList<ShuntingG
 /// <item><term><c>front E 0</c></term><description>the end each piece of a group faces at the start, in slot order (default 1).</description></item>
 /// <item><term><c>heading W</c></term><description>makes a wagon group track which way it faces.</description></item>
 /// <item><term><c>allow W 0,1,2</c></term><description>the only slots a group may enter.</description></item>
+/// <item><term><c>pushonly W</c></term><description>wagons of this group have no couplers: they can be pushed but never pulled.</description></item>
+/// <item><term><c>joined 123</c></term><description>the listed groups are permanently joined into one unit.</description></item>
+/// <item><term><c>nofrontcoupler E</c></term><description>the engine cannot pull anything while it drives rear first.</description></item>
+/// <item><term><c>carries E 1</c></term><description>the engine pushes and pulls at most this many pieces besides itself.</description></item>
 /// <item><term><c>faces 3 0</c></term><description>a goal: the piece on slot 3 faces end 0.</description></item>
 /// <item><term><c>align 0,1</c></term><description>the starting alignment of each turntable.</description></item>
 /// </list>
@@ -92,6 +96,9 @@ public static class ShuntingMap
         private readonly Dictionary<char, int[]> _fronts = [];
         private readonly Dictionary<char, int[]> _allowed = [];
         private readonly HashSet<char> _heading = [];
+        private readonly HashSet<char> _pushOnly = [], _noFrontCoupler = [];
+        private readonly List<string> _joined = [];
+        private readonly Dictionary<char, int> _carries = [];
         private readonly List<ShuntingFrontGoal> _faces = [];
         private int[]? _align;
 
@@ -144,6 +151,24 @@ public static class ShuntingMap
                     Expect(words, 3);
                     _allowed[Symbol(words[1])] = Ints(words[2]);
                     break;
+                case "pushonly":
+                    Expect(words, 2);
+                    _pushOnly.Add(Symbol(words[1]));
+                    break;
+                case "nofrontcoupler":
+                    Expect(words, 2);
+                    _noFrontCoupler.Add(Symbol(words[1]));
+                    break;
+                case "carries":
+                    Expect(words, 3);
+                    _carries[Symbol(words[1])] = Int(words[2]);
+                    break;
+                case "joined":
+                    Expect(words, 2);
+                    foreach (char c in words[1]) Symbol(c.ToString());
+                    if (words[1].Length < 2) throw new ArgumentException("A joined unit needs at least two groups.");
+                    _joined.Add(words[1]);
+                    break;
                 case "faces":
                     Expect(words, 3);
                     _faces.Add(new ShuntingFrontGoal(Int(words[1]), Int(words[2])));
@@ -172,6 +197,10 @@ public static class ShuntingMap
                     StartFronts = _fronts.TryGetValue(symbol, out var fronts) ? fronts : null,
                     Allowed = _allowed.TryGetValue(symbol, out var allowed) ? allowed : null,
                     TrackHeading = _heading.Contains(symbol),
+                    CanBePulled = !_pushOnly.Contains(symbol),
+                    FrontCoupler = !_noFrontCoupler.Contains(symbol),
+                    MaxCarried = _carries.TryGetValue(symbol, out int carried) ? carried : null,
+                    Unit = _joined.FindIndex(unit => unit.Contains(symbol)),
                 });
             }
             var goals = new List<ShuntingGroupGoal>();

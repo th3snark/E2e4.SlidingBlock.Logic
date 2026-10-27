@@ -50,6 +50,19 @@ unpacks them.
 
 A turntable turn also leaves every engine at rest.
 
+## Optional rules
+
+Hordern's variations are properties of a group, set on `ShuntingGroup` (or by keyword in the text format):
+
+| Property | Text keyword | Effect |
+|----------|--------------|--------|
+| `CanBePulled = false` | `pushonly W` | A wagon without couplers: it can be pushed, never pulled. |
+| `Unit = n` | `joined 123` | Groups with the same unit are permanently joined; an engine never pulls part of a unit and leaves the rest behind. |
+| `FrontCoupler = false` | `nofrontcoupler E` | An engine with no front coupler cannot pull anything while it drives rear first. |
+| `MaxCarried = n` | `carries E 1` | An engine pushes and pulls at most `n` pieces besides itself in one step. |
+
+A turntable turn that would split a permanent unit between the bridge and the track is not checked.
+
 ## Solving
 
 Use `PuzzleSolver.SolveDijkstra` (or `SolveWeightedAStar` with a lower bound on the remaining cost). The cost of a result is `SolveResult.Cost`:
@@ -75,6 +88,6 @@ goal ....A...
 
 ## Not covered
 
-Pieces longer than one slot (a long engine is modelled as coupled unit pieces), pushes round a closed loop, an admissible heuristic for the weighted
+Pieces longer than one slot (a long engine is modelled as coupled unit pieces), pushes round a closed loop, turns that split a unit, an admissible heuristic for the weighted
 A*, and the book's own layouts. Whether the details of each Hordern puzzle (which engine may enter which siding, what a move is) match this model is
 checked against the book where the puzzle is implemented, not here.

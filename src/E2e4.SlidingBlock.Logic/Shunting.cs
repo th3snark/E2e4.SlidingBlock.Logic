@@ -30,6 +30,10 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
     private readonly ShuntingGroup[] _groups;
     private readonly int[] _engines;
     private readonly bool[] _tracked;
+    private readonly bool[] _pullable;
+    private readonly int[] _unit;
+    private readonly bool[] _frontCoupler;
+    private readonly int[] _maxCarried;
     private readonly TBitboard[] _allowed;
     private readonly TBitboard[] _goalSlots;
     private readonly bool[] _hasGoal;
@@ -67,6 +71,10 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
         _groups = [.. groups];
 
         _tracked = new bool[_groups.Length];
+        _pullable = new bool[_groups.Length];
+        _unit = new int[_groups.Length];
+        _frontCoupler = new bool[_groups.Length];
+        _maxCarried = new int[_groups.Length];
         _allowed = new TBitboard[_groups.Length];
         var engines = new List<int>();
         for (int g = 0; g < _groups.Length; g++)
@@ -79,6 +87,12 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
                 engines.Add(g);
             }
             _tracked[g] = group.IsEngine || group.TrackHeading;
+            _pullable[g] = group.CanBePulled;
+            _unit[g] = group.Unit;
+            _frontCoupler[g] = group.FrontCoupler;
+            if (group.Unit < -1) throw new ArgumentException($"Group {g} has unit {group.Unit}; use -1 for none.", nameof(groups));
+            if (group.MaxCarried is < 0) throw new ArgumentException($"Group {g} may carry {group.MaxCarried} pieces.", nameof(groups));
+            _maxCarried[g] = group.MaxCarried ?? int.MaxValue;
             _allowed[g] = group.Allowed is null ? AllSlots(slots) : MaskOf(group.Allowed, slots, $"Group {g} allows", nameof(groups));
         }
         _engines = [.. engines];
@@ -237,6 +251,36 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
 
     /// <inheritdoc/>
     public ulong GetHashCode64(in ShuntingState<TBitboard> state) => state.Hash;
+
+    /// <summary>
+    /// The pieces <paramref name="move"/> shifts when played from <paramref name="state"/>, as (from, to) slot pairs. For an engine step these are the
+    /// engine, the pieces it pushes and the pieces it pulls, each one slot on; for a turntable turn, the pieces on the bridge when it turns round
+    /// (none if the turn only changes the alignment). A caller that follows individual pieces, as a view that animates them does, needs this
+    /// because pieces of one group are not told apart by the state.
+    /// </summary>
+    /// <exception cref="ArgumentException">The move does not belong to this position.</exception>
+    public IReadOnlyList<(int From, int To)> MovedPieces(in ShuntingState<TBitboard> state, in ShuntingMove move)
+    {
+        var pairs = new List<(int, int)>();
+        if (move.IsTurn)
+        {
+            int turntable = move.Turntable;
+            if (_track.IsInverted(turntable, state.Alignment(turntable)) == _track.IsInverted(turntable, move.Alignment)) return pairs;
+            var bridge = _track.BridgeSlots(turntable);
+            for (int i = 0; i < bridge.Count; i++)
+            {
+                if (Grid.Has(state.OccupancyBits, bridge[i])) pairs.Add((bridge[i], bridge[bridge.Count - 1 - i]));
+            }
+            return pairs;
+        }
+        Span<int> from = stackalloc int[2 * MaxTrain];
+        Span<int> to = stackalloc int[2 * MaxTrain];
+        Span<int> exit = stackalloc int[2 * MaxTrain];
+        Span<int> enter = stackalloc int[2 * MaxTrain];
+        int count = Trace(state, move, from, to, exit, enter);
+        for (int i = 0; i < count; i++) pairs.Add((from[i], to[i]));
+        return pairs;
+    }
 
     /// <inheritdoc/>
     public long MoveCost(in ShuntingState<TBitboard> state, in ShuntingMove move)
@@ -466,13 +510,13 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
                 else
                 {
                     FLen = depth + 1;
-                    if (FrontIsLegal())
+                    if (FrontIsLegal() && FLen - 1 <= D._maxCarried[Engine])
                     {
-                        Add(new ShuntingMove((byte)Engine, (byte)Lead, (byte)FLen, 0, FChoices, 0));
+                        if (CutAllowed(FSlot[0], 1 - Lead)) Add(new ShuntingMove((byte)Engine, (byte)Lead, (byte)FLen, 0, FChoices, 0));
                         RChoices = 0;
                         BSlot[0] = FSlot[0];
                         BTrail[0] = 1 - Lead;
-                        Rear(0);
+                        if (CanPull()) Rear(0);
                     }
                 }
                 Visited &= ~Bit(e.To);
@@ -488,6 +532,22 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
             return true;
         }
 
+        /// <summary>An engine without a front coupler cannot pull what stands behind its front end, which is the case when it drives rear first.</summary>
+        private readonly bool CanPull() =>
+            D._frontCoupler[Engine] || 1 - Lead != (Grid.Has(S.HeadingBits, FSlot[0]) ? 1 : 0);
+
+        /// <summary>The train may stop after <paramref name="slot"/> unless a piece of the same permanent unit stands directly behind it.</summary>
+        private readonly bool CutAllowed(int slot, int trailEnd)
+        {
+            int unit = D._unit[D.GroupAt(S, slot)];
+            if (unit < 0) return true;
+            foreach (var e in D._track.EdgesFrom(slot, trailEnd))
+            {
+                if (D.IsActive(S, e) && Grid.Has(S.OccupancyBits, e.To) && D._unit[D.GroupAt(S, e.To)] == unit) return false;
+            }
+            return true;
+        }
+
         /// <summary>BSlot[depth] is the last slot of the train; BTrail[depth] is the end of it that faces the pieces behind.</summary>
         private void Rear(int depth)
         {
@@ -497,11 +557,13 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
                 if (!D.IsActive(S, e)) continue;
                 int c = choice++;
                 if (!Grid.Has(S.OccupancyBits, e.To) || Grid.Has(Visited, e.To) || depth + 1 > MaxTrain) continue;
-                if (!Grid.Has(D._allowed[D.GroupAt(S, e.To)], BSlot[depth])) continue;
+                int behind = D.GroupAt(S, e.To);
+                if (!D._pullable[behind] || FLen - 1 + depth + 1 > D._maxCarried[Engine]) continue;
+                if (!Grid.Has(D._allowed[behind], BSlot[depth])) continue;
                 BSlot[depth + 1] = e.To;
                 BTrail[depth + 1] = 1 - e.ToEnd;
                 RChoices = (RChoices & ~(3UL << (2 * depth))) | ((ulong)c << (2 * depth));
-                Add(new ShuntingMove((byte)Engine, (byte)Lead, (byte)FLen, (byte)(depth + 1), FChoices, RChoices));
+                if (CutAllowed(e.To, 1 - e.ToEnd)) Add(new ShuntingMove((byte)Engine, (byte)Lead, (byte)FLen, (byte)(depth + 1), FChoices, RChoices));
                 Visited |= Bit(e.To);
                 Rear(depth + 1);
                 Visited &= ~Bit(e.To);
