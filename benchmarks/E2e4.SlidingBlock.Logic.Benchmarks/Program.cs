@@ -30,11 +30,13 @@ static IEnumerable<(string, Action)> Scenarios()
     var p15 = Fixtures.CreatePuzzle15();
     var ice = Fixtures.CreateIce().Domain;
     var carrier = Fixtures.CreateCarrier().Domain;
+    var yard = Fixtures.CreateYard();
     var hard15 = PuzzleWalk.RandomWalk(p15, p15.Goal, 200, new Random(3));
 
     yield return ("BFS Klotski (81 moves)", () => solver.SolveBfs(klotski, klotski.InitialState));
     yield return ("BFS Rush Hour", () => solver.SolveBfs(rush, rush.InitialState));
     yield return ("BFS Lab 2 polyominoes", () => solver.SolveBfs(lab2, lab2.InitialState));
+    yield return ("Dijkstra shunting yard", () => solver.SolveDijkstra(yard, yard.InitialState));
     yield return ("A* 15-puzzle", () => solver.SolveAStar(p15, PuzzleWalk.RandomWalk(p15, p15.Goal, 40, new Random(15)), p15.ManhattanDistance));
     yield return ("IDA* 15-puzzle", () => new PuzzleSolver { MaxNodes = 20_000_000 }.SolveIdaStar(p15, hard15, p15.ManhattanDistance));
     yield return ("GenerateMoves Klotski x200k", () => Generate(klotski, 200_000));
@@ -42,6 +44,7 @@ static IEnumerable<(string, Action)> Scenarios()
     yield return ("GenerateMoves Lab 2 x200k", () => Generate(lab2, 200_000));
     yield return ("GenerateMoves Lab 3 ice x200k", () => Generate(ice, 200_000));
     yield return ("GenerateMoves Lab 3 carrier x200k", () => Generate(carrier, 200_000));
+    yield return ("GenerateMoves shunting yard x200k", () => Generate(yard, 200_000));
 }
 
 static void Generate<TState, TMove>(ISlidingBlockDomain<TState, TMove> domain, int times) where TState : struct, IEquatable<TState>

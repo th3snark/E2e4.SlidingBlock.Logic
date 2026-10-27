@@ -88,6 +88,7 @@ public class GoldenTests
         { "feature", 0x439792F8A66290BCUL },
         { "wide", 0xDD6BCDFED3957A35UL },
         { "hex", 0xB5D8005F5BFF2C2FUL },
+        { "yard", 0xE52449608DDA4C12UL },
     };
 
     private static ulong Compute(string name) => name switch
@@ -102,6 +103,7 @@ public class GoldenTests
         "feature" => Fingerprint(FeatureDomain()),
         "wide" => Fingerprint(WideDomain()),
         "hex" => Fingerprint(HexDomain()),
+        "yard" => Fingerprint(Fixtures.CreateYard()),
         _ => throw new ArgumentOutOfRangeException(nameof(name)),
     };
 
@@ -166,6 +168,7 @@ public class GoldenTests
         { "bfs-lab2", 0xD63223CDB8327D2FUL },
         { "astar-npuzzle", 0xF00C854DAC1F1E27UL },
         { "ida-npuzzle", 0x43F69ED55F58B8D5UL },
+        { "dijkstra-yard", 0x80843E4D7B204AC8UL },
     };
 
     private static ulong ComputeSolve(string name)
@@ -179,6 +182,7 @@ public class GoldenTests
             case "bfs-lab2": { var d = Fixtures.CreateLab2(); return Fold(solver.SolveBfs(d, d.InitialState)); }
             case "astar-npuzzle": return Fold(solver.SolveAStar(p15, Scrambled(), p15.ManhattanDistance));
             case "ida-npuzzle": return Fold(solver.SolveIdaStar(p15, Scrambled(), p15.ManhattanDistance));
+            case "dijkstra-yard": { var d = Fixtures.CreateYard(); return Fold(solver.SolveDijkstra(d, d.InitialState)); }
             default: throw new ArgumentOutOfRangeException(nameof(name));
         }
     }

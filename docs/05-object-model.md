@@ -122,6 +122,7 @@ deliberately ignores the per-piece anchor buffer; see [section 4](04-zobrist-and
 | `KlotskiDomain` | `KlotskiMove(Piece, From, To)` | one-cell step of a piece (single-step metric) |
 | `LaneSlideDomain<TState, TBitboard>` | `LaneMove(Vehicle, Offset)` | the vehicle slides to `Offset` along its lane, at most `maxStep` cells (1 for Rush Hour) |
 | `PushDomain` | `PushMove(Case, To, PlayerAt)` | one case pushed to `To` in as many pushes as it takes; the storeman's walking is free |
+| `ShuntingDomain<TBitboard>` | `ShuntingMove(Mover, Lead, FrontLength, RearLength, FrontChoices, RearChoices)` | one engine moves one slot, pushing the train ahead and pulling any rear prefix; a turntable turn is a move too; costs come from `IWeightedDomain` (see [shunting](shunting.md)) |
 | `PolyominoDomain` | `PolyominoMove(PieceId, TargetAnchor)` | one turn, including multi-step hooks |
 
 ## 5.5 Solving

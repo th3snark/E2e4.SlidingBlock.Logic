@@ -12,9 +12,10 @@ The first release of the package.
 - Bitboard state structs and rules for the 4x4 N-puzzle (`NPuzzleState`, `NPuzzleDomain`, with Manhattan distance and a solvability test), Klotski
   (`KlotskiState`, `KlotskiDomain`), lane-sliding puzzles of up to 64 vehicles on 128 cells (`LaneSlideDomain<TState, TBitboard>`), Soko pushing
   (`PushDomain`) and polyominoes (`PolyominoDomain<TBitboard>`, `CompositeDomain<TBitboard>`).
+- Railway shunting (Hordern chapter J): `ShuntingTrack`, `ShuntingDomain<TBitboard>` and `ShuntingMap`, with switches, wyes, turntables, clearance masks and engine-run costs.
 - Polyomino mechanics: hex grids, two elevation layers, one-way cells, partitions, pressure plates, three slide physics (single step, flood fill, glide
   until blocked), rotation rings, pushing, carrying and magnetic clusters.
-- `PuzzleSolver`: breadth-first search, A* and IDA*, with cancellation, a node limit and a `SolveStatus` that says whether a search found nothing
+- `PuzzleSolver`: breadth-first search, A* and IDA*, plus Dijkstra and weighted A* for domains with move costs (`IWeightedDomain`), with cancellation, a node limit and a `SolveStatus` that says whether a search found nothing
   because there is no solution or because it hit the limit.
 - `PuzzleWalk` (random walks for solvable shuffles) and `PlaySession<TState, TMove>` (undo, redo and reset).
 - `E2e4.SlidingBlock.Logic.Text`: `TopologyMap`, `LaneDiagram` and `PushMap` read boards, vehicles and warehouses from diagrams with the symbols the

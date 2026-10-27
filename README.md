@@ -32,6 +32,7 @@ Console.WriteLine(new PuzzleSolver().SolveBfs(rushHour, rushHour.InitialState)?.
 - `KlotskiState` and `KlotskiDomain`: Klotski with a canonical shape key, so interchangeable pieces are the same position.
 - `LaneState16`, `LaneState64` and `LaneSlideDomain<TState, TBitboard>`: vehicles as lane offsets packed 4 bits each (up to 64 vehicles on 128 cells); Rush Hour moves one cell, garage puzzles slide any distance.
 - `PushState` and `PushDomain`: Soko warehouse pushing, where the storeman's walking is free, with dead squares and a heuristic.
+- `ShuntingTrack` and `ShuntingDomain<TBitboard>`: railway shunting (Hordern chapter J), with engines that push and pull wagons over switches, wyes and turntables, solved with `SolveDijkstra`; `ShuntingMap` reads one from text.
 - `PolyominoState` and `PolyominoDomain`: non-rectangular pieces (L, T, J, S, Z, U) on a bitboard, with multi-step corner-hook slides and a
   permutation-invariant Zobrist hash.
 - `PuzzleTopology` and `PuzzleTopologyBuilder`: build a board from relative cell lists, with LSB normalisation and precomputed

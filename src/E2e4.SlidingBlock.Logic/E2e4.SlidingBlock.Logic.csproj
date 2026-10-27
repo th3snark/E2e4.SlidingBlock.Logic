@@ -5,8 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Title>E2e4 Sliding Block Logic</Title>
     <Product>E2e4 Sliding Block Logic</Product>
-    <Description>Bitboard engine with allocation-free move generation, and solvers (BFS, A*, IDA*), for sliding block puzzles: N-puzzle, Klotski, Rush Hour, Soko pushing and polyominoes.</Description>
-    <PackageTags>sliding-puzzle;sliding-block;n-puzzle;klotski;rush-hour;sokoban;polyomino;bitboard;solver</PackageTags>
+    <Description>Bitboard engine with allocation-free move generation, and solvers (BFS, A*, IDA*, Dijkstra), for sliding block puzzles: N-puzzle, Klotski, Rush Hour, Soko pushing, railway shunting and polyominoes.</Description>
+    <PackageTags>sliding-puzzle;sliding-block;n-puzzle;klotski;rush-hour;sokoban;railway-shunting;polyomino;bitboard;solver</PackageTags>
     <PackageReleaseNotes>See https://github.com/th3snark/E2e4.SlidingBlock.Logic/releases for what changed in each version.</PackageReleaseNotes>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
