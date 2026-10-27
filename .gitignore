@@ -427,3 +427,7 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Personal assistant settings (the shared CLAUDE.md is tracked)
+.claude/settings.local.json
+CLAUDE.local.md
