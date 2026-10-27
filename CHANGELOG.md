@@ -3,7 +3,7 @@
 All notable changes are listed here, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/). While the version is below 1.0.0 the public API may still change between minor versions.
 
-## [Unreleased]
+## [0.1.0] - 2026-10-27
 
 The first release of the package.
 
