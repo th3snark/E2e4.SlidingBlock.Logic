@@ -87,7 +87,7 @@ public abstract class PuzzleSession : ObservableObject
 /// <summary>Shared plumbing: state, legal moves and undo history.</summary>
 public abstract class PuzzleSession<TState, TMove> : PuzzleSession
     where TState : struct, IEquatable<TState>
-    where TMove : struct, IEquatable<TMove>
+    where TMove : struct
 {
     private readonly ISlidingBlockDomain<TState, TMove> _domain;
     private readonly PlaySession<TState, TMove> _play;
@@ -184,13 +184,13 @@ public abstract class PuzzleSession<TState, TMove> : PuzzleSession
 public sealed class NPuzzleSession : PuzzleSession<NPuzzleState, NPuzzleMove>
 {
     private readonly NPuzzleDomain _n;
-    private NPuzzleState scrambled;
+    private NPuzzleState _scrambled;
 
     private NPuzzleSession(NPuzzleDomain d) : base(d)
     {
         _n = d;
-        scrambled = PuzzleWalk.RandomWalk(d, d.Goal, 30, new Random(15));
-        ResetTo(scrambled);
+        _scrambled = PuzzleWalk.RandomWalk(d, d.Goal, 30, new Random(15));
+        ResetTo(_scrambled);
     }
 
     public NPuzzleSession() : this(LabPuzzles.CreatePuzzle15()) { }
@@ -202,13 +202,13 @@ public sealed class NPuzzleSession : PuzzleSession<NPuzzleState, NPuzzleMove>
     public override RegisterSpec RegisterLayout => new(4, 16, 8, "nibble per square");
     public override string OccupancyCaption => "non-blank squares (16-bit)";
 
-    public override void Reset() => ResetTo(scrambled);
+    public override void Reset() => ResetTo(_scrambled);
 
     public override void Scramble()
     {
-        scrambled = PuzzleWalk.RandomWalk(_n, _n.Goal, 60, Random.Shared);
+        _scrambled = PuzzleWalk.RandomWalk(_n, _n.Goal, 60, Random.Shared);
         Trace = "New solvable scramble (60-move random walk from the solved board).";
-        ResetTo(scrambled);
+        ResetTo(_scrambled);
     }
 
     public override ulong CellsOfGroup(int group) => 1UL << group;
@@ -301,7 +301,7 @@ public sealed class KlotskiSession : PuzzleSession<KlotskiState, KlotskiMove>
     private static readonly string[] ShapeNames = ["Empty", "1x1", "1x2V", "2x1H", "2x2"];
 
     public override ulong CellsOfGroup(int group) => 1UL << group;
-    public override string PieceMaskName(int pieceId) => $"PieceMasks[{pieceId}]";
+    public override string PieceMaskName(int pieceId) => $"BaseMask << {State.AnchorOf(pieceId)}";
 
     public override GroupInfo GroupInfoFor(int group)
     {
@@ -349,22 +349,21 @@ public sealed class KlotskiSession : PuzzleSession<KlotskiState, KlotskiMove>
         var sb = new StringBuilder();
         sb.Append(CultureInfo.InvariantCulture, $"piece '{piece.Label}' ({g.Name}, shape class {g.GroupId + 1}) anchor {m.From} -> {m.To}\n\n");
         int dr = m.To / t.Width - m.From / t.Width, dc = m.To % t.Width - m.From % t.Width;
-        (string dir, string edgeName, ulong edge, string shift, ulong shifted) = (dr, dc) switch
+        int width = t.Width, column = m.From % width;
+        (string dir, string edgeTest) = (dr, dc) switch
         {
-            (0, -1) => ("left", "LeftColMask", 0x11111UL, ">> 1", pieceMask >> 1),
-            (0, 1) => ("right", "RightColMask", 0x88888UL, "<< 1", pieceMask << 1),
-            (-1, 0) => ("up", "TopRowMask", 0x0000FUL, ">> 4", pieceMask >> 4),
-            _ => ("down", "BottomRowMask", 0xF0000UL, "<< 4", pieceMask << 4),
+            (0, -1) => ("left", $"anchor column > 0  ({column} > 0)"),
+            (0, 1) => ("right", $"anchor column < width - 1  ({column} < {width - 1})"),
+            (-1, 0) => ("up", "no column test; valid[g] keeps the shape on the board"),
+            _ => ("down", "no column test; valid[g] keeps the shape on the board"),
         };
         sb.Append(Row("baseMask[g]", $"0x{g.BaseMask:X}"));
         sb.Append(Row($"pieceMask = base << {m.From}", $"0x{pieceMask:X5}"));
         sb.Append(Row("OccupancyMask", $"0x{before.OccupancyMask:X5}"));
         sb.Append(Row("otherPieces = occ ^ pieceMask", $"0x{other:X5}"));
-        sb.Append(Row($"move {dir}: pieceMask & {edgeName}", $"0x{pieceMask & edge:X5} (== 0 -> in bounds)"));
-        sb.Append(Row($"shiftedMask = pieceMask {shift}", $"0x{shifted:X5}"));
-        sb.Append(Row("otherPieces & shiftedMask", $"0x{other & shifted:X5} (== 0 -> free)"));
+        sb.Append(Row($"move {dir}: edge test", edgeTest));
+        sb.Append(Row($"(valid[g] >> {m.To}) & 1", $"{(g.ValidAnchorsMask >> m.To) & 1}  (1 -> the shape fits at anchor {m.To})"));
         sb.Append(Row($"target = base << {m.To}", $"0x{target:X5}"));
-        sb.Append(Row($"(valid[g] >> {m.To}) & 1", $"{(g.ValidAnchorsMask >> m.To) & 1}"));
         sb.Append(Row("(other & target) == 0", $"0x{other & target:X} -> legal"));
         sb.Append(Row("occ' = occ ^ piece ^ target", $"0x{after.OccupancyMask:X5}"));
         sb.Append(Row($"delta = (spread(old)^spread(new))*{g.GroupId + 1}", $"0x{delta:X15}"));

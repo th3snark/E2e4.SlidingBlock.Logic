@@ -79,10 +79,14 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
     where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>
 {
     private const RoleFlags ClusterRoles = RoleFlags.Pusher | RoleFlags.HollowCarrier | RoleFlags.Magnetic;
+
+    /// <summary>Plays on the topology of <paramref name="goalDomain"/> and is solved when its goal is reached.</summary>
     /// <param name="goalDomain">Supplies the topology and the goal; the initial position is the topology's.</param>
     /// <param name="maxPushDepth">How many pieces deep a push chains: 1 moves only what the pusher touches directly.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="goalDomain"/> is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxPushDepth"/> is below 1.</exception>
     public CompositeDomain(PolyominoDomain<TBitboard> goalDomain, int maxPushDepth = 1)
-        : this(goalDomain.Topology, goalDomain.Goal, maxPushDepth)
+        : this((goalDomain ?? throw new ArgumentNullException(nameof(goalDomain))).Topology, goalDomain.Goal, maxPushDepth)
     {
     }
 
@@ -92,8 +96,13 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
     /// <param name="topology">The board and pieces.</param>
     /// <param name="goal">When the puzzle is solved.</param>
     /// <param name="maxPushDepth">How many pieces deep a push chains: 1 moves only what the pusher touches directly.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="topology"/> or <paramref name="goal"/> is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxPushDepth"/> is below 1.</exception>
     public CompositeDomain(PuzzleTopology<TBitboard> topology, PolyominoGoal<TBitboard> goal, int maxPushDepth = 1)
     {
+        ArgumentNullException.ThrowIfNull(topology);
+        ArgumentNullException.ThrowIfNull(goal);
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxPushDepth, 1);
         Topology = topology;
         Goal = goal;
         MaxPushDepth = maxPushDepth;

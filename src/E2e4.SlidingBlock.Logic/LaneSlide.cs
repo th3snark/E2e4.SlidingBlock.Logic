@@ -150,9 +150,14 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
     /// <param name="goalVehicle">The vehicle that has to reach <paramref name="goalOffset"/>.</param>
     /// <param name="goalOffset">The offset along its lane that solves the puzzle for the goal vehicle.</param>
     /// <param name="maxStep">The most cells a vehicle slides in one move.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="vehicles"/> is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="columns"/>, <paramref name="rows"/> or <paramref name="maxStep"/> is below 1, or the goal vehicle or offset does not exist.</exception>
     /// <exception cref="ArgumentException">A vehicle is malformed, outside the board, in the way of another at the start, or there are too many.</exception>
     public LaneSlideDomain(IReadOnlyList<LaneVehicle> vehicles, int columns, int rows, int goalVehicle, int goalOffset, int maxStep = int.MaxValue)
     {
+        ArgumentNullException.ThrowIfNull(vehicles);
+        ArgumentOutOfRangeException.ThrowIfLessThan(columns, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(rows, 1);
         if (vehicles.Count == 0) throw new ArgumentException("There must be at least one vehicle.", nameof(vehicles));
         if (vehicles.Count > TState.Capacity) throw new ArgumentException($"At most {TState.Capacity} vehicles.", nameof(vehicles));
         if (columns * rows > Grid.BitWidth<TBitboard>()) throw new ArgumentException($"The board has at most {Grid.BitWidth<TBitboard>()} cells.");
@@ -282,7 +287,6 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
         }
         return n;
     }
-
 
     /// <inheritdoc/>
     public TState ApplyMove(in TState state, in LaneMove move) => state.WithOffset(move.Vehicle, move.Offset);

@@ -22,8 +22,8 @@ The inspector has these parts:
   companion **inverse register** (tile -> cell, with `BlankCell = inverse & 0xF`) is shown too;
 - a **mutation delta** list of the groups the last move changed, as `before -> after`, next to the flash on the changed bits;
 - the **occupancy bitboard** as a `0/1` grid with bit indices, plus the hovered or last-moved piece's mask and `otherPieces = occ ^ pieceMask`;
-- a **formula trace** showing the exact bitwise expressions of a move with real operands (nibble XOR mask; Klotski edge-mask and
-  shifted-mask checks; Rush Hour offset extraction, neighbour-bit test and clear-and-OR update). Hovering a legal-move arrow previews
+- a **formula trace** showing the exact bitwise expressions of a move with real operands (nibble XOR mask; Klotski anchor-column,
+  valid-anchor and free-cell checks; Rush Hour offset extraction, neighbour-bit test and clear-and-OR update). Hovering a legal-move arrow previews
   the trace without playing the move.
 
 Hovering a block or cell outlines its cells on the board, the matching register groups and the occupancy bits; hovering a register
