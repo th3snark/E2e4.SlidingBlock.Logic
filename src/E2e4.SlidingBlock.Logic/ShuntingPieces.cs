@@ -7,8 +7,9 @@ public enum ShuntingMetric
     EngineReversals,
 
     /// <summary>
-    /// A move is a change of an engine's direction, as Hordern counts in chapter J: as <see cref="EngineReversals"/>, but an engine setting off
-    /// from rest (at the start, or after a turntable turn) is not a move. Handing over to another engine still counts, and so does a turntable turn.
+    /// A move is a change of an engine's direction, as Hordern counts in chapter J. Each engine remembers the sense it last moved in, under its own
+    /// power or pushed or pulled by another engine: setting off from rest (at the start, or after a turntable turn) is free, and so is handing over
+    /// to another engine or resuming in the same sense. A step costs one for every engine it sends the other way. A turntable turn counts as a move.
     /// </summary>
     DirectionChanges,
 

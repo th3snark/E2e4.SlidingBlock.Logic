@@ -9,7 +9,12 @@ follows [Semantic Versioning](https://semver.org/). While the version is below 1
 
 - Shunting fouling sets: `ShuntingTrackBuilder.AddFoulingSet`, `ShuntingTrack.FoulingSets` and the `foul` keyword in `ShuntingMap`. At most one slot
   of a set may hold a piece, so a wagon left just past a switch blocks the other leg.
-- `ShuntingMetric.DirectionChanges`: Hordern's count of changes of direction, in which an engine setting off from rest is not a move.
+- `ShuntingMetric.DirectionChanges`: Hordern's count of changes of direction. Each engine remembers the sense it last moved in, so setting off from
+  rest, handing over to another engine and resuming in the same sense are free; an engine pushed or pulled back by another changes direction too.
+
+### Fixed
+
+- The `ShuntingMap` documentation said a piece without a `front` line faces end 1; it faces end 0, as `ShuntingGroup.StartFronts` says.
 
 ## [0.1.0] - 2026-10-27
 

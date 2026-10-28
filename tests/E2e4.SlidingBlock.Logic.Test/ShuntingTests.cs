@@ -128,6 +128,42 @@ public class ShuntingTests
         Assert.Equal(0, ShuntingCost.Primary(new PuzzleSolver().SolveDijkstra(domain, domain.InitialState)!.Cost));
     }
 
+    /// <summary>Plays the single-slot step of engine <paramref name="mover"/> through <paramref name="lead"/> that pushes and pulls the given counts, and returns its primary cost.</summary>
+    private static int Step(ShuntingDomain<ulong> domain, ref ShuntingState<ulong> state, int mover, int lead, int front = 1, int rear = 0)
+    {
+        var at = state;
+        var move = Moves(domain, at).Single(m => m.Mover == mover && m.Lead == lead && m.FrontLength == front && m.RearLength == rear);
+        long cost = domain.MoveCost(at, move);
+        state = domain.ApplyMove(at, move);
+        return ShuntingCost.Primary(cost);
+    }
+
+    [Fact]
+    public void UnderDirectionChangesEachEngineKeepsItsOwnDirection()
+    {
+        var domain = new ShuntingDomain<ulong>(Line(10), [Engine(1), new("F", true, [6]) { StartFronts = [1] }], new([]), ShuntingMetric.DirectionChanges);
+        var state = domain.InitialState;
+
+        Assert.Equal(0, Step(domain, ref state, 0, 1));   // E sets off
+        Assert.Equal(0, Step(domain, ref state, 1, 0));   // F sets off the other way: handing over is free
+        Assert.Equal(0, Step(domain, ref state, 0, 1));   // E resumes its own direction
+        Assert.Equal(1, Step(domain, ref state, 0, 0));   // E turns back
+        Assert.Equal(0, Step(domain, ref state, 1, 0));   // F carries on as before
+    }
+
+    [Fact]
+    public void UnderDirectionChangesAnEnginePushedOrPulledBackChangesDirectionToo()
+    {
+        var domain = new ShuntingDomain<ulong>(Line(10), [Engine(2), new("F", true, [4]) { StartFronts = [1] }], new([]), ShuntingMetric.DirectionChanges);
+        var state = domain.InitialState;
+
+        Assert.Equal(0, Step(domain, ref state, 1, 1));               // F sets off to the right
+        Assert.Equal(0, Step(domain, ref state, 0, 1));               // E follows
+        Assert.Equal(0, Step(domain, ref state, 0, 1));
+        Assert.Equal(0, Step(domain, ref state, 0, 1, front: 2));     // E pushes F on the way F was going
+        Assert.Equal(2, Step(domain, ref state, 0, 0, rear: 1));      // E backs and pulls F back: both change direction
+    }
+
     /// <summary>A stem 0-1 and a switch at the far end of slot 1 to two legs, 2-3 and 4-5, whose first slots foul each other.</summary>
     private static ShuntingTrack FouledSwitch(bool fouling)
     {

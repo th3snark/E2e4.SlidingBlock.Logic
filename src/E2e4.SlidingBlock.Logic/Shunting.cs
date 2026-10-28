@@ -43,6 +43,7 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
     private readonly ulong[] _zHead;
     private readonly ulong[] _zAlign;
     private readonly ulong[] _zMomentum;
+    private readonly ulong[] _zEngineSense;
 
     /// <summary>Builds the puzzle from a track, the groups of pieces and where they start, and a goal.</summary>
     /// <param name="track">The track.</param>
@@ -106,7 +107,8 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
         _zHead = new ulong[slots];
         _zAlign = new ulong[ShuntingState<TBitboard>.MaxTurntables * 16];
         _zMomentum = new ulong[_groups.Length * 2];
-        foreach (ulong[] table in new[] { _zSlot, _zHead, _zAlign, _zMomentum })
+        _zEngineSense = new ulong[_groups.Length * 4];
+        foreach (ulong[] table in new[] { _zSlot, _zHead, _zAlign, _zMomentum, _zEngineSense })
         {
             for (int i = 0; i < table.Length; i++) table[i] = Next();
         }
@@ -252,6 +254,13 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
         next.Engine = move.Mover;
         next.SenseBit = (byte)SenseOf(state, move);
         next.Hash ^= _zMomentum[next.Engine * 2 + next.SenseBit];
+        if (Metric == ShuntingMetric.DirectionChanges)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                if (_groups[group[i]].IsEngine) SetEngineSense(ref next, group[i], 1u | ((uint)SenseOf(state, from[i], exit[i]) << 1));
+            }
+        }
         return next;
     }
 
@@ -297,12 +306,47 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
         return Metric switch
         {
             ShuntingMetric.EngineReversals => carriesOn ? ShuntingCost.Pack(0, 0, 1) : ShuntingCost.Pack(1, 1, 1),
-            ShuntingMetric.DirectionChanges => carriesOn ? ShuntingCost.Pack(0, 0, 1) : atRest ? ShuntingCost.Pack(0, 1, 1) : ShuntingCost.Pack(1, 1, 1),
+            ShuntingMetric.DirectionChanges => ShuntingCost.Pack(Reversals(state, move), carriesOn ? 0 : 1, 1),
             _ => ShuntingCost.Pack(0, carriesOn || atRest ? 0 : 1, 1),
         };
     }
 
     private static TBitboard Bit(int slot) => TBitboard.One << slot;
+
+    /// <summary>
+    /// How many engines <paramref name="move"/> sends the other way from their last movement since they were at rest: the engine that drives, and
+    /// any engine it pushes or pulls.
+    /// </summary>
+    private int Reversals(in ShuntingState<TBitboard> state, in ShuntingMove move)
+    {
+        Span<int> from = stackalloc int[2 * MaxTrain];
+        Span<int> to = stackalloc int[2 * MaxTrain];
+        Span<int> exit = stackalloc int[2 * MaxTrain];
+        Span<int> enter = stackalloc int[2 * MaxTrain];
+        int count = Trace(state, move, from, to, exit, enter);
+        int reversals = 0;
+        for (int i = 0; i < count; i++)
+        {
+            int g = GroupAt(state, from[i]);
+            if (!_groups[g].IsEngine) continue;
+            uint code = (state.EngineSenses >> (2 * g)) & 3;
+            if ((code & 1) != 0 && (code >> 1) != (uint)SenseOf(state, from[i], exit[i])) reversals++;
+        }
+        return reversals;
+    }
+
+    /// <summary>The sense in which the piece on <paramref name="slot"/> moves when it leaves through <paramref name="exitEnd"/>: 0 front first, 1 rear first.</summary>
+    private static int SenseOf(in ShuntingState<TBitboard> state, int slot, int exitEnd) =>
+        (Grid.Has(state.HeadingBits, slot) ? 1 : 0) == exitEnd ? 0 : 1;
+
+    /// <summary>Records what engine <paramref name="engine"/> last did: 0 at rest, else 1 plus twice the sense it moved in.</summary>
+    private void SetEngineSense(ref ShuntingState<TBitboard> state, int engine, uint code)
+    {
+        uint old = (state.EngineSenses >> (2 * engine)) & 3;
+        if (old != 0) state.Hash ^= _zEngineSense[engine * 4 + (int)old];
+        if (code != 0) state.Hash ^= _zEngineSense[engine * 4 + (int)code];
+        state.EngineSenses = (state.EngineSenses & ~(3u << (2 * engine))) | (code << (2 * engine));
+    }
 
     /// <summary>True if no fouling set holds more than one piece of <paramref name="occupancy"/>.</summary>
     private bool FoulingClear(TBitboard occupancy)
@@ -491,6 +535,7 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
         if (state.Engine != ShuntingState<TBitboard>.NoEngine) next.Hash ^= _zMomentum[state.Engine * 2 + state.SenseBit];
         next.Engine = ShuntingState<TBitboard>.NoEngine;
         next.SenseBit = 0;
+        foreach (int g in _engines) SetEngineSense(ref next, g, 0);
     }
 
     /// <summary>The recursive search for trains: first the pushed front, then the pulled rear, writing a move for each way to do both.</summary>

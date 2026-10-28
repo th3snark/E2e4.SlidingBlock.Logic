@@ -31,7 +31,8 @@ public readonly record struct ShuntingMove(byte Mover, byte Lead, byte FrontLeng
 
 /// <summary>
 /// A shunting position: which slot each group's pieces stand on, which way the tracked pieces face, how the turntables stand, and which engine
-/// moved last and which way (the momentum, which decides what the next move costs). Pieces of one group are interchangeable.
+/// moved last and which way (the momentum, which decides what the next move costs). Under <see cref="ShuntingMetric.DirectionChanges"/> it also
+/// remembers the sense each engine last drove in. Pieces of one group are interchangeable.
 /// </summary>
 public struct ShuntingState<TBitboard> : IEquatable<ShuntingState<TBitboard>>
     where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>
@@ -50,6 +51,7 @@ public struct ShuntingState<TBitboard> : IEquatable<ShuntingState<TBitboard>>
     internal ulong Alignments;
     internal byte Engine;
     internal byte SenseBit;
+    internal uint EngineSenses;
     internal ulong Hash;
 
     /// <summary>Bit s is set when a piece stands on slot s.</summary>
@@ -73,7 +75,7 @@ public struct ShuntingState<TBitboard> : IEquatable<ShuntingState<TBitboard>>
     /// <inheritdoc/>
     public readonly bool Equals(ShuntingState<TBitboard> other)
     {
-        if (Hash != other.Hash || Engine != other.Engine || SenseBit != other.SenseBit || Alignments != other.Alignments) return false;
+        if (Hash != other.Hash || Engine != other.Engine || SenseBit != other.SenseBit || EngineSenses != other.EngineSenses || Alignments != other.Alignments) return false;
         if (HeadingBits != other.HeadingBits || OccupancyBits != other.OccupancyBits) return false;
         for (int g = 0; g < MaxGroups; g++)
         {
