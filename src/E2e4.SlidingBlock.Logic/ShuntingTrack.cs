@@ -13,7 +13,7 @@ public readonly record struct ShuntingEdge(int To, int ToEnd, int Turntable, int
 /// <summary>
 /// An immutable railway track cut into unit slots, each with two ends (0 and 1). It records which slot end meets which, so switches are just
 /// ends with several edges, and a wye is a connection that joins two ends of the same number. Turntables switch edges on and off by alignment.
-/// Build one with <see cref="ShuntingTrackBuilder"/>.
+/// Fouling sets mark slots that overlap on the ground, such as the two legs just past a switch. Build one with <see cref="ShuntingTrackBuilder"/>.
 /// </summary>
 public sealed class ShuntingTrack
 {
@@ -23,13 +23,15 @@ public sealed class ShuntingTrack
     private readonly ShuntingEdge[][] _edges;
     private readonly int[][] _bridges;
     private readonly bool[][] _inverted;
+    private readonly int[][] _fouling;
 
-    internal ShuntingTrack(int slotCount, ShuntingEdge[][] edges, int[][] bridges, bool[][] inverted)
+    internal ShuntingTrack(int slotCount, ShuntingEdge[][] edges, int[][] bridges, bool[][] inverted, int[][] fouling)
     {
         SlotCount = slotCount;
         _edges = edges;
         _bridges = bridges;
         _inverted = inverted;
+        _fouling = fouling;
     }
 
     /// <summary>The number of slots, numbered from 0.</summary>
@@ -52,6 +54,12 @@ public sealed class ShuntingTrack
     /// alignment to another with a different value reverses whatever stands on the bridge.
     /// </summary>
     public bool IsInverted(int turntable, int alignment) => _inverted[turntable][alignment];
+
+    /// <summary>
+    /// The fouling sets: slots that overlap on the ground, of which at most one may hold a piece at a time. A piece standing just past a switch
+    /// fouls the other leg, so nothing can pass it on that leg.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<int>> FoulingSets => _fouling;
 }
 
 /// <summary>Collects the slots, connections and turntables of a <see cref="ShuntingTrack"/> and checks them.</summary>
@@ -61,6 +69,7 @@ public sealed class ShuntingTrackBuilder
     private readonly List<ShuntingEdge>[] _edges;
     private readonly List<int[]> _bridges = [];
     private readonly List<bool[]> _inverted = [];
+    private readonly List<int[]> _fouling = [];
 
     /// <summary>Starts a track of <paramref name="slotCount"/> slots, numbered from 0, with no connections.</summary>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="slotCount"/> is not between 1 and <see cref="ShuntingTrack.MaxSlots"/>.</exception>
@@ -112,9 +121,27 @@ public sealed class ShuntingTrackBuilder
         return _bridges.Count - 1;
     }
 
+    /// <summary>
+    /// Declares a fouling set: slots that overlap on the ground, such as the first slot of each leg past a switch, of which at most one may hold a
+    /// piece at a time. Moves that would put two pieces in one set are not generated.
+    /// </summary>
+    /// <exception cref="ArgumentException">There are fewer than two slots, a slot is out of range, or a slot is listed twice.</exception>
+    public ShuntingTrackBuilder AddFoulingSet(IReadOnlyList<int> slots)
+    {
+        ArgumentNullException.ThrowIfNull(slots);
+        if (slots.Count < 2) throw new ArgumentException("A fouling set needs at least two slots.", nameof(slots));
+        foreach (int slot in slots)
+        {
+            CheckSlot(slot, nameof(slots));
+            if (slots.Count(s => s == slot) > 1) throw new ArgumentException($"Slot {slot} is in the fouling set twice.", nameof(slots));
+        }
+        _fouling.Add([.. slots]);
+        return this;
+    }
+
     /// <summary>Checks the description and builds the track.</summary>
     public ShuntingTrack Build() =>
-        new(_slotCount, [.. _edges.Select(e => e.ToArray())], [.. _bridges], [.. _inverted]);
+        new(_slotCount, [.. _edges.Select(e => e.ToArray())], [.. _bridges], [.. _inverted], [.. _fouling]);
 
     private ShuntingTrackBuilder Add(int turntable, int alignment, int slotA, int endA, int slotB, int endB)
     {

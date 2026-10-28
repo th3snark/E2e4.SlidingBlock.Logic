@@ -26,6 +26,7 @@ public sealed record ShuntingLayout(ShuntingTrack Track, IReadOnlyList<ShuntingG
 /// <item><term><c>track N</c></term><description>the number of slots; must come first.</description></item>
 /// <item><term><c>turntable 1,2 0,1</c></term><description>a turntable whose bridge is the listed slots and whose alignments are numbered from 0; the second list says for each alignment whether the bridge lies turned round (1) or not (0).</description></item>
 /// <item><term><c>join 0.1 1.0</c></term><description>joins two slot ends; a third word <c>@T.A</c> makes the join exist only in alignment A of turntable T.</description></item>
+/// <item><term><c>foul 3,7</c></term><description>a fouling set: at most one of the listed slots may hold a piece at a time (the legs just past a switch, say).</description></item>
 /// <item><term><c>start E.WW..</c></term><description>one character per slot: the symbol of the piece standing there, or the empty symbol.</description></item>
 /// <item><term><c>goal ....W.</c></term><description>the same, for the slots a group must end on; groups left out are free. Several <c>goal</c> lines add up, which lets two groups share slots.</description></item>
 /// <item><term><c>front E 0</c></term><description>the end each piece of a group faces at the start, in slot order (default 1).</description></item>
@@ -131,6 +132,10 @@ public static class ShuntingMap
                     if (words[3][0] != '@') throw new ArgumentException("The third word must look like @turntable.alignment.");
                     var (turntable, alignment) = End(words[3][1..]);
                     _track!.ConnectWhen(turntable, alignment, sa, ea, sb, eb);
+                    break;
+                case "foul":
+                    Expect(words, 2);
+                    _track!.AddFoulingSet(Ints(words[1]));
                     break;
                 case "start":
                     Expect(words, 2);

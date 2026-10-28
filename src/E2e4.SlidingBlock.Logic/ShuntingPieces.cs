@@ -6,6 +6,12 @@ public enum ShuntingMetric
     /// <summary>A move is one run of an engine in one direction: it counts again when an engine starts, reverses or hands over to another engine. A turntable turn counts as a move too.</summary>
     EngineReversals,
 
+    /// <summary>
+    /// A move is a change of an engine's direction, as Hordern counts in chapter J: as <see cref="EngineReversals"/>, but an engine setting off
+    /// from rest (at the start, or after a turntable turn) is not a move. Handing over to another engine still counts, and so does a turntable turn.
+    /// </summary>
+    DirectionChanges,
+
     /// <summary>Only a turntable turn is a move. Engine runs between turns are free to count, but cost a secondary reversal when an engine starts or reverses.</summary>
     TurntableRotations,
 }
@@ -73,7 +79,7 @@ public static class ShuntingCost
     public static long Pack(int primary, int secondary, int steps) =>
         ((long)primary << PrimaryShift) | ((long)secondary << SecondaryShift) | (long)steps;
 
-    /// <summary>The moves Hordern counts: engine runs or turntable turns.</summary>
+    /// <summary>The moves Hordern counts: engine runs, changes of direction or turntable turns, as the metric says.</summary>
     public static int Primary(long cost) => (int)(cost >> PrimaryShift);
 
     /// <summary>The secondary count: how many times an engine started, reversed or handed over to another engine.</summary>

@@ -14,6 +14,9 @@ application, as for every other domain.
 - Joining two ends of the same number (`Connect(0, 1, 1, 1)`) is the chord of a **wye**. A train that takes it comes out facing the other way round.
 - A **turntable** has a bridge (one or more slots) and several alignments. `ConnectWhen` makes a join exist only in one alignment. An alignment can
   be marked as turned round by 180 degrees: turning to or from it reverses the pieces on the bridge and flips the way they face.
+- A **fouling set** (`AddFoulingSet`) lists slots that overlap on the ground, of which at most one may hold a piece. The usual case is the first slot
+  of each leg past a switch: a wagon left there blocks the other leg, so a train cannot drop it and push the rest down the other leg in one run.
+  Without fouling sets a piece one slot past a switch is out of the way, which makes some puzzles easier than the real ones.
 
 The number of slots is bounded by the bitboard: 64 with `ulong`, 128 with `UInt128`.
 
@@ -46,9 +49,14 @@ unpacks them.
 | Metric | Engine step, same engine and sense | Engine step otherwise | Turntable turn |
 |--------|------------------------------------|-----------------------|----------------|
 | `EngineReversals` | (0, 0, 1) | (1, 1, 1) | (1, 0, 1) |
+| `DirectionChanges` | (0, 0, 1) | (1, 1, 1); (0, 1, 1) when all engines are at rest | (1, 0, 1) |
 | `TurntableRotations` | (0, 0, 1) | (0, 1, 1); (0, 0, 1) when all engines are at rest | (1, 0, 1) |
 
 A turntable turn also leaves every engine at rest.
+
+`DirectionChanges` is Hordern's own count in chapter J ("every time the engine changes direction"): an engine setting off from rest is not a
+change of direction, so the first run is free and the book's numbers are one less than `EngineReversals` gives. The state remembers only the engine
+that moved last, so with several engines a hand-over to another engine still counts as a move.
 
 ## Optional rules
 
@@ -70,7 +78,7 @@ Use `PuzzleSolver.SolveDijkstra` (or `SolveWeightedAStar` with a lower bound on 
 
 ## Reading a puzzle from text
 
-`ShuntingMap.Parse` reads a small line-based description (`track`, `join`, `turntable`, `start`, `goal`, `front`, `heading`, `allow`, `faces`, `align`);
+`ShuntingMap.Parse` reads a small line-based description (`track`, `join`, `turntable`, `foul`, `start`, `goal`, `front`, `heading`, `allow`, `faces`, `align`);
 see its documentation for the grammar. The symbols of the pieces are parameters.
 
 ```

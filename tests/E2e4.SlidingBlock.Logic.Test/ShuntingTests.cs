@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace E2e4.SlidingBlock.Logic.Test;
 
 public class ShuntingTests
@@ -112,6 +114,56 @@ public class ShuntingTests
         var back = Moves(domain, moved).First(m => m.Lead == 0);
         Assert.Equal(ShuntingCost.Pack(0, 1, 1), domain.MoveCost(moved, back));
     }
+
+    [Fact]
+    public void TheDirectionChangeMetricDoesNotChargeTheFirstStart()
+    {
+        var domain = LineDomain(6, engineAt: 0, wagonAt: 1, goal: 5, ShuntingMetric.DirectionChanges);
+        var first = Moves(domain, domain.InitialState).Single();
+        var moved = domain.ApplyMove(domain.InitialState, first);
+
+        Assert.Equal(ShuntingCost.Pack(0, 1, 1), domain.MoveCost(domain.InitialState, first));
+        Assert.Equal(ShuntingCost.Pack(0, 0, 1), domain.MoveCost(moved, Moves(domain, moved).Single(m => m.Lead == 1)));
+        Assert.Equal(ShuntingCost.Pack(1, 1, 1), domain.MoveCost(moved, Moves(domain, moved).First(m => m.Lead == 0)));
+        Assert.Equal(0, ShuntingCost.Primary(new PuzzleSolver().SolveDijkstra(domain, domain.InitialState)!.Cost));
+    }
+
+    /// <summary>A stem 0-1 and a switch at the far end of slot 1 to two legs, 2-3 and 4-5, whose first slots foul each other.</summary>
+    private static ShuntingTrack FouledSwitch(bool fouling)
+    {
+        var b = new ShuntingTrackBuilder(6).Connect(0, 1, 1, 0).Connect(1, 1, 2, 0).Connect(2, 1, 3, 0).Connect(1, 1, 4, 0).Connect(4, 1, 5, 0);
+        if (fouling) b.AddFoulingSet([2, 4]);
+        return b.Build();
+    }
+
+    [Theory]
+    [InlineData(false, new[] { 2, 4 })]
+    [InlineData(true, new[] { 2 })]
+    public void APieceJustPastASwitchFoulsTheOtherLeg(bool fouling, int[] engineSlots)
+    {
+        // The wagon stands on the first slot of one leg; the engine at the switch may push it on, but may enter the other leg only without fouling.
+        var domain = new ShuntingDomain<ulong>(FouledSwitch(fouling), [Engine(1), new("W", false, [2])], new([]));
+
+        var forward = Moves(domain, domain.InitialState).Where(m => m.Lead == 1);
+
+        Assert.Equal(engineSlots, forward.Select(m => BitOperations.TrailingZeroCount(domain.ApplyMove(domain.InitialState, m).GroupSlots(0))).Order());
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void ATrainCannotLeaveAPieceJustPastASwitchAndDivertTheRest(bool fouling, bool diverts)
+    {
+        // A train has pushed wagon V just past the switch with W behind it at the switch: W may not go on into the other leg and leave V there.
+        var domain = new ShuntingDomain<ulong>(FouledSwitch(fouling), [Engine(0), new("W", false, [1]), new("V", false, [2])], new([]));
+        var start = domain.InitialState;
+
+        Assert.Equal(diverts, Moves(domain, start).Any(m => domain.ApplyMove(start, m).GroupSlots(1) == 1UL << 4));
+    }
+
+    [Fact]
+    public void AStartThatFoulsIsRejected() =>
+        Assert.Throws<ArgumentException>(() => new ShuntingDomain<ulong>(FouledSwitch(true), [Engine(2), new("W", false, [4])], new([])));
 
     [Fact]
     public void GoalAndEqualityIgnoreWhichIdenticalWagonIsWhich()

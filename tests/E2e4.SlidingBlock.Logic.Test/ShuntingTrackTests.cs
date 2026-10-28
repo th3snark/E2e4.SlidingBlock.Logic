@@ -75,4 +75,17 @@ public class ShuntingTrackTests
         Assert.Throws<ArgumentException>(() => builder.AddTurntable([9], [false, true]));
         Assert.Throws<ArgumentException>(() => builder.ConnectWhen(0, 5, 0, 1, 1, 0));
     }
+
+    [Fact]
+    public void FoulingSetsAreKeptAndChecked()
+    {
+        var builder = new ShuntingTrackBuilder(4).AddFoulingSet([1, 3]);
+
+        Assert.Equal([[1, 3]], builder.Build().FoulingSets);
+        Assert.Empty(new ShuntingTrackBuilder(2).Build().FoulingSets);
+        Assert.Throws<ArgumentNullException>(() => builder.AddFoulingSet(null!));
+        Assert.Throws<ArgumentException>(() => builder.AddFoulingSet([1]));
+        Assert.Throws<ArgumentException>(() => builder.AddFoulingSet([1, 1]));
+        Assert.Throws<ArgumentException>(() => builder.AddFoulingSet([1, 4]));
+    }
 }
