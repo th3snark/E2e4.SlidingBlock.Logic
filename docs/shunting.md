@@ -49,14 +49,16 @@ unpacks them.
 | Metric | Engine step, same engine and sense | Engine step otherwise | Turntable turn |
 |--------|------------------------------------|-----------------------|----------------|
 | `EngineReversals` | (0, 0, 1) | (1, 1, 1) | (1, 0, 1) |
-| `DirectionChanges` | (0, 0, 1) | (1, 1, 1); (0, 1, 1) when all engines are at rest | (1, 0, 1) |
+| `DirectionChanges` | (n, 0, 1) | (n, 1, 1) | (1, 0, 1) |
 | `TurntableRotations` | (0, 0, 1) | (0, 1, 1); (0, 0, 1) when all engines are at rest | (1, 0, 1) |
 
-A turntable turn also leaves every engine at rest.
+A turntable turn also leaves every engine at rest. Under `DirectionChanges`, n is the number of engines the step sends the other way (see below).
 
-`DirectionChanges` is Hordern's own count in chapter J ("every time the engine changes direction"): an engine setting off from rest is not a
-change of direction, so the first run is free and the book's numbers are one less than `EngineReversals` gives. The state remembers only the engine
-that moved last, so with several engines a hand-over to another engine still counts as a move.
+`DirectionChanges` is Hordern's own count in chapter J ("every time the engine changes direction"). The state remembers, for each engine, the sense
+it last moved in since it was at rest, whether it drove or was pushed or pulled by another engine. A step costs one for every engine it sends the
+other way: the engine that drives, and any engine in its train. Setting off from rest is free (so the book's numbers are one less than
+`EngineReversals` gives for a single engine), and so are handing over to another engine and resuming in the same sense. A turntable turn leaves
+every engine at rest.
 
 ## Optional rules
 

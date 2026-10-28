@@ -29,7 +29,7 @@ public sealed record ShuntingLayout(ShuntingTrack Track, IReadOnlyList<ShuntingG
 /// <item><term><c>foul 3,7</c></term><description>a fouling set: at most one of the listed slots may hold a piece at a time (the legs just past a switch, say).</description></item>
 /// <item><term><c>start E.WW..</c></term><description>one character per slot: the symbol of the piece standing there, or the empty symbol.</description></item>
 /// <item><term><c>goal ....W.</c></term><description>the same, for the slots a group must end on; groups left out are free. Several <c>goal</c> lines add up, which lets two groups share slots.</description></item>
-/// <item><term><c>front E 0</c></term><description>the end each piece of a group faces at the start, in slot order (default 1).</description></item>
+/// <item><term><c>front E 1</c></term><description>the end each piece of a group faces at the start, in slot order (default 0).</description></item>
 /// <item><term><c>heading W</c></term><description>makes a wagon group track which way it faces.</description></item>
 /// <item><term><c>allow W 0,1,2</c></term><description>the only slots a group may enter.</description></item>
 /// <item><term><c>pushonly W</c></term><description>wagons of this group have no couplers: they can be pushed but never pulled.</description></item>
