@@ -39,7 +39,7 @@ public static class BitboardExtensions
             return sb.ToString();
         }
 
-        /// <summary>Renders the mask as a width x height grid (row 0 on top, bit 0 top-left).</summary>
+        /// <summary>Renders the mask as a width x height grid (row 0 on top, bit 0 top-left), rows separated by <c>\n</c> on every platform.</summary>
         public string ToGrid(int width, int height)
         {
             var sb = new StringBuilder();
@@ -47,7 +47,7 @@ public static class BitboardExtensions
             {
                 for (int c = 0; c < width; c++)
                     sb.Append(((mask >> (r * width + c)) & T.One) != T.Zero ? '#' : '.');
-                if (r != height - 1) sb.AppendLine();
+                if (r != height - 1) sb.Append('\n');
             }
             return sb.ToString();
         }

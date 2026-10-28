@@ -4,8 +4,8 @@ Guidance for AI coding assistants working in this repository. People: see [CONTR
 
 ## Project
 
-`E2e4.SlidingBlock.Logic` is a dependency-free sliding block puzzle engine for .NET (`net10.0`, MIT): bitboard state structs and generic BFS, A* and
-IDA* solvers for the N-puzzle, Klotski, lane-sliding (Rush Hour), Soko pushing, railway shunting and polyominoes.
+`E2e4.SlidingBlock.Logic` is a dependency-free sliding block puzzle engine for .NET (`net10.0`, MIT): bitboard state structs and generic BFS, A*,
+IDA*, Dijkstra and weighted A* solvers for the N-puzzle, Klotski, lane-sliding (Rush Hour), Soko pushing, railway shunting and polyominoes.
 
 - `src/E2e4.SlidingBlock.Logic/`: the NuGet package.
 - `src/E2e4.SlidingBlock.Logic.Labs.Wpf/`: demonstration app (not packed).
@@ -18,6 +18,7 @@ IDA* solvers for the N-puzzle, Klotski, lane-sliding (Rush Hour), Soko pushing, 
 dotnet build E2e4.SlidingBlock.Logic.slnx
 dotnet test E2e4.SlidingBlock.Logic.slnx
 dotnet format whitespace E2e4.SlidingBlock.Logic.slnx --verify-no-changes
+./scripts/check.ps1                # the CI steps locally: formatting, IDE0049, tests, vulnerable packages, pack
 dotnet run -c Release --project benchmarks/E2e4.SlidingBlock.Logic.Benchmarks
 ```
 

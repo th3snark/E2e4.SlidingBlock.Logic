@@ -6,7 +6,7 @@ public static class PuzzleWalk
     /// <summary>
     /// Random walk of <paramref name="steps"/> moves from <paramref name="start"/>. Every position it returns is reachable from
     /// <paramref name="start"/> and therefore solvable back to it. A move that returns to the previous position is re-drawn
-    /// (a few times) when there is a choice, so the walk does not simply shuffle back and forth. Stops early at a dead end.
+    /// (up to 32 times) when there is a choice, so the walk does not simply shuffle back and forth. Stops early at a dead end.
     /// </summary>
     public static TState RandomWalk<TState, TMove>(ISlidingBlockDomain<TState, TMove> domain, TState start, int steps, Random rng)
         where TState : struct, IEquatable<TState>

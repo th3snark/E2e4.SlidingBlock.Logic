@@ -182,6 +182,13 @@ public struct PolyominoState<TBitboard> : IEquatable<PolyominoState<TBitboard>>
     /// <summary>True if the positions differ.</summary>
     public static bool operator !=(PolyominoState<TBitboard> left, PolyominoState<TBitboard> right) => !left.Equals(right);
 
+    private static void CheckStart(int startAnchor, int boardWidth)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(boardWidth);
+        if ((uint)startAnchor >= (uint)Math.Min(Grid.BitWidth<TBitboard>(), 128))
+            throw new ArgumentOutOfRangeException(nameof(startAnchor), startAnchor, "The start anchor must be a cell of the board.");
+    }
+
     private static TBitboard FreeAnchors(int startAnchor, TBitboard baseMask, TBitboard validAnchorsMask, TBitboard otherOccupancy)
     {
         // An anchor is blocked when any cell of the shape lands on an occupied cell: one shift of the occupancy per shape cell.
@@ -246,6 +253,7 @@ public struct PolyominoState<TBitboard> : IEquatable<PolyominoState<TBitboard>>
     public static TBitboard FindReachableAnchors(int startAnchor, TBitboard baseMask, TBitboard validAnchorsMask, TBitboard otherOccupancy, int boardWidth,
         AllowedDirections directions = AllowedDirections.Both, GridGeometry geometry = GridGeometry.Orthogonal4Way, ReadOnlySpan<TBitboard> validByDir = default)
     {
+        CheckStart(startAnchor, boardWidth);
         int count = Grid.DirectionCount(geometry);
         Span<int> deltas = stackalloc int[Grid.MaxDirections];
         Span<TBitboard> entry = stackalloc TBitboard[Grid.MaxDirections];
@@ -266,6 +274,8 @@ public struct PolyominoState<TBitboard> : IEquatable<PolyominoState<TBitboard>>
         Span<sbyte> parentMap, out TBitboard straightMovesMask, out TBitboard hookMovesMask, AllowedDirections directions = AllowedDirections.Both,
         GridGeometry geometry = GridGeometry.Orthogonal4Way, ReadOnlySpan<TBitboard> validByDir = default)
     {
+        CheckStart(startAnchor, boardWidth);
+        if (parentMap.Length <= startAnchor) throw new ArgumentException("The parent map must hold every cell of the board.", nameof(parentMap));
         TBitboard free = FreeAnchors(startAnchor, baseMask, validAnchorsMask, otherOccupancy);
         Span<int> dirs = stackalloc int[Grid.MaxDirections], deltas = stackalloc int[Grid.MaxDirections];
         Span<TBitboard> entry = stackalloc TBitboard[Grid.MaxDirections];
@@ -331,6 +341,7 @@ public struct PolyominoState<TBitboard> : IEquatable<PolyominoState<TBitboard>>
         TBitboard otherOccupancy, int boardWidth, AllowedDirections directions = AllowedDirections.Both,
         GridGeometry geometry = GridGeometry.Orthogonal4Way, ReadOnlySpan<TBitboard> validByDir = default)
     {
+        CheckStart(startAnchor, boardWidth);
         if (startAnchor == targetAnchor) return [startAnchor];
         TBitboard free = FreeAnchors(startAnchor, baseMask, validAnchorsMask, otherOccupancy);
         int bits = Grid.BitWidth<TBitboard>();
