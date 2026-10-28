@@ -333,7 +333,7 @@ public struct PolyominoState<TBitboard> : IEquatable<PolyominoState<TBitboard>>
     {
         for (int d = 0; d < Grid.DirectionCount(geometry); d++)
             if (Grid.Delta(width, d) == diff) return Grid.Axis(d);
-        return 1;
+        throw new InvalidOperationException($"A step of {diff} cells is not a move in any direction of the board.");
     }
 
     /// <summary>Shortest step-by-step anchor trajectory (start..target inclusive) or empty if unreachable.</summary>

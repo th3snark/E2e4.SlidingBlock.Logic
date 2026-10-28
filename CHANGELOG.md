@@ -14,6 +14,7 @@ follows [Semantic Versioning](https://semver.org/). While the version is below 1
 
 ### Fixed
 
+- `SolveIdaStar` throws `InsufficientExecutionStackException` when a solution is deep enough to overflow the stack, instead of ending the process.
 - `PolyominoState<TBitboard>.FindReachableAnchors` and `ReconstructHookPath` throw `ArgumentOutOfRangeException` for a start anchor outside the board
   instead of indexing out of range.
 - `PlaySession<TState, TMove>` no longer requires `TMove : IEquatable<TMove>`, which it never used.

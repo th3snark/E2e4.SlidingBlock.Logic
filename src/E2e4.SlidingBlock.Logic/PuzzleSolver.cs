@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace E2e4.SlidingBlock.Logic;
@@ -189,6 +190,7 @@ public sealed class PuzzleSolver
         SolveIdaStar(domain, start, heuristic, out _, ct);
 
     /// <summary>IDA* as <see cref="SolveIdaStar{TState,TMove}(ISlidingBlockDomain{TState,TMove},TState,Func{TState,int},CancellationToken)"/>, reporting why it found nothing.</summary>
+    /// <exception cref="InsufficientExecutionStackException">The solution is so long that the recursion would overflow the stack; use A* instead.</exception>
     public SolveResult<TMove>? SolveIdaStar<TState, TMove>(ISlidingBlockDomain<TState, TMove> domain, TState start, Func<TState, int> heuristic, out SolveStatus status, CancellationToken ct = default)
         where TState : struct, IEquatable<TState>
     {
@@ -233,6 +235,7 @@ public sealed class PuzzleSolver
         /// <returns><see cref="Solved"/>, <see cref="Aborted"/> at the node cap, otherwise the smallest f that exceeded the bound (int.MaxValue = dead end).</returns>
         public int Search(TState state, TState parentState, bool hasParent, int g, int limit)
         {
+            RuntimeHelpers.EnsureSufficientExecutionStack();
             if ((++Nodes & 4095) == 0) _ct.ThrowIfCancellationRequested();
             if (Nodes > _maxNodes) return Aborted;
             int f = g + _heuristic(state);
