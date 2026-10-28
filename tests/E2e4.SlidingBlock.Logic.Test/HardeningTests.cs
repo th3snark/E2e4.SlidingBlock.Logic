@@ -69,6 +69,56 @@ public class HardeningTests
         Assert.Throws<ArgumentNullException>(() => new PlaySession<Spot, int>(null!, new Spot(0)));
     }
 
+    // A one-way corridor whose goal is the far end: with a perfect heuristic IDA* walks it in one pass, one recursion level per move.
+    private sealed class Corridor(int length) : ISlidingBlockDomain<Spot, int>
+    {
+        public Spot InitialState => new(0);
+        public int MaxMoves => 1;
+        public bool IsGoal(in Spot state) => state.X == length;
+
+        public int GenerateMoves(in Spot state, Span<int> moveBuffer)
+        {
+            if (state.X >= length) return 0;
+            moveBuffer[0] = 1;
+            return 1;
+        }
+
+        public Spot ApplyMove(in Spot state, in int move) => new(state.X + move);
+        public ulong GetHashCode64(in Spot state) => Hashing.Mix((ulong)state.X);
+    }
+
+    [Fact]
+    public void IdaStarThrowsInsteadOfOverflowingTheStack()
+    {
+        // A million levels of recursion cannot fit on any thread's stack; the guard must turn that into an exception the caller can catch.
+        const int length = 1_000_000;
+        var solver = new PuzzleSolver { MaxNodes = 10_000_000 };
+        Assert.Throws<InsufficientExecutionStackException>(() =>
+            solver.SolveIdaStar(new Corridor(length), new Spot(0), s => length - s.X));
+        var shallow = solver.SolveIdaStar(new Corridor(50), new Spot(0), s => 50 - s.X);
+        Assert.Equal(50, shallow!.Moves.Count);
+    }
+
+    [Fact]
+    public void ReachableAnchorSearchesRejectAStartOffTheBoard()
+    {
+        const ulong all9 = (1UL << 9) - 1;
+        Span<sbyte> parents = stackalloc sbyte[9];
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<ulong>.FindReachableAnchors(-1, 1UL, all9, 0UL, 3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<ulong>.FindReachableAnchors(64, 1UL, all9, 0UL, 3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<ulong>.FindReachableAnchors(0, 1UL, all9, 0UL, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<ulong>.ReconstructHookPath(-1, 4, 1UL, all9, 0UL, 3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<ulong>.ReconstructHookPath(0, 4, 1UL, all9, 0UL, -3));
+        var tooShort = new sbyte[4];
+        try
+        {
+            PolyominoState<ulong>.FindReachableAnchors(6, 1UL, all9, 0UL, 3, tooShort, out _, out _);
+            Assert.Fail("A parent map shorter than the start anchor must be rejected.");
+        }
+        catch (ArgumentException ex) { Assert.Equal("parentMap", ex.ParamName); }
+        Assert.NotEqual(0UL, PolyominoState<ulong>.FindReachableAnchors(6, 1UL, all9, 0UL, 3, parents, out _, out _));
+    }
+
     [Fact]
     public void NodeLimitCountsExpandedNodes()
     {
