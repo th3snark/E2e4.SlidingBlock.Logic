@@ -14,6 +14,11 @@ follows [Semantic Versioning](https://semver.org/). While the version is below 1
 
 ### Fixed
 
+- `PolyominoState<TBitboard>.FindReachableAnchors` and `ReconstructHookPath` throw `ArgumentOutOfRangeException` for a start anchor outside the board
+  instead of indexing out of range.
+- `PlaySession<TState, TMove>` no longer requires `TMove : IEquatable<TMove>`, which it never used.
+- `ToGrid` separates rows with `
+` on every platform, not `Environment.NewLine`.
 - The `ShuntingMap` documentation said a piece without a `front` line faces end 1; it faces end 0, as `ShuntingGroup.StartFronts` says.
 
 ## [0.1.0] - 2026-10-27

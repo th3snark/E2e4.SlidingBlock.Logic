@@ -49,7 +49,7 @@ disk-backed search.
 | Priority | Gap | Value | Effort | Notes |
 |----------|-----|-------|--------|-------|
 | 1 | **Move metrics as a parameter** (one cell, one piece any distance, a whole line) | High: published solution lengths depend on the metric | Medium | L'Âne Rouge is 81 moves when a two-cell slide counts as one, against 85 to 116 under other counts ([aschmied/klotski-solver](https://github.com/aschmied/klotski-solver)). The domains mix metrics today: Klotski single step, polyomino one turn, lane `maxStep`. |
-| 2 | **Pattern databases and linear conflict** for the N-puzzle | High | Medium | `NPuzzleState.InverseMap` was built for O(1) lookups but nothing uses it yet. Additive databases make the 24-puzzle feasible ([Felner, Korf and Hanan, JAIR 2004](https://jair.org/index.php/jair/article/view/10391)); linear conflict alone cuts IDA* a long way ([arXiv 1411.6593](https://arxiv.org/pdf/1411.6593)). |
+| 2 | **Pattern databases and linear conflict** for the N-puzzle | High | Medium | `NPuzzleState.InverseMap` gives O(1) tile lookups (the domain uses it for its distance table and `IsSolvable`), but no pattern database is built on it yet. Additive databases make the 24-puzzle feasible ([Felner, Korf and Hanan, JAIR 2004](https://jair.org/index.php/jair/article/view/10391)); linear conflict alone cuts IDA* a long way ([arXiv 1411.6593](https://arxiv.org/pdf/1411.6593)). |
 | 3 | **Weighted edges** (an optional `IWeightedDomain.MoveCost`) | Medium | Low to medium | Needed for the metrics above and for Soko pushes against player steps. `IWeightedDomain`, `SolveDijkstra` and `SolveWeightedAStar` landed with the shunting domain; the other domains do not use them yet. |
 | 4 | **Bidirectional BFS** | High for Klotski, Rush Hour and garages | Low | Needs predecessor moves; every pure-slide domain is reversible and can reuse `GenerateMoves`. |
 | 5 | **Memory-lean search**: frontier search, a compact closed list, disk-based BFS | Medium to high | Medium | `PuzzleSolver` keeps every state it meets, so `MaxNodes` is the practical ceiling. |
@@ -97,14 +97,14 @@ While the version is below 1.0.0 these can still change without a breaking-chang
   null checks on the remaining domain constructors.
 - **Moves and states:** `CompositeMove` has public mutable fields and magic values in `DirectionIndex` (-1 for a rotation, -2 for a multi-step slide); a
   readonly struct and an enum would be safer. `PolyominoState<TBitboard>` is a large struct that is not `readonly`, and the heuristic delegates take it by value.
-- **Inconsistent constraints:** `PlaySession` requires `TMove : IEquatable<TMove>` but `ISlidingBlockDomain` does not; `LaneSlideDomain.ReachableOffsets`
+- **Inconsistent constraints:** `LaneSlideDomain.ReachableOffsets`
   takes the state by value where the rest of the domain takes `in`.
 - **Naming:** the hash is `GetHashCode64`, `ILaneState.Hash()`, `PushState.Hash` and `ZobristHash`; the board size is `Width` and `Height` in a topology but
   `Columns` and `Rows` elsewhere; a piece is `PieceId`, `Piece`, `Vehicle` or `Case`; `OccupancyMask` and `TotalOccupancy` are the same thing;
   `PolyominoDomain.GoalGroupId`, `GoalAnchor` and `GoalPosition` repeat `Goal`; the `NPuzzle` types are 4x4 only behind general names.
 - **Weak typing:** `GridDirection` is a set of `int` constants rather than an enum, and `EquivalenceGroup<TBitboard>` is a public record whose invariants
   (a normalised mask, valid anchors) can be broken with `new` or `with`.
-- **After the first release:** set `PackageValidationBaselineVersion` so a breaking change is caught when the package is packed, and check
+- **Now that 0.1.0 is out:** set `PackageValidationBaselineVersion` so a breaking change is caught when the package is packed, and check
   `IsAotCompatible` with a trimmed or native-AOT publish of a small sample.
 
 ## 7. Other libraries

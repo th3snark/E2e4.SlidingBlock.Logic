@@ -7,7 +7,7 @@ namespace E2e4.SlidingBlock.Logic;
 /// </summary>
 public sealed class PlaySession<TState, TMove>
     where TState : struct, IEquatable<TState>
-    where TMove : struct, IEquatable<TMove>
+    where TMove : struct
 {
     private readonly Stack<TState> _history = new();
     private readonly Stack<TState> _undone = new();
@@ -54,7 +54,7 @@ public sealed class PlaySession<TState, TMove>
 
     /// <summary>
     /// Plays a move the caller has taken from <see cref="ISlidingBlockDomain{TState,TMove}.GenerateMoves"/>. The session does not check that
-    /// the move is legal here, and not thread-safe: use one session per thread.
+    /// the move is legal. It is not thread-safe either: use one session per thread.
     /// </summary>
     public void Apply(TMove move)
     {
