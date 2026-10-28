@@ -14,7 +14,8 @@ namespace E2e4.SlidingBlock.Logic;
 /// An engine step moves the engine one slot out of one of its ends. Everything in front of it is pushed one slot ahead (the push stops at the first
 /// empty slot and is illegal against a dead end or a slot a piece may not enter). Couplers can be made and broken at will while the train stands,
 /// so the engine may also pull any number of the pieces directly behind it. At a switch the move names the branch it takes, so one position can
-/// have several moves that differ only in the branch. A train, pushed and pulled together, is at most 32 pieces long.
+/// have several moves that differ only in the branch. A train, pushed and pulled together, is at most 32 pieces long. No move leaves two pieces
+/// in one of the track's fouling sets.
 /// </para>
 /// <para>
 /// A train never doubles back over a slot it already covers in the same step, so pushes round a closed loop of wagons are not generated.
@@ -35,6 +36,7 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
     private readonly bool[] _frontCoupler;
     private readonly int[] _maxCarried;
     private readonly TBitboard[] _allowed;
+    private readonly TBitboard[] _fouling;
     private readonly TBitboard[] _goalSlots;
     private readonly bool[] _hasGoal;
     private readonly ulong[] _zSlot;
@@ -49,7 +51,7 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
     /// <param name="metric">How moves are counted.</param>
     /// <param name="startAlignments">The starting alignment of each turntable; null means 0 for all.</param>
     /// <exception cref="ArgumentNullException">An argument is null.</exception>
-    /// <exception cref="ArgumentException">The track does not fit the bitboard, a switch has too many branches, or a group, start position or goal is invalid.</exception>
+    /// <exception cref="ArgumentException">The track does not fit the bitboard, a switch has too many branches, a group, start position or goal is invalid, or the start puts two pieces in one fouling set.</exception>
     public ShuntingDomain(ShuntingTrack track, IReadOnlyList<ShuntingGroup> groups, ShuntingGoal goal,
         ShuntingMetric metric = ShuntingMetric.EngineReversals, IReadOnlyList<int>? startAlignments = null)
     {
@@ -96,6 +98,7 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
             _allowed[g] = group.Allowed is null ? AllSlots(slots) : MaskOf(group.Allowed, slots, $"Group {g} allows", nameof(groups));
         }
         _engines = [.. engines];
+        _fouling = [.. track.FoulingSets.Select(set => MaskOf(set, slots, "A fouling set uses", nameof(track)))];
 
         var rng = new Random(0x5417);
         ulong Next() => ((ulong)rng.NextInt64() << 1) ^ (ulong)rng.NextInt64();
@@ -109,6 +112,7 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
         }
 
         InitialState = BuildStart(startAlignments);
+        if (!FoulingClear(InitialState.OccupancyBits)) throw new ArgumentException("The start puts two pieces in one fouling set.", nameof(groups));
 
         _goalSlots = new TBitboard[_groups.Length];
         _hasGoal = new bool[_groups.Length];
@@ -196,7 +200,9 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
             for (int a = 0; a < _track.AlignmentCount(t); a++)
             {
                 if (a == state.Alignment(t)) continue;
-                walk.Add(new ShuntingMove(ShuntingMove.TurnMover, (byte)t, (byte)a, 0, 0, 0));
+                var turn = new ShuntingMove(ShuntingMove.TurnMover, (byte)t, (byte)a, 0, 0, 0);
+                if (_fouling.Length > 0 && !FoulingClear(ApplyMove(state, turn).OccupancyBits)) continue;
+                walk.Add(turn);
             }
         }
         return walk.N;
@@ -287,12 +293,27 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
     {
         if (move.IsTurn) return ShuntingCost.Pack(1, 0, 1);
         bool carriesOn = state.Engine == move.Mover && state.SenseBit == SenseOf(state, move);
-        if (Metric == ShuntingMetric.EngineReversals) return carriesOn ? ShuntingCost.Pack(0, 0, 1) : ShuntingCost.Pack(1, 1, 1);
         bool atRest = state.Engine == ShuntingState<TBitboard>.NoEngine;
-        return ShuntingCost.Pack(0, carriesOn || atRest ? 0 : 1, 1);
+        return Metric switch
+        {
+            ShuntingMetric.EngineReversals => carriesOn ? ShuntingCost.Pack(0, 0, 1) : ShuntingCost.Pack(1, 1, 1),
+            ShuntingMetric.DirectionChanges => carriesOn ? ShuntingCost.Pack(0, 0, 1) : atRest ? ShuntingCost.Pack(0, 1, 1) : ShuntingCost.Pack(1, 1, 1),
+            _ => ShuntingCost.Pack(0, carriesOn || atRest ? 0 : 1, 1),
+        };
     }
 
     private static TBitboard Bit(int slot) => TBitboard.One << slot;
+
+    /// <summary>True if no fouling set holds more than one piece of <paramref name="occupancy"/>.</summary>
+    private bool FoulingClear(TBitboard occupancy)
+    {
+        foreach (var mask in _fouling)
+        {
+            var held = occupancy & mask;
+            if ((held & (held - TBitboard.One)) != TBitboard.Zero) return false;
+        }
+        return true;
+    }
 
     private static TBitboard AllSlots(int slots) => (TBitboard.One << (slots - 1)) | ((TBitboard.One << (slots - 1)) - TBitboard.One);
 
@@ -512,7 +533,7 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
                     FLen = depth + 1;
                     if (FrontIsLegal() && FLen - 1 <= D._maxCarried[Engine])
                     {
-                        if (CutAllowed(FSlot[0], 1 - Lead)) Add(new ShuntingMove((byte)Engine, (byte)Lead, (byte)FLen, 0, FChoices, 0));
+                        if (CutAllowed(FSlot[0], 1 - Lead) && FoulingClear(FSlot[0])) Add(new ShuntingMove((byte)Engine, (byte)Lead, (byte)FLen, 0, FChoices, 0));
                         RChoices = 0;
                         BSlot[0] = FSlot[0];
                         BTrail[0] = 1 - Lead;
@@ -522,6 +543,10 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
                 Visited &= ~Bit(e.To);
             }
         }
+
+        /// <summary>True if no fouling set holds two pieces once the train has moved into FSlot[FLen] and left <paramref name="vacated"/> empty.</summary>
+        private readonly bool FoulingClear(int vacated) =>
+            D._fouling.Length == 0 || D.FoulingClear((S.OccupancyBits | Bit(FSlot[FLen])) & ~Bit(vacated));
 
         private readonly bool FrontIsLegal()
         {
@@ -563,7 +588,7 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
                 BSlot[depth + 1] = e.To;
                 BTrail[depth + 1] = 1 - e.ToEnd;
                 RChoices = (RChoices & ~(3UL << (2 * depth))) | ((ulong)c << (2 * depth));
-                if (CutAllowed(e.To, 1 - e.ToEnd)) Add(new ShuntingMove((byte)Engine, (byte)Lead, (byte)FLen, (byte)(depth + 1), FChoices, RChoices));
+                if (CutAllowed(e.To, 1 - e.ToEnd) && FoulingClear(e.To)) Add(new ShuntingMove((byte)Engine, (byte)Lead, (byte)FLen, (byte)(depth + 1), FChoices, RChoices));
                 Visited |= Bit(e.To);
                 Rear(depth + 1);
                 Visited &= ~Bit(e.To);

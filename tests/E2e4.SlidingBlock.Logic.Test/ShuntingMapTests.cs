@@ -98,6 +98,16 @@ public class ShuntingMapTests
     }
 
     [Fact]
+    public void ReadsFoulingSets()
+    {
+        var layout = ShuntingMap.Parse([.. Fork, "foul 2,3"], "EW", "E");
+
+        Assert.Equal([[2, 3]], layout.Track.FoulingSets);
+        Assert.Throws<ArgumentException>(() => ShuntingMap.Parse([.. Fork, "foul 2"], "EW", "E"));
+        Assert.Throws<ArgumentException>(() => ShuntingMap.CreateDomain<ulong>([.. Fork, "foul 1,2", "start .WE."], "EW", "E"));
+    }
+
+    [Fact]
     public void SeveralGoalLinesLetGroupsShareSlots()
     {
         string[] map =

@@ -3,6 +3,14 @@
 All notable changes are listed here, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/). While the version is below 1.0.0 the public API may still change between minor versions.
 
+## [Unreleased]
+
+### Added
+
+- Shunting fouling sets: `ShuntingTrackBuilder.AddFoulingSet`, `ShuntingTrack.FoulingSets` and the `foul` keyword in `ShuntingMap`. At most one slot
+  of a set may hold a piece, so a wagon left just past a switch blocks the other leg.
+- `ShuntingMetric.DirectionChanges`: Hordern's count of changes of direction, in which an engine setting off from rest is not a move.
+
 ## [0.1.0] - 2026-10-27
 
 The first release of the package.
