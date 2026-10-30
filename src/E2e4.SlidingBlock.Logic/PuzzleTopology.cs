@@ -223,16 +223,20 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     /// <param name="width">Columns.</param>
     /// <param name="height">Rows.</param>
     /// <param name="geometry">How the cells touch.</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="width"/> or <paramref name="height"/> is below 1, or the board has more cells than the bitboard has bits.</exception>
     public PuzzleTopologyBuilder(int width, int height, GridGeometry geometry = GridGeometry.Orthogonal4Way)
     {
-        if (width <= 0 || height <= 0 || (long)width * height > Grid.BitWidth<TBitboard>())
-            throw new ArgumentOutOfRangeException(nameof(width), $"Board must fit in {Grid.BitWidth<TBitboard>()} bits.");
+        ArgumentOutOfRangeException.ThrowIfLessThan(width, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(height, 1);
+        if ((long)width * height > Grid.BitWidth<TBitboard>())
+            throw new ArgumentOutOfRangeException(nameof(height), $"A board of {width} x {height} cells does not fit in {Grid.BitWidth<TBitboard>()} bits.");
         _width = width;
         _height = height;
         _geometry = geometry;
     }
 
     /// <summary>Makes cell (<paramref name="row"/>, <paramref name="col"/>) a wall.</summary>
+    /// <exception cref="ArgumentOutOfRangeException">The cell is not on the board.</exception>
     public PuzzleTopologyBuilder<TBitboard> AddWall(int row, int col)
     {
         CheckCell(row, col);
@@ -241,6 +245,7 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     }
 
     /// <summary>Makes cell (<paramref name="row"/>, <paramref name="col"/>) one-way: a piece may enter it only by the directions set in <paramref name="allowedEntryDirectionsMask"/> (bit d is direction d).</summary>
+    /// <exception cref="ArgumentOutOfRangeException">The cell is not on the board.</exception>
     public PuzzleTopologyBuilder<TBitboard> AddDiode(int row, int col, byte allowedEntryDirectionsMask)
     {
         CheckCell(row, col);
@@ -252,6 +257,8 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     /// Puts an immovable partition on the edge of cell (<paramref name="row"/>, <paramref name="col"/>) in <paramref name="direction"/>
     /// (a <see cref="GridDirection"/>): no piece crosses it either way. Declaring the same edge from either side adds it once.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The cell is not on the board, or <paramref name="direction"/> is not a direction of the geometry.</exception>
+    /// <exception cref="ArgumentException">The edge lies on the border of the board.</exception>
     public PuzzleTopologyBuilder<TBitboard> AddPartition(int row, int col, int direction)
     {
         CheckCell(row, col);
@@ -272,17 +279,24 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     }
 
     /// <summary>Adds a plate: while a piece on an elevation in <paramref name="triggerElevationMask"/> covers a trigger cell, the gate cells open (or, if not <paramref name="normallyClosed"/>, close).</summary>
+    /// <exception cref="ArgumentException">A mask has a bit set outside the board.</exception>
     public PuzzleTopologyBuilder<TBitboard> AddPressurePlate(TBitboard triggerCellsMask, TBitboard gateCellsMask, byte triggerElevationMask = 0b01,
         bool normallyClosed = true)
     {
+        TBitboard board = TBitboard.AllBitsSet >> (Grid.BitWidth<TBitboard>() - _width * _height);
+        if ((triggerCellsMask & ~board) != TBitboard.Zero) throw new ArgumentException("The trigger cells are not all on the board.", nameof(triggerCellsMask));
+        if ((gateCellsMask & ~board) != TBitboard.Zero) throw new ArgumentException("The gate cells are not all on the board.", nameof(gateCellsMask));
         _plates.Add(new PressurePlateRule<TBitboard>(triggerCellsMask, gateCellsMask, triggerElevationMask, normallyClosed));
         return this;
     }
 
     /// <summary>Adds a shape class from the cells it covers (row and column offsets) and returns its group id.</summary>
+    /// <exception cref="ArgumentNullException"><paramref name="name"/> or <paramref name="cells"/> is null.</exception>
+    /// <exception cref="ArgumentException"><paramref name="cells"/> is empty, or the shape is wider than the board or does not fit in the bitboard.</exception>
     public int AddGroup(string name, IEnumerable<(int dRow, int dCol)> cells, AllowedDirections directions = AllowedDirections.Both,
         byte elevationMask = 0b01, SlidePhysics physics = SlidePhysics.ContinuousFloodFill, RoleFlags roles = RoleFlags.None)
     {
+        ArgumentNullException.ThrowIfNull(name);
         var (baseMask, rel) = Normalize(cells, _width);
         _groups.Add(new GroupDef(name, rel, baseMask, directions, elevationMask, physics, roles));
         return _groups.Count - 1;
@@ -292,12 +306,14 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     /// Adds the distinct 90-degree orientations of a shape as a ring of groups that rotate into each other inside the square box
     /// around the shape's bounding box (anchored at its top-left). Returns the group ids in clockwise order, starting with the shape as given.
     /// </summary>
+    /// <exception cref="ArgumentNullException"><paramref name="name"/> or <paramref name="cells"/> is null.</exception>
+    /// <exception cref="ArgumentException"><paramref name="cells"/> is empty, or the rotation box does not fit on the board.</exception>
     public IReadOnlyList<int> AddRotatableGroup(string name, IEnumerable<(int dRow, int dCol)> cells, AllowedDirections directions = AllowedDirections.Both,
         byte elevationMask = 0b01, SlidePhysics physics = SlidePhysics.ContinuousFloodFill, RoleFlags roles = RoleFlags.None)
     {
+        ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(cells);
-        var start = cells.Distinct().ToList();
-        if (start.Count == 0) throw new ArgumentException("A piece needs at least one cell.", nameof(cells));
+        var start = Canonical(cells);
         int minR = start.Min(c => c.dRow), minC = start.Min(c => c.dCol);
         start = start.Select(c => (c.dRow - minR, c.dCol - minC)).ToList();
         int n = Math.Max(start.Max(c => c.dRow), start.Max(c => c.dCol)) + 1;
@@ -307,7 +323,7 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
         var current = start;
         while (true)
         {
-            var sorted = current.OrderBy(c => c.dRow).ThenBy(c => c.dCol).ToList();
+            var sorted = Canonical(current);
             if (orientations.Count > 0 && orientations[0].SequenceEqual(sorted)) break;
             orientations.Add(sorted);
             current = sorted.Select(c => (c.dCol, n - 1 - c.dRow)).ToList();
@@ -333,8 +349,11 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     }
 
     /// <summary>Places a piece of group <paramref name="groupId"/> with its anchor on <paramref name="initialAnchor"/> and returns its piece id.</summary>
+    /// <exception cref="ArgumentNullException"><paramref name="label"/> is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="groupId"/> names no added group.</exception>
     public int AddPiece(int groupId, string label, int initialAnchor)
     {
+        ArgumentNullException.ThrowIfNull(label);
         if ((uint)groupId >= (uint)_groups.Count) throw new ArgumentOutOfRangeException(nameof(groupId), "No such group has been added.");
         _pieces.Add(new PieceTemplate(_pieces.Count, groupId, label, initialAnchor));
         return _pieces.Count - 1;
@@ -411,6 +430,15 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
         return valid;
     }
 
+    /// <summary>The distinct cells in row-major order.</summary>
+    /// <exception cref="ArgumentException"><paramref name="cells"/> is empty.</exception>
+    private static List<(int dRow, int dCol)> Canonical(IEnumerable<(int dRow, int dCol)> cells)
+    {
+        var list = cells.Distinct().OrderBy(c => c.dRow).ThenBy(c => c.dCol).ToList();
+        if (list.Count == 0) throw new ArgumentException("A piece needs at least one cell.", nameof(cells));
+        return list;
+    }
+
     /// <summary>
     /// LSB normalization: lay the cells in their bounding box, then shift right by tzcnt so the first
     /// occupied cell in row-major order sits on bit 0. Also returns cells relative to that first cell.
@@ -418,8 +446,7 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     public static (TBitboard BaseMask, IReadOnlyList<(int dRow, int dCol)> RelativeCells) Normalize(IEnumerable<(int dRow, int dCol)> cells, int boardWidth)
     {
         ArgumentNullException.ThrowIfNull(cells);
-        var list = cells.Distinct().OrderBy(c => c.dRow).ThenBy(c => c.dCol).ToList();
-        if (list.Count == 0) throw new ArgumentException("A piece needs at least one cell.", nameof(cells));
+        var list = Canonical(cells);
         int minR = list.Min(c => c.dRow), minC = list.Min(c => c.dCol), maxC = list.Max(c => c.dCol);
         if (maxC - minC + 1 > boardWidth) throw new ArgumentException("Piece is wider than the board.", nameof(cells));
         TBitboard raw = TBitboard.Zero;
