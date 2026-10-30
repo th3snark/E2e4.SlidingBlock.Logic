@@ -3,21 +3,27 @@ using System.Runtime.CompilerServices;
 
 namespace E2e4.SlidingBlock.Logic;
 
-[InlineArray(10)]
+[InlineArray(KlotskiState.MaxPieces)]
 internal struct KlotskiAnchorBuffer
 {
     private byte _element0;
 }
 
 /// <summary>
-/// Klotski position: per-piece anchors (for UI identity), the 20-bit occupancy bitboard and the 60-bit
-/// canonical shape key (3 bits per cell, class = groupId + 1). Equality uses the key only, so swapping
+/// Klotski position: per-piece anchors (for UI identity), the occupancy bitboard (one bit per cell) and the
+/// canonical shape key (3 bits per cell, class = groupId + 1; 60 bits on the classic 4x5 board). Equality uses the key only, so swapping
 /// identical pieces yields the same state.
 /// </summary>
 public readonly struct KlotskiState : IEquatable<KlotskiState>
 {
     /// <summary>The most cells a board may have: the shape key spends 3 bits on each of them.</summary>
     public const int MaxCells = 21;
+
+    /// <summary>The most pieces a position holds.</summary>
+    public const int MaxPieces = 10;
+
+    /// <summary>The most shape classes: the class of a cell is its group id plus one, in 3 bits.</summary>
+    public const int MaxShapes = 7;
 
     private readonly KlotskiAnchorBuffer _anchors;
 
@@ -27,8 +33,8 @@ public readonly struct KlotskiState : IEquatable<KlotskiState>
     {
         ArgumentNullException.ThrowIfNull(topology);
         if (topology.Width * topology.Height > MaxCells) throw new ArgumentException($"At most {MaxCells} cells fit the 64-bit shape key.");
-        if (topology.Pieces.Count > 10) throw new ArgumentException("At most 10 pieces.");
-        if (topology.Groups.Count > 7) throw new ArgumentException("At most 7 shape classes fit in 3 bits.");
+        if (topology.Pieces.Count > MaxPieces) throw new ArgumentException($"At most {MaxPieces} pieces.");
+        if (topology.Groups.Count > MaxShapes) throw new ArgumentException($"At most {MaxShapes} shape classes fit in 3 bits.");
         var anchors = new KlotskiAnchorBuffer();
         ulong occ = 0, key = 0;
         foreach (var p in topology.PieceTable)

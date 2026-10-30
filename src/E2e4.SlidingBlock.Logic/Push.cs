@@ -102,7 +102,7 @@ public sealed class PushDomain : ISlidingBlockDomain<PushState, PushMove>
         ArgumentNullException.ThrowIfNull(floor);
         ArgumentNullException.ThrowIfNull(targets);
         ArgumentNullException.ThrowIfNull(cases);
-        if ((long)columns * rows > MaxCells) throw new ArgumentException($"The warehouse has at most {MaxCells} cells.");
+        if ((long)columns * rows > MaxCells) throw new ArgumentException($"The warehouse has at most {MaxCells} cells.", nameof(columns));
         Columns = columns;
         Rows = rows;
         int cells = columns * rows;
@@ -186,12 +186,15 @@ public sealed class PushDomain : ISlidingBlockDomain<PushState, PushMove>
     public int MaxMoves => CaseCount * CellCount * 4;
 
     /// <summary>True if the cell is floor (not a wall and not outside).</summary>
-    public bool IsFloor(int cell) => _floor[cell];
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="cell"/> is outside the warehouse.</exception>
+    public bool IsFloor(int cell) => _floor[CheckedCell(cell)];
     /// <summary>True if the cell is a place for a case.</summary>
-    public bool IsTarget(int cell) => _target[cell];
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="cell"/> is outside the warehouse.</exception>
+    public bool IsTarget(int cell) => _target[CheckedCell(cell)];
 
     /// <summary>True if a case on <paramref name="cell"/> could still be pushed to a place if nothing else were in the way.</summary>
-    public bool IsAlive(int cell) => _distance[cell] >= 0;
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="cell"/> is outside the warehouse.</exception>
+    public bool IsAlive(int cell) => _distance[CheckedCell(cell)] >= 0;
 
     /// <inheritdoc/>
     public bool IsGoal(in PushState state)
@@ -211,7 +214,11 @@ public sealed class PushDomain : ISlidingBlockDomain<PushState, PushMove>
     }
 
     /// <summary>The pushes a lone case on <paramref name="cell"/> needs to reach a place if nothing else were in the way, or -1 if no push can.</summary>
-    public int PushDistance(int cell) => _distance[cell];
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="cell"/> is outside the warehouse.</exception>
+    public int PushDistance(int cell) => _distance[CheckedCell(cell)];
+
+    private int CheckedCell(int cell, [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(cell))] string? name = null) =>
+        (uint)cell < (uint)_floor.Length ? cell : throw new ArgumentOutOfRangeException(name, cell, "The cell is outside the warehouse.");
 
     /// <inheritdoc/>
     public ulong GetHashCode64(in PushState state) => state.Hash;

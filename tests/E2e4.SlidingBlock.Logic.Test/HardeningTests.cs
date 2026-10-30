@@ -265,6 +265,34 @@ public class HardeningTests
     }
 
     [Fact]
+    public void CompositeDomainRejectsMissingPartsAndAPushDepthBelowOne()
+    {
+        var b = PuzzleTopology<ulong>.CreateBuilder(3, 3);
+        b.AddPiece(b.AddGroup("one", Cells.One), "a", 0);
+        var topology = b.Build();
+        var goal = new PolyominoGoal<ulong>(0, 8);
+        Assert.Throws<ArgumentNullException>(() => new CompositeDomain<ulong>((PolyominoDomain<ulong>)null!));
+        Assert.Throws<ArgumentNullException>(() => new CompositeDomain<ulong>(null!, goal));
+        Assert.Throws<ArgumentNullException>(() => new CompositeDomain<ulong>(topology, null!));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new CompositeDomain<ulong>(topology, goal, 0));
+        Assert.Equal(1, new CompositeDomain<ulong>(topology, goal).MaxPushDepth);
+    }
+
+    [Fact]
+    public void PushDomainCellQueriesRejectCellsOffTheWarehouse()
+    {
+        var domain = PushMap.CreateDomain(["@1.X."], Fixtures.CaseSymbols);
+        Assert.True(domain.IsFloor(0));
+        foreach (int cell in new[] { -1, domain.CellCount })
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() => domain.IsFloor(cell));
+            Assert.Throws<ArgumentOutOfRangeException>(() => domain.IsTarget(cell));
+            Assert.Throws<ArgumentOutOfRangeException>(() => domain.IsAlive(cell));
+            Assert.Throws<ArgumentOutOfRangeException>(() => domain.PushDistance(cell));
+        }
+    }
+
+    [Fact]
     public void DefaultPushStateIsEmptyNotBroken()
     {
         var empty = default(PushState);

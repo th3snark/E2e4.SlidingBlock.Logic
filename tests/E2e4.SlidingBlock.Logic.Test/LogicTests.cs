@@ -163,7 +163,7 @@ public class ReachableAnchorsTests
                 for (int i = 1; i < path.Count; i++)
                 {
                     int diff = Math.Abs(path[i] - path[i - 1]);
-                    Assert.True(diff == 1 || diff == 5);
+                    Assert.Contains(diff, new[] { 1, 5 });
                     if (diff == 1) Assert.Equal(path[i] / 5, path[i - 1] / 5);
                 }
             }

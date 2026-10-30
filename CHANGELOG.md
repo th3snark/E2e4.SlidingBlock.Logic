@@ -14,6 +14,11 @@ follows [Semantic Versioning](https://semver.org/). While the version is below 1
 
 ### Fixed
 
+- `LaneSlideDomain` throws `ArgumentNullException` for a null vehicle list and `ArgumentOutOfRangeException` for a board of fewer than one column or row.
+- `CompositeDomain` rejects null arguments and a `maxPushDepth` below 1 (which silently turned pushing off).
+- `PushDomain.IsFloor`, `IsTarget`, `IsAlive` and `PushDistance` throw `ArgumentOutOfRangeException` for a cell off the warehouse, and the cell-count error names its parameter.
+- `KlotskiState.MaxPieces` and `MaxShapes` replace the bare 10 and 7, and the `KlotskiState` summary no longer says 20 bits.
+- The Lab 1 Klotski formula trace and `docs/06-labs.md` describe the checks the engine actually makes (anchor column, valid anchors, free cells), not edge masks it does not have.
 - `SolveIdaStar` throws `InsufficientExecutionStackException` when a solution is deep enough to overflow the stack, instead of ending the process.
 - `PolyominoState<TBitboard>.FindReachableAnchors` and `ReconstructHookPath` throw `ArgumentOutOfRangeException` for a start anchor outside the board
   instead of indexing out of range.

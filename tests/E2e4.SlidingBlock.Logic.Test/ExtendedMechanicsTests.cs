@@ -35,8 +35,8 @@ public class WideBoardAndHexTests
         var topo = b.Build();
 
         Assert.Equal(UInt128.One | (UInt128.One << 1), topo.Groups[0].BaseMask);
-        Assert.True(((topo.Groups[0].ValidAnchorsMask >> 98) & UInt128.One) == UInt128.One);
-        Assert.True(((topo.Groups[0].ValidAnchorsMask >> 99) & UInt128.One) == UInt128.Zero);   // would wrap onto the next row
+        Assert.Equal(UInt128.One, (topo.Groups[0].ValidAnchorsMask >> 98) & UInt128.One);
+        Assert.Equal(UInt128.Zero, (topo.Groups[0].ValidAnchorsMask >> 99) & UInt128.One);   // would wrap onto the next row
 
         var domain = new PolyominoDomain<UInt128>(topo, 0, 70);
         var s = domain.InitialState;
@@ -275,7 +275,7 @@ public class StatefulCellTests
 
         s = domain.ApplyMove(s, new PolyominoMove(0, 0));                          // A stands on the trigger
         Assert.Equal(0UL, domain.ActiveDynamicWalls(s));
-        Assert.True((domain.ReachableFor(s, 1) & Cells.Bits(3, 2)) == Cells.Bits(3, 2));
+        Assert.Equal(Cells.Bits(3, 2), domain.ReachableFor(s, 1) & Cells.Bits(3, 2));
     }
 
     [Fact]
