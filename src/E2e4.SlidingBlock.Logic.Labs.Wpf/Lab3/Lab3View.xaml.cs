@@ -78,7 +78,7 @@ public partial class Lab3View : UserControl
     {
         GridLayer.Children.Clear();
         CoordLayer.Children.Clear();
-        var hatch = new DrawingBrush(new GeometryDrawing(null, new Pen(new SolidColorBrush(Rgb(0x47, 0x55, 0x69)), 1.5),
+        var hatch = new DrawingBrush(new GeometryDrawing(null, new Pen(Palette.SlateBrush, 1.5),
             new LineGeometry(new Point(0, 10), new Point(10, 0))))
         { TileMode = TileMode.Tile, Viewport = new Rect(0, 0, 10, 10), ViewportUnits = BrushMappingMode.Absolute };
         for (int s = 0; s < Bits; s++)
@@ -88,8 +88,8 @@ public partial class Lab3View : UserControl
             {
                 Width = Cell,
                 Height = Cell,
-                Background = wall ? hatch : new SolidColorBrush((s / N + s % N) % 2 == 0 ? Rgb(0x17, 0x20, 0x33) : Rgb(0x1A, 0x25, 0x3B)),
-                BorderBrush = new SolidColorBrush(Rgb(0x2A, 0x38, 0x50)),
+                Background = wall ? hatch : (s / N + s % N) % 2 == 0 ? Palette.CellBrush : Palette.CellAltBrush,
+                BorderBrush = Palette.EdgeBrush,
                 BorderThickness = new Thickness(1),
             };
             Canvas.SetLeft(tile, s % N * Cell);
@@ -100,7 +100,7 @@ public partial class Lab3View : UserControl
                 Text = wall ? $"{s} ({s / N},{s % N}) wall" : $"{s} ({s / N},{s % N})",
                 FontSize = 10,
                 FontFamily = (FontFamily)FindResource("Mono"),
-                Foreground = new SolidColorBrush(Color.FromArgb(0xC0, 0xCB, 0xD5, 0xE1)),
+                Foreground = Palette.Tint(Palette.Text, 0xC0),
             };
             Canvas.SetLeft(idx, s % N * Cell + 4);
             Canvas.SetTop(idx, s / N * Cell + Cell - 17);
@@ -130,32 +130,7 @@ public partial class Lab3View : UserControl
         });
     }
 
-    /// <summary>Merged outline of a polyomino with its anchor cell at the local origin (cells inset only on exposed sides).</summary>
-    private static Geometry FootprintGeometry(EquivalenceGroup<ulong> g, double inset = 2)
-    {
-        var set = g.RelativeCells.ToHashSet();
-        Geometry? union = null;
-        foreach (var (dr, dc) in g.RelativeCells)
-        {
-            double l = dc * Cell + (set.Contains((dr, dc - 1)) ? 0 : inset), t = dr * Cell + (set.Contains((dr - 1, dc)) ? 0 : inset);
-            double r = (dc + 1) * Cell - (set.Contains((dr, dc + 1)) ? 0 : inset), b = (dr + 1) * Cell - (set.Contains((dr + 1, dc)) ? 0 : inset);
-            Geometry rect = new RectangleGeometry(new Rect(l, t, r - l, b - t));
-            union = union is null ? rect : Geometry.Combine(union, rect, GeometryCombineMode.Union, null);
-        }
-        union!.Freeze();
-        return union;
-    }
-
-    private static PointCollection StarPoints(double cx, double cy, double outer, double inner)
-    {
-        var pts = new PointCollection();
-        for (int i = 0; i < 10; i++)
-        {
-            double a = -Math.PI / 2 + i * Math.PI / 5, rad = i % 2 == 0 ? outer : inner;
-            pts.Add(new Point(cx + rad * Math.Cos(a), cy + rad * Math.Sin(a)));
-        }
-        return pts;
-    }
+    private static Geometry FootprintGeometry(EquivalenceGroup<ulong> g, double inset = 2) => DrawHelpers.FootprintGeometry(g, Cell, inset);
 
     // ---- pieces -----------------------------------------------------------------------------------------------
 
@@ -188,10 +163,10 @@ public partial class Lab3View : UserControl
                 if (set.Contains((dr, dc + 1))) inner.Children.Add(new LineGeometry(new Point((dc + 1) * Cell, dr * Cell + 6), new Point((dc + 1) * Cell, (dr + 1) * Cell - 6)));
                 if (set.Contains((dr + 1, dc))) inner.Children.Add(new LineGeometry(new Point(dc * Cell + 6, (dr + 1) * Cell), new Point((dc + 1) * Cell - 6, (dr + 1) * Cell)));
             }
-            container.Children.Add(new Path { Data = inner, Stroke = new SolidColorBrush(Color.FromArgb(0x55, 255, 255, 255)), StrokeThickness = 1, IsHitTestVisible = false });
+            container.Children.Add(new Path { Data = inner, Stroke = Palette.Tint(Colors.White, 0x55), StrokeThickness = 1, IsHitTestVisible = false });
             container.Children.Add(new Polygon
             {
-                Points = StarPoints(Cell / 2, Cell / 2, 15, 6),
+                Points = DrawHelpers.StarPoints(Cell / 2, Cell / 2, 15, 6),
                 Fill = (Brush)FindResource("Gold"),
                 Stroke = Brushes.Black,
                 StrokeThickness = 1.2,
@@ -338,7 +313,7 @@ public partial class Lab3View : UserControl
 
     private void SlideMarkers(CompositeMove[] moves)
     {
-        var teal = Rgb(0x2D, 0xD4, 0xBF);
+        var teal = Palette.Teal;
         foreach (var m in moves)
         {
             if (m.DirectionIndex == -1) continue;
@@ -362,7 +337,7 @@ public partial class Lab3View : UserControl
         {
             if (m.DirectionIndex is < 0 or > 3) continue;
             bool coupled = m.Count > 1;
-            var color = coupled ? Rgb(0xFB, 0x92, 0x3C) : Rgb(0x2D, 0xD4, 0xBF);
+            var color = coupled ? Palette.Orange : Palette.Teal;
             string text = coupled ? $"Coupled {m.Count}-piece CompositeMove" : "Single-piece slide";
             var move = m;
             AddRing(at[m.DirectionIndex], color, text, () => Hover(move, color, text), () => PlayAsync(move), glyphs[m.DirectionIndex], 38);
@@ -412,7 +387,7 @@ public partial class Lab3View : UserControl
             CornerRadius = new CornerRadius(size / 2),
             BorderBrush = new SolidColorBrush(color),
             BorderThickness = new Thickness(3),
-            Background = new SolidColorBrush(Color.FromArgb(0xAA, color.R, color.G, color.B)),
+            Background = Palette.Tint(color, 0xAA),
             Cursor = Cursors.Hand,
             ToolTip = tooltip,
             Child = glyph.Length == 0 ? null : new TextBlock
@@ -443,7 +418,7 @@ public partial class Lab3View : UserControl
             var ghost = new Path
             {
                 Data = FootprintGeometry(T.Groups[d.NewGroupId]),
-                Fill = new SolidColorBrush(Color.FromArgb(0x55, color.R, color.G, color.B)),
+                Fill = Palette.Tint(color, 0x55),
                 Stroke = new SolidColorBrush(color),
                 StrokeThickness = 2,
                 IsHitTestVisible = false,
@@ -513,7 +488,7 @@ public partial class Lab3View : UserControl
             case 0 when _selected >= 0 && T.Groups[State.GroupOf(_selected)].CanRotate:
                 var cw = RotationCheck(_selected, true);
                 bool blocked = RotationMove(_selected, true) is null && RotationMove(_selected, false) is null;
-                if (on || blocked) Tint(cw.Swept, Rgb(0xF5, 0xB3, 0x01), 0x38);
+                if (on || blocked) Tint(cw.Swept, Palette.Gold, 0x38);
                 if (blocked) Tint(cw.Collision, Rgb(0xF8, 0x71, 0x71), 0x90);
                 break;
             case 1 when on:
@@ -630,7 +605,7 @@ public partial class Lab3View : UserControl
         RebuildMarkers();
         RebuildOverlay();
         foreach (var kv in _visuals)
-            kv.Value.Effect = kv.Key == _selected ? new DropShadowEffect { Color = Rgb(0xF5, 0xB3, 0x01), BlurRadius = 16, ShadowDepth = 0, Opacity = 0.95 } : null;
+            kv.Value.Effect = kv.Key == _selected ? new DropShadowEffect { Color = Palette.Gold, BlurRadius = 16, ShadowDepth = 0, Opacity = 0.95 } : null;
 
         var sb = new StringBuilder();
         if (_selected < 0)
@@ -675,7 +650,7 @@ public partial class Lab3View : UserControl
         bool match = recomputed == State.ZobristHash;
         HashText.Text = $"0x{State.ZobristHash:X16}";
         HashBadgeText.Text = match ? $"IncrementalHash == FullRecomputedHash  ✓   (0x{recomputed:X16})" : $"MISMATCH  ✗  recomputed 0x{recomputed:X16}";
-        HashBadge.Background = new SolidColorBrush(match ? Rgb(0x06, 0x4E, 0x3B) : Rgb(0x7F, 0x1D, 0x1D));
+        HashBadge.Background = Palette.Frozen(match ? Palette.GoodDeep : Palette.BadDeep);
         XorText.Text = _xor[_mode];
 
         if (_mode == 0 && _selected >= 0 && T.Groups[State.GroupOf(_selected)].CanRotate

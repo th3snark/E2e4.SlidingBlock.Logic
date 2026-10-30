@@ -60,7 +60,7 @@ public partial class Lab1View : UserControl
         Occupancy.Configure(_session.Cols, _session.Rows, 24, true);
         PieceGrid.Configure(_session.Cols, _session.Rows, 16);
         OtherGrid.Configure(_session.Cols, _session.Rows, 16);
-        OtherGrid.Accent = Color.FromRgb(0x94, 0xA3, 0xB8);
+        OtherGrid.Accent = Palette.Muted;
         OccupancyCaption.Text = _session.OccupancyCaption;
         RebuildBoard();
         RefreshInspector(animate: false);
@@ -147,8 +147,8 @@ public partial class Lab1View : UserControl
                 {
                     Width = _cell,
                     Height = _cell,
-                    Background = new SolidColorBrush(Color.FromRgb(0x17, 0x20, 0x33)),
-                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x2A, 0x38, 0x50)),
+                    Background = Palette.CellBrush,
+                    BorderBrush = Palette.EdgeBrush,
                     BorderThickness = new Thickness(1),
                 };
                 ulong bit = 1UL << (r * _session.Cols + c);
@@ -177,7 +177,7 @@ public partial class Lab1View : UserControl
                 {
                     Text = string.Create(CultureInfo.InvariantCulture, $"{r * _session.Cols + c} ({r},{c})"),
                     FontSize = 9,
-                    Foreground = new SolidColorBrush(Color.FromArgb(0xB0, 0xCB, 0xD5, 0xE1)),
+                    Foreground = Palette.Tint(Palette.Text, 0xB0),
                     IsHitTestVisible = false,
                     FontFamily = (FontFamily)FindResource("Mono"),
                 };
@@ -200,8 +200,8 @@ public partial class Lab1View : UserControl
             Height = h * _cell - 4,
             Margin = new Thickness(2),
             CornerRadius = new CornerRadius(7),
-            Background = new LinearGradientBrush(Lighten(color, 0.12), color, 90),
-            BorderBrush = new SolidColorBrush(Lighten(color, 0.35)),
+            Background = new LinearGradientBrush(DrawHelpers.Lighten(color, 0.12), color, 90),
+            BorderBrush = new SolidColorBrush(DrawHelpers.Lighten(color, 0.35)),
             BorderThickness = new Thickness(1.5),
             Cursor = Cursors.Hand,
             Tag = p.Id,
@@ -247,9 +247,9 @@ public partial class Lab1View : UserControl
                 {
                     Width = _cell - 2,
                     Height = _cell - 2,
-                    Stroke = new SolidColorBrush(Color.FromRgb(0xF5, 0xB3, 0x01)),
+                    Stroke = Palette.GoldBrush,
                     StrokeThickness = 3,
-                    Fill = new SolidColorBrush(Color.FromArgb(0x30, 0xF5, 0xB3, 0x01)),
+                    Fill = Palette.Tint(Palette.Gold, 0x30),
                     IsHitTestVisible = false,
                 };
                 Canvas.SetLeft(box, origin.X + bit % _session.Cols * _cell + 1);
@@ -289,9 +289,6 @@ public partial class Lab1View : UserControl
         PieceMaskText.Text = $"{name}\n  = 0x{pm:X16}\nOccupancyMask\n  = 0x{occ:X16}\notherPieces\n  = 0x{other:X16}";
     }
 
-    private static Color Lighten(Color c, double f) =>
-        Color.FromRgb((byte)(c.R + (255 - c.R) * f), (byte)(c.G + (255 - c.G) * f), (byte)(c.B + (255 - c.B) * f));
-
     private void BuildArrows()
     {
         foreach (var a in _arrows) Board.Children.Remove(a);
@@ -306,7 +303,7 @@ public partial class Lab1View : UserControl
             var arrow = new Polygon
             {
                 Points = ArrowPoints(m.DRow, m.DCol, Math.Min(26, _cell * 0.34)),
-                Fill = new SolidColorBrush(Color.FromArgb(0xE0, 0xF5, 0xB3, 0x01)),
+                Fill = Palette.Tint(Palette.Gold, 0xE0),
                 Stroke = Brushes.White,
                 StrokeThickness = 1,
                 Cursor = Cursors.Hand,
@@ -391,8 +388,8 @@ public partial class Lab1View : UserControl
             double nx = origin.X + c * _cell, ny = origin.Y + r * _cell;
             if (p.Label.Length > 0 && int.TryParse(p.Label, out _))
             {
-                v.Background = new LinearGradientBrush(Lighten(p.Color, 0.12), p.Color, 90);
-                v.BorderBrush = new SolidColorBrush(Lighten(p.Color, 0.35));
+                v.Background = new LinearGradientBrush(DrawHelpers.Lighten(p.Color, 0.12), p.Color, 90);
+                v.BorderBrush = new SolidColorBrush(DrawHelpers.Lighten(p.Color, 0.35));
             }
             if (Math.Abs(Canvas.GetLeft(v) - nx) < 0.5 && Math.Abs(Canvas.GetTop(v) - ny) < 0.5) continue;
             any = true;
