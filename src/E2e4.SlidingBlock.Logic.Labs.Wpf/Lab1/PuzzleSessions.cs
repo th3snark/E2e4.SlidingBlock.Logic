@@ -67,21 +67,6 @@ public abstract class PuzzleSession : ObservableObject
         var moves = LegalMoves;
         if (moves.Count > 0) Apply(moves[Random.Shared.Next(moves.Count)].Index);
     }
-
-    public static Color Hue(double hue, double sat = 0.55, double val = 0.85)
-    {
-        double c = val * sat, x = c * (1 - Math.Abs(hue / 60 % 2 - 1)), m = val - c;
-        (double r, double g, double b) = (int)(hue / 60) switch
-        {
-            0 => (c, x, 0.0),
-            1 => (x, c, 0.0),
-            2 => (0.0, c, x),
-            3 => (0.0, x, c),
-            4 => (x, 0.0, c),
-            _ => (c, 0.0, x),
-        };
-        return Color.FromRgb((byte)((r + m) * 255), (byte)((g + m) * 255), (byte)((b + m) * 255));
-    }
 }
 
 /// <summary>Shared plumbing: state, legal moves and undo history.</summary>
@@ -219,7 +204,7 @@ public sealed class NPuzzleSession : PuzzleSession<NPuzzleState, NPuzzleMove>
         int tile = State.TileAt(group);
         string name = tile == 0 ? "blank" : $"tile {tile}";
         string bits = Convert.ToString(tile, 2).PadLeft(4, '0');
-        return new GroupInfo(tile == 0 ? Color.FromRgb(0x47, 0x55, 0x69) : Hue(tile * 24), $"cell {group}", tile == 0 ? "blank" : $"{tile} = {tile:X}",
+        return new GroupInfo(tile == 0 ? Palette.Slate : DrawHelpers.Hue(tile * 24), $"cell {group}", tile == 0 ? "blank" : $"{tile} = {tile:X}",
             $"Nibble {group} (bits {group * 4}..{group * 4 + 3})\ncell {group} ({group >> 2},{group & 3})\n0b{bits} = 0x{tile:X} -> {name}");
     }
 
@@ -230,7 +215,7 @@ public sealed class NPuzzleSession : PuzzleSession<NPuzzleState, NPuzzleMove>
     {
         int tile = group;
         int cell = (int)((State.InverseMap >> (tile * 4)) & 0xF);
-        return new GroupInfo(tile == 0 ? Color.FromRgb(0x47, 0x55, 0x69) : Hue(tile * 24), tile == 0 ? "blank" : $"tile {tile}", $"cell {cell}");
+        return new GroupInfo(tile == 0 ? Palette.Slate : DrawHelpers.Hue(tile * 24), tile == 0 ? "blank" : $"tile {tile}", $"cell {cell}");
     }
 
     protected override IReadOnlyList<PieceView> BuildPieces(NPuzzleState s)
@@ -240,7 +225,7 @@ public sealed class NPuzzleSession : PuzzleSession<NPuzzleState, NPuzzleMove>
         {
             int t = s.TileAt(sq);
             if (t == 0) continue;
-            list.Add(new PieceView(t, t.ToString(CultureInfo.InvariantCulture), Hue(t * 24, t == sq ? 0.7 : 0.38, t == sq ? 0.9 : 0.62), [(sq >> 2, sq & 3)]));
+            list.Add(new PieceView(t, t.ToString(CultureInfo.InvariantCulture), DrawHelpers.Hue(t * 24, t == sq ? 0.7 : 0.38, t == sq ? 0.9 : 0.62), [(sq >> 2, sq & 3)]));
         }
         return list;
     }
@@ -308,7 +293,7 @@ public sealed class KlotskiSession : PuzzleSession<KlotskiState, KlotskiMove>
         int cls = (int)((State.CanonicalShapeKey >> (3 * group)) & 7);
         Color c = cls switch
         {
-            0 => Color.FromRgb(0x47, 0x55, 0x69),
+            0 => Palette.Slate,
             _ => DrawHelpers.Hex(LabPuzzles.KlotskiColors[_k.Topology.Groups[cls - 1].Name]),
         };
         string name = ShapeNames[cls];
@@ -394,7 +379,7 @@ public sealed class RushHourSession : PuzzleSession<LaneState16, LaneMove>
     public override RegisterSpec RegisterLayout => new(4, _r.Vehicles.Count, 8, "4-bit offset per vehicle");
     public override string OccupancyCaption => "occupied cells (36-bit)";
 
-    private Color VehicleColor(int v) => v == _r.GoalVehicle ? Color.FromRgb(0xEF, 0x44, 0x44) : PuzzleSession.Hue(v * 47 + 20, 0.5, 0.85);
+    private Color VehicleColor(int v) => v == _r.GoalVehicle ? Color.FromRgb(0xEF, 0x44, 0x44) : DrawHelpers.Hue(v * 47 + 20, 0.5, 0.85);
 
     public override ulong CellsOfGroup(int group) => (ulong)_r.MaskAt(group, State.OffsetOf(group));
     public override string PieceMaskName(int pieceId) => $"MaskAt({pieceId},{State.OffsetOf(pieceId)})";

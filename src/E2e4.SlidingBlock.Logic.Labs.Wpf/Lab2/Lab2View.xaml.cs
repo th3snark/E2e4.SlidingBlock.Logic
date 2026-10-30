@@ -40,9 +40,9 @@ public partial class Lab2View : UserControl
         _state = _d.InitialState;
         GridsRow.Visibility = Visibility.Collapsed;
         foreach (var g in new[] { BaseGrid, ShiftedGrid, ValidGrid, OtherGrid, ReachGrid, StraightGrid, HookGrid }) g.Configure(N, N, 20, true);
-        StraightGrid.Accent = Color.FromRgb(0x2D, 0xD4, 0xBF);
-        HookGrid.Accent = Color.FromRgb(0xFB, 0x92, 0x3C);
-        OtherGrid.Accent = Color.FromRgb(0x94, 0xA3, 0xB8);
+        StraightGrid.Accent = Palette.Teal;
+        HookGrid.Accent = Palette.Orange;
+        OtherGrid.Accent = Palette.Muted;
         BuildStaticBoard();
         BuildPieces();
         RefreshAll();
@@ -58,7 +58,7 @@ public partial class Lab2View : UserControl
     {
         GridLayer.Children.Clear();
         CoordLayer.Children.Clear();
-        var hatch = new DrawingBrush(new GeometryDrawing(null, new Pen(new SolidColorBrush(Color.FromRgb(0x47, 0x55, 0x69)), 1.5),
+        var hatch = new DrawingBrush(new GeometryDrawing(null, new Pen(Palette.SlateBrush, 1.5),
             new LineGeometry(new Point(0, 10), new Point(10, 0))))
         { TileMode = TileMode.Tile, Viewport = new Rect(0, 0, 10, 10), ViewportUnits = BrushMappingMode.Absolute };
         for (int s = 0; s < N * N; s++)
@@ -68,8 +68,8 @@ public partial class Lab2View : UserControl
             {
                 Width = Cell,
                 Height = Cell,
-                Background = wall ? hatch : new SolidColorBrush((s / N + s % N) % 2 == 0 ? Color.FromRgb(0x17, 0x20, 0x33) : Color.FromRgb(0x1A, 0x25, 0x3B)),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0x2A, 0x38, 0x50)),
+                Background = wall ? hatch : (s / N + s % N) % 2 == 0 ? Palette.CellBrush : Palette.CellAltBrush,
+                BorderBrush = Palette.EdgeBrush,
                 BorderThickness = new Thickness(1),
             };
             Canvas.SetLeft(tile, s % N * Cell);
@@ -80,7 +80,7 @@ public partial class Lab2View : UserControl
                 Text = wall ? $"{s} ({s / N},{s % N}) wall" : $"{s} ({s / N},{s % N})",
                 FontSize = 10,
                 FontFamily = (FontFamily)FindResource("Mono"),
-                Foreground = new SolidColorBrush(Color.FromArgb(0xC0, 0xCB, 0xD5, 0xE1)),
+                Foreground = Palette.Tint(Palette.Text, 0xC0),
             };
             Canvas.SetLeft(idx, s % N * Cell + 4);
             Canvas.SetTop(idx, s / N * Cell + Cell - 17);
@@ -100,32 +100,7 @@ public partial class Lab2View : UserControl
         GridLayer.Children.Add(goal);
     }
 
-    /// <summary>Merged outline of a polyomino with its anchor cell at the local origin (cells inset only on exposed sides).</summary>
-    private static Geometry FootprintGeometry(EquivalenceGroup<ulong> g, double inset = 2)
-    {
-        var set = g.RelativeCells.ToHashSet();
-        Geometry? union = null;
-        foreach (var (dr, dc) in g.RelativeCells)
-        {
-            double l = dc * Cell + (set.Contains((dr, dc - 1)) ? 0 : inset), t = dr * Cell + (set.Contains((dr - 1, dc)) ? 0 : inset);
-            double r = (dc + 1) * Cell - (set.Contains((dr, dc + 1)) ? 0 : inset), b = (dr + 1) * Cell - (set.Contains((dr + 1, dc)) ? 0 : inset);
-            Geometry rect = new RectangleGeometry(new Rect(l, t, r - l, b - t));
-            union = union is null ? rect : Geometry.Combine(union, rect, GeometryCombineMode.Union, null);
-        }
-        union!.Freeze();
-        return union;
-    }
-
-    private static PointCollection StarPoints(double cx, double cy, double outer, double inner)
-    {
-        var pts = new PointCollection();
-        for (int i = 0; i < 10; i++)
-        {
-            double a = -Math.PI / 2 + i * Math.PI / 5, rad = i % 2 == 0 ? outer : inner;
-            pts.Add(new Point(cx + rad * Math.Cos(a), cy + rad * Math.Sin(a)));
-        }
-        return pts;
-    }
+    private static Geometry FootprintGeometry(EquivalenceGroup<ulong> g, double inset = 2) => DrawHelpers.FootprintGeometry(g, Cell, inset);
 
     // ---- pieces -----------------------------------------------------------------------------------------------
 
@@ -156,11 +131,11 @@ public partial class Lab2View : UserControl
                 if (set.Contains((dr, dc + 1))) inner.Children.Add(new LineGeometry(new Point((dc + 1) * Cell, dr * Cell + 6), new Point((dc + 1) * Cell, (dr + 1) * Cell - 6)));
                 if (set.Contains((dr + 1, dc))) inner.Children.Add(new LineGeometry(new Point(dc * Cell + 6, (dr + 1) * Cell), new Point((dc + 1) * Cell - 6, (dr + 1) * Cell)));
             }
-            container.Children.Add(new Path { Data = inner, Stroke = new SolidColorBrush(Color.FromArgb(0x55, 255, 255, 255)), StrokeThickness = 1, IsHitTestVisible = false });
+            container.Children.Add(new Path { Data = inner, Stroke = Palette.Tint(Colors.White, 0x55), StrokeThickness = 1, IsHitTestVisible = false });
 
             var star = new Polygon
             {
-                Points = StarPoints(Cell / 2, Cell / 2, 17, 7),
+                Points = DrawHelpers.StarPoints(Cell / 2, Cell / 2, 17, 7),
                 Fill = (Brush)FindResource("Gold"),
                 Stroke = Brushes.Black,
                 StrokeThickness = 1.2,
@@ -228,7 +203,7 @@ public partial class Lab2View : UserControl
     private static Color KindColor(string kind) => kind switch
     {
         "step" => Color.FromRgb(0x34, 0xD3, 0x99),
-        "slide" => Color.FromRgb(0x2D, 0xD4, 0xBF),
+        "slide" => Palette.Teal,
         _ => Color.FromRgb(0xFB, 0x92, 0x3C),
     };
 
@@ -300,7 +275,7 @@ public partial class Lab2View : UserControl
                 Height = 30,
                 Stroke = new SolidColorBrush(color),
                 StrokeThickness = 3,
-                Fill = new SolidColorBrush(Color.FromArgb(0x55, color.R, color.G, color.B)),
+                Fill = Palette.Tint(color, 0x55),
                 Cursor = Cursors.Hand,
                 ToolTip = kind switch { "step" => "1-step orthogonal slide", "slide" => $"{path.Count - 1}-step straight slide", _ => $"{path.Count - 1}-step corner hook move" },
             };
@@ -325,7 +300,7 @@ public partial class Lab2View : UserControl
         _ghost = new Path
         {
             Data = FootprintGeometry(g),
-            Fill = new SolidColorBrush(Color.FromArgb(0x55, color.R, color.G, color.B)),
+            Fill = Palette.Tint(color, 0x55),
             Stroke = new SolidColorBrush(color),
             StrokeThickness = 2,
             IsHitTestVisible = false,
