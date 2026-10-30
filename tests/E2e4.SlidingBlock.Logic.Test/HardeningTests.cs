@@ -198,6 +198,24 @@ public class HardeningTests
     }
 
     [Fact]
+    public void TopologyBuilderNamesTheBadBoardDimensionAndChecksLabelsNamesAndPlateMasks()
+    {
+        Assert.Equal("width", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<ulong>.CreateBuilder(0, 3)).ParamName);
+        Assert.Equal("height", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<ulong>.CreateBuilder(3, -1)).ParamName);
+        Assert.Equal("height", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<ulong>.CreateBuilder(9, 8)).ParamName);   // 72 cells, 64 bits
+
+        var b = PuzzleTopology<ulong>.CreateBuilder(3, 3);
+        var one = b.AddGroup("one", [(0, 0)]);
+        Assert.Throws<ArgumentNullException>(() => b.AddGroup(null!, [(0, 0)]));
+        Assert.Throws<ArgumentNullException>(() => b.AddRotatableGroup(null!, [(0, 0)]));
+        Assert.Throws<ArgumentNullException>(() => b.AddPiece(one, null!, 0));
+
+        Assert.Equal("gateCellsMask", Assert.Throws<ArgumentException>(() => b.AddPressurePlate(1UL, 1UL << 9)).ParamName);
+        Assert.Equal("triggerCellsMask", Assert.Throws<ArgumentException>(() => b.AddPressurePlate(1UL << 63, 1UL)).ParamName);
+        b.AddPressurePlate(1UL << 8, 1UL);   // the last cell is still on the board
+    }
+
+    [Fact]
     public void TopologyCollectionsCannotBeWrittenTo()
     {
         var b = PuzzleTopology<ulong>.CreateBuilder(3, 3);
