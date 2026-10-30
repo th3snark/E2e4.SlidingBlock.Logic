@@ -93,8 +93,12 @@ While the version is below 1.0.0 these can still change without a breaking-chang
 - **`BitboardExtensions` extends every unsigned integer type**, so `using E2e4.SlidingBlock.Logic;` puts `Lsb`, `ToHex` and the rest on `byte`, `uint` and
   `ulong` everywhere. Moving it to a `Diagnostics` namespace would make it opt-in.
 - **The flood-fill helpers `FindReachableAnchors` and `ReconstructHookPath`** are static members of `PolyominoState`; they would sit better in their own static class.
-- **Argument checks still missing:** `PolyominoGoal(groupId, anchor)` (a group of 16 or more, an anchor off the board), `CompositeDomain`'s `maxPushDepth`, and
-  null checks on the remaining domain constructors.
+- **Argument checks still missing:** `PolyominoGoal(groupId, anchor)` (a group of 16 or more, an anchor off the board) and null checks on the remaining
+  domain constructors.
+- **Tried and not worth it (measured, October 2026):** one generic best-first core for `SolveAStar` and `SolveWeightedAStar` (15 to 25% slower A*, because the
+  unit-cost version packs f and h into one `long` priority); `[InlineArray]` scratch buffers in place of the `stackalloc` spans in `ShuntingDomain`
+  (about 25% slower `ApplyMove`); and `[InlineArray]` words in `LaneState64` (about 30% slower `GenerateMoves`). The duplication and the `Unsafe` layout stay
+  until a version that keeps the speed is found; run the benchmarks before and after any such change.
 - **Moves and states:** `CompositeMove` has public mutable fields and magic values in `DirectionIndex` (-1 for a rotation, -2 for a multi-step slide); a
   readonly struct and an enum would be safer. `PolyominoState<TBitboard>` is a large struct that is not `readonly`, and the heuristic delegates take it by value.
 - **Inconsistent constraints:** `LaneSlideDomain.ReachableOffsets`
