@@ -268,8 +268,10 @@ public sealed class PolyominoDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
     where TBitboard : unmanaged, IBitboard<TBitboard>
 {
     /// <summary>The puzzle is solved when group <paramref name="goalGroupId"/> has exactly one piece, on <paramref name="goalAnchor"/>.</summary>
+    /// <exception cref="ArgumentNullException"><paramref name="topology"/> is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="goalGroupId"/> names no group of the topology, or <paramref name="goalAnchor"/> is not a cell of the board.</exception>
     public PolyominoDomain(PuzzleTopology<TBitboard> topology, int goalGroupId, int goalAnchor)
-        : this(topology, new PolyominoGoal<TBitboard>(goalGroupId, goalAnchor))
+        : this(topology, SingleGroupGoal(topology, goalGroupId, goalAnchor))
     {
     }
 
@@ -279,17 +281,33 @@ public sealed class PolyominoDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
     /// topology that has the same groups, in the same order, as <paramref name="topology"/>. Bit g of <paramref name="matchedGroups"/>
     /// says whether group g has to match the goal; groups left out may end up anywhere.
     /// </summary>
+    /// <exception cref="ArgumentNullException"><paramref name="topology"/> is null.</exception>
     public PolyominoDomain(PuzzleTopology<TBitboard> topology, PolyominoState<TBitboard> goal, ulong matchedGroups = ulong.MaxValue)
         : this(topology, new PolyominoGoal<TBitboard>(goal, matchedGroups))
     {
     }
 
     /// <summary>The puzzle is solved when <paramref name="goal"/> is reached.</summary>
+    /// <exception cref="ArgumentNullException"><paramref name="topology"/> or <paramref name="goal"/> is null.</exception>
+    /// <exception cref="ArgumentException"><paramref name="goal"/> names a group or a cell the topology does not have.</exception>
     public PolyominoDomain(PuzzleTopology<TBitboard> topology, PolyominoGoal<TBitboard> goal)
     {
+        ArgumentNullException.ThrowIfNull(topology);
+        ArgumentNullException.ThrowIfNull(goal);
+        goal.CheckFits(topology, nameof(goal));
         Topology = topology;
         Goal = goal;
         InitialState = PolyominoState<TBitboard>.FromTopology(topology);
+    }
+
+    private static PolyominoGoal<TBitboard> SingleGroupGoal(PuzzleTopology<TBitboard> topology, int goalGroupId, int goalAnchor)
+    {
+        ArgumentNullException.ThrowIfNull(topology);
+        if ((uint)goalGroupId >= (uint)topology.Groups.Count)
+            throw new ArgumentOutOfRangeException(nameof(goalGroupId), goalGroupId, "No such group in the topology.");
+        if ((uint)goalAnchor >= (uint)topology.CellCount)
+            throw new ArgumentOutOfRangeException(nameof(goalAnchor), goalAnchor, "The goal anchor is not a cell of the board.");
+        return new PolyominoGoal<TBitboard>(goalGroupId, goalAnchor);
     }
 
     /// <summary>When the puzzle is solved.</summary>

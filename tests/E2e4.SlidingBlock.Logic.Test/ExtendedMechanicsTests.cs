@@ -53,7 +53,7 @@ public class WideBoardAndHexTests
         Assert.Equal(topo.Groups[0].BaseMask << 70, moved.OccupancyMask);
         Assert.True(domain.IsGoal(moved));
         Assert.Equal(Cells.HashOf(topo, moved), moved.Hash);
-        Assert.Equal(70, (moved.OccupancyMask).Lsb);
+        Assert.Equal(70, moved.OccupancyMask.Lsb());
         Assert.Equal(2, moved.OccupancyMask.PopCount());
     }
 

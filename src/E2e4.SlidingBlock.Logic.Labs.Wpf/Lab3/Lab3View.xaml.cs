@@ -622,7 +622,7 @@ public partial class Lab3View : UserControl
             sb.AppendLine(CultureInfo.InvariantCulture, $"Piece                 {piece.Label}  (PieceId {piece.PieceId})  {g.Name}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"EquivalenceGroupId    {g.GroupId}     RoleFlags {g.Roles}     {g.SlidePhysics}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"BaseMask[g]           {g.BaseMask.ToHex(9)}   {g.BaseMask.ToBinary(Bits)}");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"CurrentAnchor         tzcnt(pieceMask) = {pieceMask.Lsb}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"CurrentAnchor         tzcnt(pieceMask) = {pieceMask.Lsb()}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"PieceMask             {pieceMask.ToHex(9)}   {pieceMask.ToBinary(Bits)}   = BaseMask << {a}");
             sb.Append(CultureInfo.InvariantCulture, $"ValidAnchorsMask[g]   {g.ValidAnchorsMask.ToHex(9)}   {g.ValidAnchorsMask.ToBinary(Bits)}");
             PieceText.Text = sb.ToString();

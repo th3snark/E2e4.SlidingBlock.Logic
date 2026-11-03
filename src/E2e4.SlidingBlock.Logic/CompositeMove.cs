@@ -110,11 +110,13 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
     /// <param name="goal">When the puzzle is solved.</param>
     /// <param name="maxPushDepth">How many pieces deep a push chains: 1 moves only what the pusher touches directly.</param>
     /// <exception cref="ArgumentNullException"><paramref name="topology"/> or <paramref name="goal"/> is null.</exception>
+    /// <exception cref="ArgumentException"><paramref name="goal"/> names a group or a cell the topology does not have.</exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxPushDepth"/> is below 1.</exception>
     public CompositeDomain(PuzzleTopology<TBitboard> topology, PolyominoGoal<TBitboard> goal, int maxPushDepth = 1)
     {
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(goal);
+        goal.CheckFits(topology, nameof(goal));
         ArgumentOutOfRangeException.ThrowIfLessThan(maxPushDepth, 1);
         Topology = topology;
         Goal = goal;

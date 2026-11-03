@@ -303,6 +303,34 @@ public class HardeningTests
     }
 
     [Fact]
+    public void PolyominoGoalsMustFitThePositionAndTheBoard()
+    {
+        Assert.Equal("groupId", Assert.Throws<ArgumentOutOfRangeException>(() => new PolyominoGoal<Bitboard64>(16, 0)).ParamName);
+        Assert.Equal("groupId", Assert.Throws<ArgumentOutOfRangeException>(() => new PolyominoGoal<Bitboard64>(-1, 0)).ParamName);
+        Assert.Equal("anchor", Assert.Throws<ArgumentOutOfRangeException>(() => new PolyominoGoal<Bitboard64>(0, 64)).ParamName);
+        Assert.Equal(100, new PolyominoGoal<Bitboard128>(0, 100).Anchor);
+
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(3, 3);
+        b.AddPiece(b.AddGroup("one", Cells.One), "a", 0);
+        var topology = b.Build();
+        Assert.Throws<ArgumentNullException>(() => new PolyominoDomain<Bitboard64>(null!, 0, 8));
+        Assert.Throws<ArgumentNullException>(() => new PolyominoDomain<Bitboard64>(topology, (PolyominoGoal<Bitboard64>)null!));
+        Assert.Equal("goalGroupId", Assert.Throws<ArgumentOutOfRangeException>(() => new PolyominoDomain<Bitboard64>(topology, 1, 8)).ParamName);
+        Assert.Equal("goalAnchor", Assert.Throws<ArgumentOutOfRangeException>(() => new PolyominoDomain<Bitboard64>(topology, 0, 9)).ParamName);
+        Assert.Equal("goal", Assert.Throws<ArgumentException>(() => new PolyominoDomain<Bitboard64>(topology, new PolyominoGoal<Bitboard64>(3, 0))).ParamName);
+        Assert.Equal("goal", Assert.Throws<ArgumentException>(() => new CompositeDomain<Bitboard64>(topology, new PolyominoGoal<Bitboard64>(0, 9))).ParamName);
+        Assert.Equal(8, new PolyominoDomain<Bitboard64>(topology, 0, 8).Goal.Anchor);
+    }
+
+    [Fact]
+    public void LaneSlideChecksTheVehicleOfAQueryAtOnce()
+    {
+        var domain = new LaneSlideDomain<LaneState16, Bitboard64>([new(0, true, 2, 1, 0, 0)], 4, 1, 0, 2);
+        Assert.Throws<ArgumentOutOfRangeException>(() => domain.ReachableOffsets(domain.InitialState, 1));   // thrown before any enumeration
+        Assert.Equal([1, 2], domain.ReachableOffsets(domain.InitialState, 0));
+    }
+
+    [Fact]
     public void PushDomainCellQueriesRejectCellsOffTheWarehouse()
     {
         var domain = PushMap.CreateDomain(["@1.X."], Fixtures.CaseSymbols);

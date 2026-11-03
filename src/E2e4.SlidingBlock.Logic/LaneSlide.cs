@@ -243,7 +243,14 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
     }
 
     /// <summary>The offsets a vehicle can slide to in one move from where it stands (not counting where it stands), nearest first on each side.</summary>
-    public IEnumerable<int> ReachableOffsets(TState state, int vehicle)
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="vehicle"/> is not a vehicle of the puzzle.</exception>
+    public IEnumerable<int> ReachableOffsets(in TState state, int vehicle)
+    {
+        if ((uint)vehicle >= (uint)_count) throw new ArgumentOutOfRangeException(nameof(vehicle), vehicle, "No such vehicle.");
+        return Offsets(state, vehicle);
+    }
+
+    private IEnumerable<int> Offsets(TState state, int vehicle)
     {
         int at = state.OffsetOf(vehicle), baseIndex = vehicle * Stride;
         var others = Occupancy(state).AndNot(_masks[baseIndex + at]);

@@ -235,11 +235,11 @@ public class GoldenTests
     {
         var narrow = new Bitboard64(0b1010UL << 8);
         var wide = new Bitboard128(1UL << 3, 1UL << 36);
-        Assert.Equal((9, 11, 2), (narrow.Lsb, narrow.Msb, narrow.PopCount()));
-        Assert.Equal((3, 100, 2), (wide.Lsb, wide.Msb, wide.PopCount()));
-        Assert.Equal(64, default(Bitboard64).Lsb);
-        Assert.Equal(128, default(Bitboard128).Lsb);
-        Assert.Equal(-1, default(Bitboard64).Msb);
+        Assert.Equal((9, 11, 2), (narrow.Lsb(), narrow.Msb(), narrow.PopCount()));
+        Assert.Equal((3, 100, 2), (wide.Lsb(), wide.Msb(), wide.PopCount()));
+        Assert.Equal(64, default(Bitboard64).Lsb());
+        Assert.Equal(128, default(Bitboard128).Lsb());
+        Assert.Equal(-1, default(Bitboard64).Msb());
         Assert.True(wide.HasBit(100));
         Assert.Equal(34, wide.ToHex().Length);
     }
