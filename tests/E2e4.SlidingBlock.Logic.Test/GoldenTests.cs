@@ -256,9 +256,16 @@ public class GoldenTests
             for (int k = 0; k < n && states.Count < 40; k++) states.Add(domain.ApplyMove(states[i], buffer[k]));
         }
         foreach (var s in states) domain.GenerateMoves(s, buffer);   // warm up (JIT, caches)
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        foreach (var s in states) domain.GenerateMoves(s, buffer);
-        return GC.GetAllocatedBytesForCurrentThread() - before;
+        // The least of three passes: an allocation of the move generator shows in every pass, while the runtime may allocate once in a pass
+        // that happens to meet a tier-up under load (seen once on net8.0 with every target testing in parallel).
+        long least = long.MaxValue;
+        for (int pass = 0; pass < 3; pass++)
+        {
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            foreach (var s in states) domain.GenerateMoves(s, buffer);
+            least = Math.Min(least, GC.GetAllocatedBytesForCurrentThread() - before);
+        }
+        return least;
     }
 
     public static TheoryData<string> Domains => new()
