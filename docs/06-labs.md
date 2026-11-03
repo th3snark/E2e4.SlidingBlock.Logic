@@ -51,11 +51,11 @@ A 5x5 board (bits `0..24`) with a static wall on square 12:
 | Multi-segment animation | the piece follows `ReconstructHookPath` cell by cell |
 | Dashed box on a selected T or J | the empty bounding-box origin, one column left of the real anchor |
 | `Show ValidAnchorsMask[g] Overlay` | green/red badges on all 25 cells for the selected piece; hovering a cell explains why its anchor is valid or masked out (left/right overhang, bottom overflow, wall) |
-| `Swap Identical 1x1 Pieces` | verifies `GroupAnchors[3]`, `ZobristHash` and `Equals` are unchanged by the swap |
+| `Swap Identical 1x1 Pieces` | verifies `GroupAnchors[3]`, `Hash` and `Equals` are unchanged by the swap |
 | `Load Hook-Move Demo Preset` | puts block A above the wall and clears the right side, so anchor 17 needs a 4-step hook round bit 12 |
 | `Random Valid Move`, `Undo Move`, `Reset Board` | undo replays the trajectory backwards and shows the XOR that restores the hash |
 | Selected-piece breakdown | ids, `(dRow,dCol)` offsets, `BaseMask`, anchor, `PieceMask`, `ValidAnchorsMask`, `OtherOccupancy`, reachable / straight / hook masks as hex, binary and 5x5 grids (`FindReachableAnchors` with its parent map) |
-| Canonical state panel | `GroupAnchors[0..3]` with set anchors and `PopCount`, occupancy, `ZobristHash`, an incremental-versus-recomputed hash badge, and the full `Z[g,old] ^ Z[g,new]` derivation of the last action |
+| Canonical state panel | `GroupAnchors[0..3]` with set anchors and `PopCount`, occupancy, `Hash`, an incremental-versus-recomputed hash badge, and the full `Z[g,old] ^ Z[g,new]` derivation of the last action |
 
 The goal is to bring the master L to anchor 16.
 

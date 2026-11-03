@@ -13,8 +13,8 @@ below come from that page and other secondary sources, not from the book itself,
 
 | Chapter | Content | Coverage | What is missing |
 |---------|---------|----------|-----------------|
-| A, random arrangement | Same-shape counters, any scramble, fixed goal | Mostly | A solvability test for a scramble (now `NPuzzleDomain.IsSolvable`). Latin-square goals ("each row has distinct symbols") need a goal *predicate*, not a target position. |
-| B, uniform pieces | The 15-puzzle family, letter tiles | Mostly | The fast `NPuzzleState` is fixed at 4x4 with one blank: no 8-puzzle, no 24-puzzle, no several blanks. The polyomino path covers small multi-blank boards. |
+| A, random arrangement | Same-shape counters, any scramble, fixed goal | Mostly | A solvability test for a scramble (now `NPuzzle4x4Domain.IsSolvable`). Latin-square goals ("each row has distinct symbols") need a goal *predicate*, not a target position. |
+| B, uniform pieces | The 15-puzzle family, letter tiles | Mostly | The fast `NPuzzle4x4State` is fixed at 4x4 with one blank: no 8-puzzle, no 24-puzzle, no several blanks. The polyomino path covers small multi-blank boards. |
 | C, rectangular pieces | Dad's Puzzle, L'Âne Rouge | Covered | Only the move metric (section 3). |
 | D, non-convex pieces | L and T shapes | Covered | The limit of 16 pieces and 16 groups could bind on large boards. |
 | E, restricted routes | Lanes, one-way moves, fixed pieces | Partly | Lanes, diodes, partitions and direction masks are there. Missing: knight or jump moves, and counters moving along lines between spots on a graph that is not a grid. |
@@ -34,7 +34,7 @@ disk-backed search.
 |----------|-----|-------|--------|-------------|
 | 1 | **Tilt / gravity**: every piece slides as far as it can in one direction at once | A whole family of popular puzzles | Low to medium | A domain with at most four moves per position, reusing the glide of the polyomino domain. |
 | 2 | **Ricochet Robots, Lunar Lockout, Atomix**: slide until blocked | High; these are PSPACE-complete ([Hesterberg and Kopinsky](https://ar5iv.labs.arxiv.org/html/2402.11440)) | Low | Mostly present as `FrictionlessRaycast` groups. Needs a goal of "any robot of colour c on cell x" (a `PolyominoGoal` variant). |
-| 3 | **Bigger and smaller N-puzzles, several blanks** | The standard research benchmarks | Medium | Make `NPuzzleState` size-generic: 5x5 needs 25 tiles of 5 bits, which fits a `UInt128`. |
+| 3 | **Bigger and smaller N-puzzles, several blanks** | The standard research benchmarks | Medium | A size-generic domain beside `NPuzzle4x4State`, which keeps the fast 4x4 packing; the general `NPuzzle` names are free for it. 5x5 needs 25 tiles of 5 bits, which fits two `ulong` words. |
 | 4 | **Soko variants**: player-move metric, pull, Multiban, Hexoban | Medium to high | Medium | Pull is the reverse of `PushDomain`. `sokoenginepy` implements four tilings plus Multiban ([PyPI](https://pypi.org/project/sokoenginepy/)). |
 | 5 | **Torus and row-rotation puzzles** (Loopover, the Sixteen Puzzle) | Medium | Low | A permutation domain where a move rotates a row or column one step ([Algorithms 2012](https://mdpi.com/1999-4893/5/1/18)). |
 | 6 | **Colour-matching goals** (same-coloured tiles anywhere) | Medium | Low | A "colour class per cell" goal beside `PolyominoGoal`. |
@@ -48,12 +48,12 @@ disk-backed search.
 
 | Priority | Gap | Value | Effort | Notes |
 |----------|-----|-------|--------|-------|
-| 1 | **Move metrics as a parameter** (one cell, one piece any distance, a whole line) | High: published solution lengths depend on the metric | Medium | L'Âne Rouge is 81 moves when a two-cell slide counts as one, against 85 to 116 under other counts ([aschmied/klotski-solver](https://github.com/aschmied/klotski-solver)). The domains mix metrics today: Klotski single step, polyomino one turn, lane `maxStep`. |
-| 2 | **Pattern databases and linear conflict** for the N-puzzle | High | Medium | `NPuzzleState.InverseMap` gives O(1) tile lookups (the domain uses it for its distance table and `IsSolvable`), but no pattern database is built on it yet. Additive databases make the 24-puzzle feasible ([Felner, Korf and Hanan, JAIR 2004](https://jair.org/index.php/jair/article/view/10391)); linear conflict alone cuts IDA* a long way ([arXiv 1411.6593](https://arxiv.org/pdf/1411.6593)). |
+| 1 | **Move metrics as a parameter** (one cell, one piece any distance, a whole line) | High: published solution lengths depend on the metric | Medium | L'Âne Rouge is 81 moves when a two-cell slide counts as one, against 85 to 116 under other counts ([aschmied/klotski-solver](https://github.com/aschmied/klotski-solver)). The domains mix metrics today: Klotski single step, polyomino one turn, lane `maxStep`. Those counts are each domain's contract from 1.0, so another metric comes as an option (section 6). |
+| 2 | **Pattern databases and linear conflict** for the N-puzzle | High | Medium | `NPuzzle4x4State.InverseMap` gives O(1) tile lookups (the domain uses it for its distance table and `IsSolvable`), but no pattern database is built on it yet. Additive databases make the 24-puzzle feasible ([Felner, Korf and Hanan, JAIR 2004](https://jair.org/index.php/jair/article/view/10391)); linear conflict alone cuts IDA* a long way ([arXiv 1411.6593](https://arxiv.org/pdf/1411.6593)). |
 | 3 | **Weighted edges** (an optional `IWeightedDomain.MoveCost`) | Medium | Low to medium | Needed for the metrics above and for Soko pushes against player steps. `IWeightedDomain`, `SolveDijkstra` and `SolveWeightedAStar` landed with the shunting domain; the other domains do not use them yet. |
-| 4 | **Bidirectional BFS** | High for Klotski, Rush Hour and garages | Low | Needs predecessor moves; every pure-slide domain is reversible and can reuse `GenerateMoves`. |
-| 5 | **Memory-lean search**: frontier search, a compact closed list, disk-based BFS | Medium to high | Medium | `PuzzleSolver` keeps every state it meets, so `MaxNodes` is the practical ceiling. |
-| 6 | **Symmetry reduction** (mirror boards) | Medium | Low to medium | An optional `Canonicalize(state)`. Many Klotski layouts are left-right symmetric, which roughly halves the space. |
+| 4 | **Bidirectional BFS** | High for Klotski, Rush Hour and garages | Low | Needs predecessor moves, through a new interface such as `IReversibleDomain` (section 6); every pure-slide domain is reversible and can reuse `GenerateMoves`. |
+| 5 | **Memory-lean search**: frontier search, a compact closed list, disk-based BFS | Medium to high | Medium | `PuzzleSolver` keeps every state it meets: `MaxStoredStates` stops it before memory runs out, but does not let it go further. |
+| 6 | **Symmetry reduction** (mirror boards) | Medium | Low to medium | An optional interface with `Canonicalize(state)`. Many Klotski layouts are left-right symmetric, which roughly halves the space. |
 | 7 | **IDA\* transposition table** | Medium | Low | IDA* prunes only the move back to the parent today. |
 | 8 | **Parallel search** | Medium | Medium to high | Parallel IDA* at the root, or BFS layers split by hash. The domains are immutable, so they are safe to share. |
 | 9 | **Stronger Soko search**: corral pruning, freeze deadlocks | Medium for large warehouses | High | Today there are dead squares and a lower bound only. Festival and FESS solve large benchmark sets that way ([FESS paper](https://webdocs.cs.ualberta.ca/~jonathan/publications/ai_publications/fess.pdf), [Festival](https://festival-solver.site/)). |
@@ -73,43 +73,50 @@ Each of these is deliberate today (a packed layout, a fixed-size buffer or a saf
 
 | Limit | Where | Lifting it |
 |-------|-------|------------|
-| 21 cells, 10 pieces, 7 shape classes | `KlotskiState`: the canonical key spends 3 bits per cell of a `ulong` | A `UInt128` key, or a hash-based canonical form. |
-| 16 pieces, 16 groups; 64 or 128 cells | `PolyominoState<TBitboard>`: fixed-size inline buffers | Larger buffers cost every position more bytes (about 184 bytes today, 328 on a `UInt128` board). |
+| 21 cells, 10 pieces, 7 shape classes | `KlotskiState`: the canonical key spends 3 bits per cell of a `ulong` | A 128-bit key, or a hash-based canonical form. The key is internal, so this can change in a 1.x. |
+| 16 pieces, 16 groups; 64 or 128 cells | `PolyominoState<TBitboard>`: fixed-size inline buffers | Larger buffers cost every position more bytes (about 184 bytes today, 328 on a `Bitboard128` board). |
 | Lanes of 16 cells, 64 vehicles, 128 cells | `LaneSlideDomain`: 4-bit offsets packed into `ulong` words | Wider offsets, or a second packing for long lanes. |
 | 2048 cells, 256 cases; the position allocates | `PushDomain`: per-call scratch space lives on the stack, and the position is a heap array, so `ApplyMove` allocates | An inline or pooled position would make Soko search allocation-free and allow bigger warehouses. |
-| No memory limit | `PuzzleSolver`: `MaxNodes` counts expanded nodes, but BFS and A* keep every position they generate, so a limit of millions of nodes can mean gigabytes. IDA* recurses once per move of the solution and prunes only the move back to the parent | A limit in bytes (or stored positions) and a `SolveStatus` for it. |
-| Weak hashes cluster | `PuzzleSolver`'s table is indexed by the upper 32 bits of `GetHashCode64` | Mix the hash in the table, so a domain with a poor hash still spreads. |
+| No limit in bytes | `PuzzleSolver`: `MaxStoredStates` caps the positions BFS and A* keep, but a position is 8 bytes in one domain and about 184 in another, so the cap is not a memory budget. IDA* recurses once per move of the solution and prunes only the move back to the parent | A limit in bytes, worked out from the size of the state type. |
+| Positions and heuristics are copied | `PolyominoState<TBitboard>` is a large struct that is not `readonly`, and the solvers' heuristic delegates take the state by value | Make the struct `readonly` and add heuristic overloads that take `in`; both are additive. |
 | `PuzzleTopology.PieceMask` uses the piece's starting shape | A piece that has rotated covers cells of another group | A state-aware variant, `PolyominoState.MaskOf(piece)`. |
 | `PlaySession.Apply` trusts the move | It does not check that the move is legal | An optional check against `GenerateMoves`. |
 | The Labs have no tests of their own | The glide-report wording is tested against a copy in the test project | A small test project for the Labs, or leaving the Labs as a demonstration. |
 
-## 6. API tidy-ups to settle before 1.0
+## 6. Compatibility from 1.0
 
-While the version is below 1.0.0 these can still change without a breaking-change release.
+From 1.0.0 a breaking change to the public API needs a 2.0, and nuget.org cannot delete a version. Every gap above can still arrive in a 1.x,
+as long as it follows these rules.
 
-- **Diagnostic members that are public only because the Labs and the tests need them:** `NPuzzleState.SlideMask`, `KlotskiState.SpreadCells` and
-  `CanonicalShapeKey`, `PolyominoState.ComputeZobrist`, `PolyominoDomain.TraceRaycast` with `RaycastTrace`, `PuzzleTopology.ForbiddenEntryCells` and
-  `GetDirectionDeltas`. They belong in a `Diagnostics` namespace, or behind an explicit friend assembly.
-- **`BitboardExtensions` extends every unsigned integer type**, so `using E2e4.SlidingBlock.Logic;` puts `Lsb`, `ToHex` and the rest on `byte`, `uint` and
-  `ulong` everywhere. Moving it to a `Diagnostics` namespace would make it opt-in.
-- **The flood-fill helpers `FindReachableAnchors` and `ReconstructHookPath`** are static members of `PolyominoState`; they would sit better in their own static class.
-- **Argument checks still missing:** `PolyominoGoal(groupId, anchor)` (a group of 16 or more, an anchor off the board) and null checks on the remaining
-  domain constructors.
+- **New capabilities come as new types or new interfaces**, never as new members of `ISlidingBlockDomain`, `IWeightedDomain`, `ILaneState` or
+  `IBitboard`. netstandard2.0 has no default interface members, so a member added to one of them breaks every implementation. Bidirectional
+  BFS would get an `IReversibleDomain`, symmetry reduction a canonicalising interface beside the domain.
+- **New options come as overloads or `init` properties**, not as new optional parameters on existing methods, which breaks compiled callers.
+- **Defaults stay.** What counts as one move in each domain, and the order each solver searches in, are part of the contract.
+- **New enum values go at the end**, as `SolveStatus.StateLimit` did.
+- **Packed representations stay internal.** The Klotski shape key, the N-puzzle slide mask and the from-scratch Zobrist check are internal, so a
+  wider packing breaks no one.
+
+Once 1.0.0 is on nuget.org, `PackageValidationBaselineVersion` names the last published version, so `dotnet pack` catches a breaking change.
+
+### Settled before 1.0
+
+- Members tied to a packing are internal: `KlotskiState.CanonicalShapeKey` and `SpreadCells`, `NPuzzle4x4State.SlideMask` and
+  `PolyominoState.ComputeZobrist`. `TraceRaycast` with `RaycastTrace`, `ForbiddenEntryCells` and `GetDirectionDeltas` stay public, as
+  visualisation and topology queries.
+- The flood fill is `PolyominoFloodFill`. `BitboardExtensions` extends only `IBitboard<T>`, and `Lsb()` and `Msb()` are methods any C# version can
+  call.
+- Names: `NPuzzle4x4State`, `NPuzzle4x4Domain` and `NPuzzle4x4Move`; a `Hash` property on every state; `Columns` and `Rows` for every board; no
+  duplicate occupancy or goal members. A piece keeps each puzzle family's own word (`PieceId`, `Vehicle`, `Case`).
+- Types: the `GridDirection` and `GridDirections` enums, `CompositeMove.Kind` and `Direction` in place of the magic `DirectionIndex`, and an
+  `EquivalenceGroup` that only the builder makes.
+- Argument checks on `PolyominoGoal`, `PolyominoDomain`, `CompositeDomain`, `LaneSlideDomain.ReachableOffsets` and the topology's direction
+  queries.
+- `IsAotCompatible` is on for net8.0 and net10.0, and its analyzers run in every warning-free build.
 - **Tried and not worth it (measured, October 2026):** one generic best-first core for `SolveAStar` and `SolveWeightedAStar` (15 to 25% slower A*, because the
   unit-cost version packs f and h into one `long` priority); `[InlineArray]` scratch buffers in place of the `stackalloc` spans in `ShuntingDomain`
   (about 25% slower `ApplyMove`); and `[InlineArray]` words in `LaneState64` (about 30% slower `GenerateMoves`). The duplication and the `Unsafe` layout stay
   until a version that keeps the speed is found; run the benchmarks before and after any such change.
-- **Moves and states:** `CompositeMove` has public mutable fields and magic values in `DirectionIndex` (-1 for a rotation, -2 for a multi-step slide); a
-  readonly struct and an enum would be safer. `PolyominoState<TBitboard>` is a large struct that is not `readonly`, and the heuristic delegates take it by value.
-- **Inconsistent constraints:** `LaneSlideDomain.ReachableOffsets`
-  takes the state by value where the rest of the domain takes `in`.
-- **Naming:** the hash is `GetHashCode64`, `ILaneState.Hash()`, `PushState.Hash` and `ZobristHash`; the board size is `Width` and `Height` in a topology but
-  `Columns` and `Rows` elsewhere; a piece is `PieceId`, `Piece`, `Vehicle` or `Case`; `OccupancyMask` and `TotalOccupancy` are the same thing;
-  `PolyominoDomain.GoalGroupId`, `GoalAnchor` and `GoalPosition` repeat `Goal`; the `NPuzzle` types are 4x4 only behind general names.
-- **Weak typing:** `GridDirection` is a set of `int` constants rather than an enum, and `EquivalenceGroup<TBitboard>` is a public record whose invariants
-  (a normalised mask, valid anchors) can be broken with `new` or `with`.
-- **Now that 0.1.0 is out:** set `PackageValidationBaselineVersion` so a breaking change is caught when the package is packed, and check
-  `IsAotCompatible` with a trimmed or native-AOT publish of a small sample.
 
 ## 7. Other libraries
 
@@ -119,7 +126,6 @@ whole-space analysis and generation, and Soko deadlock detection. The engine's r
 
 ## Suggested order
 
-0. Before 1.0: the API tidy-ups in section 6, since they are the changes that would break users later.
 1. Move metrics and weighted edges, then bidirectional BFS.
 2. A state-space explorer and distance tables.
 3. A size-generic N-puzzle with linear conflict and pattern databases.

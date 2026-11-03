@@ -87,7 +87,7 @@ public partial class Lab2View : UserControl
             CoordLayer.Children.Add(idx);
         }
         // Goal outline for the master L.
-        var master = _t.Groups[_d.GoalGroupId];
+        var master = _t.Groups[_d.Goal.GroupId];
         var goal = new Path
         {
             Data = FootprintGeometry(master, 0),
@@ -96,7 +96,7 @@ public partial class Lab2View : UserControl
             StrokeDashArray = [4, 3],
             Opacity = 0.85,
         };
-        goal.RenderTransform = new TranslateTransform(Pos(_d.GoalAnchor).X, Pos(_d.GoalAnchor).Y);
+        goal.RenderTransform = new TranslateTransform(Pos(_d.Goal.Anchor).X, Pos(_d.Goal.Anchor).Y);
         GridLayer.Children.Add(goal);
     }
 
@@ -255,7 +255,7 @@ public partial class Lab2View : UserControl
         for (Bitboard64 r = reach; !r.IsEmpty; r = r.ClearLowest())
         {
             int target = r.TrailingZeroCount();
-            var path = PolyominoState<Bitboard64>.ReconstructHookPath(a, target, g.BaseMask, g.ValidAnchorsMask, other, N, g.Directions);
+            var path = PolyominoFloodFill.ReconstructHookPath<Bitboard64>(a, target, g.BaseMask, g.ValidAnchorsMask, other, N, g.Directions);
             if (path.Count < 2) continue;
             string kind = Classify(path);
             var color = KindColor(kind);
@@ -414,7 +414,7 @@ public partial class Lab2View : UserControl
         foreach (var (g, anchor, add) in terms)
             sb.AppendLine(CultureInfo.InvariantCulture, $"^ {$"ZobristTable[{g}, {anchor}]:",-30}  0x{_t.ZobristKey(g, anchor):X16}  ({(add ? "Add new anchor" : "Remove old anchor")})");
         sb.AppendLine(new string('-', 62));
-        sb.Append(CultureInfo.InvariantCulture, $"= {"New ZobristHash:",-30}  0x{result:X16}");
+        sb.Append(CultureInfo.InvariantCulture, $"= {"New Hash:",-30}  0x{result:X16}");
         return sb.ToString();
     }
 
@@ -434,7 +434,7 @@ public partial class Lab2View : UserControl
             _note = "";
             int g = _t.Pieces[piece].GroupId, old = before.AnchorOf(piece);
             _lastMove = Derivation($"piece {_t.Pieces[piece].Label} (group {g}): anchor {old} -> {target}   [{Classify(path)}, {path.Count - 1} step(s)]   path: {string.Join(" -> ", path)}",
-                    before.ZobristHash, TermsFor(jobs, false), _state.ZobristHash)
+                    before.Hash, TermsFor(jobs, false), _state.Hash)
                 + $"\n\nGroupAnchors[{g}] ^= (1<<{old}) | (1<<{target})\n  0x{before.GroupAnchorsOf(g):X7} -> 0x{_state.GroupAnchorsOf(g):X7}";
             Banner.Visibility = Visibility.Collapsed;
             RefreshAll();
@@ -453,7 +453,7 @@ public partial class Lab2View : UserControl
             _state = entry.Before;
             _moves = entry.MovesBefore;
             _note = "";
-            _lastMove = Derivation("Undo: previous state restored", previous.ZobristHash, TermsFor(entry.Jobs, true), _state.ZobristHash);
+            _lastMove = Derivation("Undo: previous state restored", previous.Hash, TermsFor(entry.Jobs, true), _state.Hash);
             Banner.Visibility = Visibility.Collapsed;
             RefreshAll();
         });
@@ -468,7 +468,7 @@ public partial class Lab2View : UserControl
         var m = buf[Random.Shared.Next(n)];
         _selected = m.PieceId;
         var (other, g, a) = Context(m.PieceId);
-        MoveSelected(m.TargetAnchor, PolyominoState<Bitboard64>.ReconstructHookPath(a, m.TargetAnchor, g.BaseMask, g.ValidAnchorsMask, other, N, g.Directions));
+        MoveSelected(m.TargetAnchor, PolyominoFloodFill.ReconstructHookPath<Bitboard64>(a, m.TargetAnchor, g.BaseMask, g.ValidAnchorsMask, other, N, g.Directions));
     }
 
     /// <summary>Moves the 1x1 block A above the wall and clears the right-hand side, so reaching anchor 17 needs a 4-step hook around the wall.</summary>
@@ -564,18 +564,18 @@ public partial class Lab2View : UserControl
             // Route through a scratch square: every update is XOR algebra, so overlap is irrelevant.
             _state = before.WithPieceMoved(_t, pa, 24).WithPieceMoved(_t, pb, a).WithPieceMoved(_t, pa, b);
             bool sameGa = before.GroupAnchorsOf(groupId) == _state.GroupAnchorsOf(groupId);
-            bool sameHash = before.ZobristHash == _state.ZobristHash;
+            bool sameHash = before.Hash == _state.Hash;
             bool equal = before.Equals(_state);
             string ok(bool v) => v ? "IDENTICAL  ✓" : "DIFFERENT  ✗";
             BannerText.Text =
                 $"Swapped block A ({a} -> {b}) and block B ({b} -> {a}).\n" +
                 $"GroupAnchors[3]: 0x{before.GroupAnchorsOf(groupId):X7} -> 0x{_state.GroupAnchorsOf(groupId):X7}   {ok(sameGa)}\n" +
-                $"ZobristHash:     0x{before.ZobristHash:X16} -> 0x{_state.ZobristHash:X16}   {ok(sameHash)}\n" +
+                $"Hash:            0x{before.Hash:X16} -> 0x{_state.Hash:X16}   {ok(sameHash)}\n" +
                 $"state.Equals / GetHashCode: {equal} / {before.GetHashCode() == _state.GetHashCode()}   (PieceAnchors differ: A={_state.AnchorOf(pa)}, B={_state.AnchorOf(pb)})";
             Banner.Background = new SolidColorBrush(sameGa && sameHash && equal ? Color.FromRgb(0x06, 0x4E, 0x3B) : Color.FromRgb(0x7F, 0x1D, 0x1D));
             Banner.Visibility = Visibility.Visible;
             _lastMove = Derivation("Identical-piece swap: A leaves " + a + " for " + b + ", B leaves " + b + " for " + a + ". Every term appears twice, so the hash cancels back to itself.",
-                before.ZobristHash, TermsFor(jobs, false), _state.ZobristHash);
+                before.Hash, TermsFor(jobs, false), _state.Hash);
             RefreshAll();
         });
     }
@@ -611,7 +611,7 @@ public partial class Lab2View : UserControl
             var piece = _t.Pieces[_selected];
             Bitboard64 shifted = g.BaseMask << a, valid = g.ValidAnchorsMask;
             var parent = new sbyte[N * N];
-            Bitboard64 reach = PolyominoState<Bitboard64>.FindReachableAnchors(a, g.BaseMask, valid, other, N, parent, out Bitboard64 straight, out Bitboard64 hook, g.Directions);
+            Bitboard64 reach = PolyominoFloodFill.FindReachableAnchors<Bitboard64>(a, g.BaseMask, valid, other, N, parent, out Bitboard64 straight, out Bitboard64 hook, g.Directions);
             string offsets = string.Join("  ", g.RelativeCells.Select(c => $"({c.dRow},{c.dCol})->{N * c.dRow + c.dCol}"));
             sb.AppendLine(CultureInfo.InvariantCulture, $"Piece                 {piece.Label}  (PieceId {piece.PieceId})  {g.Name}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"EquivalenceGroupId    {g.GroupId}");
@@ -651,15 +651,15 @@ public partial class Lab2View : UserControl
         CanonText.Text = sb.ToString().TrimEnd();
 
         ulong recomputed = RecomputedHash(_state);
-        bool match = recomputed == _state.ZobristHash;
-        HashText.Text = $"0x{_state.ZobristHash:X16}";
+        bool match = recomputed == _state.Hash;
+        HashText.Text = $"0x{_state.Hash:X16}";
         HashBadgeText.Text = match
             ? $"IncrementalHash == RecomputedFromScratchHash  ✓   (0x{recomputed:X16})"
             : $"MISMATCH  ✗  recomputed 0x{recomputed:X16}";
         HashBadge.Background = new SolidColorBrush(match ? Color.FromRgb(0x06, 0x4E, 0x3B) : Color.FromRgb(0x7F, 0x1D, 0x1D));
         ZobristText.Text = _lastMove;
 
-        StatusText.Text = (_d.IsGoal(_state) ? $"Solved in {_moves} move(s)!" : $"Moves: {_moves}   |   goal: master L-tromino on anchor {_d.GoalAnchor}")
+        StatusText.Text = (_d.IsGoal(_state) ? $"Solved in {_moves} move(s)!" : $"Moves: {_moves}   |   goal: master L-tromino on anchor {_d.Goal.Anchor}")
             + (_note.Length > 0 ? "\n" + _note : "");
     }
 }

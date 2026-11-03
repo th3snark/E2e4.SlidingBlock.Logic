@@ -36,7 +36,7 @@ public interface ILaneState<TState> : IEquatable<TState> where TState : struct, 
     ulong Word(int index);
 
     /// <summary>A 64-bit hash of the position.</summary>
-    ulong Hash();
+    ulong Hash { get; }
 }
 
 /// <summary>A position of up to 16 vehicles, in one 64-bit word.</summary>
@@ -56,7 +56,7 @@ public readonly struct LaneState16 : ILaneState<LaneState16>
     /// <inheritdoc/>
     public LaneState16 WithOffset(int vehicle, int offset) => new((_word & ~(0xFUL << (4 * vehicle))) | ((ulong)(offset & 0xF) << (4 * vehicle)));
     /// <inheritdoc/>
-    public ulong Hash() => Hashing.Mix(_word);
+    public ulong Hash => Hashing.Mix(_word);
 
     /// <inheritdoc/>
     public bool Equals(LaneState16 other) => _word == other._word;
@@ -106,14 +106,14 @@ public readonly struct LaneState64 : ILaneState<LaneState64>
     }
 
     /// <inheritdoc/>
-    public ulong Hash() => Hashing.Mix(_w0, _w1, _w2, _w3);
+    public ulong Hash => Hashing.Mix(_w0, _w1, _w2, _w3);
 
     /// <inheritdoc/>
     public bool Equals(LaneState64 other) => _w0 == other._w0 && _w1 == other._w1 && _w2 == other._w2 && _w3 == other._w3;
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is LaneState64 s && Equals(s);
     /// <inheritdoc/>
-    public override int GetHashCode() => Hash().GetHashCode();
+    public override int GetHashCode() => Hash.GetHashCode();
     /// <summary>True if both positions have every vehicle at the same offset.</summary>
     public static bool operator ==(LaneState64 left, LaneState64 right) => left.Equals(right);
     /// <summary>True if the positions differ.</summary>
@@ -128,8 +128,8 @@ public readonly record struct LaneMove(byte Vehicle, byte Offset);
 /// yards. A move takes one vehicle through free cells, up to <c>maxStep</c> cells; <c>1</c> counts one cell at a time and the default
 /// counts any distance as one move. The position is the packed lane offsets, four bits each, in <typeparamref name="TState"/>:
 /// <see cref="LaneState16"/> for up to 16 vehicles, <see cref="LaneState64"/> for up to 64, far past the polyomino domain's 16 pieces.
-/// <typeparamref name="TBitboard"/> is the board's cell register, as for the polyomino domain: <see cref="ulong"/> for boards of up to 64
-/// cells, <c>UInt128</c> for up to 128. The puzzle is solved when the goal vehicle reaches the goal offset.
+/// <typeparamref name="TBitboard"/> is the board's cell register, as for the polyomino domain: <see cref="Bitboard64"/> for boards of up
+/// to 64 cells, <see cref="Bitboard128"/> for up to 128. The puzzle is solved when the goal vehicle reaches the goal offset.
 /// </summary>
 public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TState, LaneMove>
     where TState : struct, ILaneState<TState>
@@ -243,7 +243,14 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
     }
 
     /// <summary>The offsets a vehicle can slide to in one move from where it stands (not counting where it stands), nearest first on each side.</summary>
-    public IEnumerable<int> ReachableOffsets(TState state, int vehicle)
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="vehicle"/> is not a vehicle of the puzzle.</exception>
+    public IEnumerable<int> ReachableOffsets(in TState state, int vehicle)
+    {
+        if ((uint)vehicle >= (uint)_count) throw new ArgumentOutOfRangeException(nameof(vehicle), vehicle, "No such vehicle.");
+        return Offsets(state, vehicle);
+    }
+
+    private IEnumerable<int> Offsets(TState state, int vehicle)
     {
         int at = state.OffsetOf(vehicle), baseIndex = vehicle * Stride;
         var others = Occupancy(state).AndNot(_masks[baseIndex + at]);
@@ -293,7 +300,7 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
     public TState ApplyMove(in TState state, in LaneMove move) => state.WithOffset(move.Vehicle, move.Offset);
 
     /// <inheritdoc/>
-    public ulong GetHashCode64(in TState state) => state.Hash();
+    public ulong GetHashCode64(in TState state) => state.Hash;
 
     private TBitboard MaskOf(LaneVehicle v, int offset)
     {

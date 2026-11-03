@@ -108,9 +108,9 @@ public partial class Lab3View : UserControl
         }
 
         var dash = (Brush)FindResource("Gold");
-        if (M.Goal.GoalGroupId >= 0)
-            AddGoalOutline(FootprintGeometry(T.Groups[M.Goal.GoalGroupId], 0), M.Goal.GoalAnchor, dash);
-        else if (M.Goal.GoalPosition is { } goal)
+        if (M.Domain.Goal.GroupId >= 0)
+            AddGoalOutline(FootprintGeometry(T.Groups[M.Domain.Goal.GroupId], 0), M.Domain.Goal.Anchor, dash);
+        else if (M.Domain.Goal.Position is { } goal)
             for (int g = 0; g < T.Groups.Count; g++)
                 if (T.Groups[g].Name == "Crate")
                     for (Bitboard64 m = goal.GroupAnchorsOf(g); !m.IsEmpty; m = m.ClearLowest())
@@ -222,7 +222,7 @@ public partial class Lab3View : UserControl
         if (!g.CanRotate) return null;
         int next = clockwise ? g.NextCwGroupId : g.NextCcwGroupId;
         foreach (var m in MovesFor(pieceId))
-            if (m.DirectionIndex == -1 && m.AsSpan()[0].NewGroupId == next) return m;
+            if (m.Kind == CompositeMoveKind.Rotation && m.AsSpan()[0].NewGroupId == next) return m;
         return null;
     }
 
@@ -253,7 +253,7 @@ public partial class Lab3View : UserControl
         await AnimateAsync(jobs);
 
         S.Apply(move);
-        _xor[_mode] = Derivation(move, before.ZobristHash, State.ZobristHash);
+        _xor[_mode] = Derivation(move, before.Hash, State.Hash);
         _lastTable[_mode] = DeltaTable(move);
         _lastCluster[_mode] = deltas.Aggregate(default(Bitboard64), (acc, d) => acc | FootprintOf(T, d));
         Banner.Visibility = Visibility.Collapsed;
@@ -316,7 +316,7 @@ public partial class Lab3View : UserControl
         var teal = Palette.Teal;
         foreach (var m in moves)
         {
-            if (m.DirectionIndex == -1) continue;
+            if (m.Kind == CompositeMoveKind.Rotation) continue;
             var d = m.AsSpan()[0];
             var move = m;
             AddRing(Center(d.NewAnchor), teal, $"slide to anchor {d.NewAnchor}", () => Hover(move, teal, $"Slide {d.OldAnchor} -> {d.NewAnchor}"), () => PlayAsync(move));
@@ -335,12 +335,12 @@ public partial class Lab3View : UserControl
         Point[] at = [new(left, midY), new(right, midY), new(midX, top), new(midX, bottom)];
         foreach (var m in moves)
         {
-            if (m.DirectionIndex is < 0 or > 3) continue;
+            if (m.Direction is not { } direction || (int)direction > 3) continue;
             bool coupled = m.Count > 1;
             var color = coupled ? Palette.Orange : Palette.Teal;
             string text = coupled ? $"Coupled {m.Count}-piece CompositeMove" : "Single-piece slide";
             var move = m;
-            AddRing(at[m.DirectionIndex], color, text, () => Hover(move, color, text), () => PlayAsync(move), glyphs[m.DirectionIndex], 38);
+            AddRing(at[(int)direction], color, text, () => Hover(move, color, text), () => PlayAsync(move), glyphs[(int)direction], 38);
         }
     }
 
@@ -523,9 +523,9 @@ public partial class Lab3View : UserControl
     private void OnUndo(object sender, RoutedEventArgs e)
     {
         if (_busy) return;
-        var before = State.ZobristHash;
+        var before = State.Hash;
         if (!S.Undo()) return;
-        _xor[_mode] = $"Undo: previous state restored\n  PreviousHash:  0x{before:X16}\n  RestoredHash:  0x{State.ZobristHash:X16}";
+        _xor[_mode] = $"Undo: previous state restored\n  PreviousHash:  0x{before:X16}\n  RestoredHash:  0x{State.Hash:X16}";
         _lastTable[_mode] = "";
         _lastCluster[_mode] = 0;
         Banner.Visibility = Visibility.Collapsed;
@@ -579,7 +579,7 @@ public partial class Lab3View : UserControl
             sb.AppendLine(CultureInfo.InvariantCulture, $"^ {$"ZobristTable[{d.NewGroupId}, {d.NewAnchor}]:",-32}  0x{T.ZobristKey(d.NewGroupId, d.NewAnchor):X16}  (add new)");
         }
         sb.AppendLine(new string('-', 64));
-        sb.Append(CultureInfo.InvariantCulture, $"= {"New ZobristHash:",-32}  0x{result:X16}");
+        sb.Append(CultureInfo.InvariantCulture, $"= {"New Hash:",-32}  0x{result:X16}");
         foreach (var d in deltas)
             sb.Append(CultureInfo.InvariantCulture, $"\nGroupAnchors[{d.OldGroupId}] ^= 1<<{d.OldAnchor};  GroupAnchors[{d.NewGroupId}] ^= 1<<{d.NewAnchor}");
         return sb.ToString();
@@ -622,7 +622,7 @@ public partial class Lab3View : UserControl
             sb.AppendLine(CultureInfo.InvariantCulture, $"Piece                 {piece.Label}  (PieceId {piece.PieceId})  {g.Name}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"EquivalenceGroupId    {g.GroupId}     RoleFlags {g.Roles}     {g.SlidePhysics}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"BaseMask[g]           {g.BaseMask.ToHex(9)}   {g.BaseMask.ToBinary(Bits)}");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"CurrentAnchor         tzcnt(pieceMask) = {pieceMask.Lsb}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"CurrentAnchor         tzcnt(pieceMask) = {pieceMask.Lsb()}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"PieceMask             {pieceMask.ToHex(9)}   {pieceMask.ToBinary(Bits)}   = BaseMask << {a}");
             sb.Append(CultureInfo.InvariantCulture, $"ValidAnchorsMask[g]   {g.ValidAnchorsMask.ToHex(9)}   {g.ValidAnchorsMask.ToBinary(Bits)}");
             PieceText.Text = sb.ToString();
@@ -647,8 +647,8 @@ public partial class Lab3View : UserControl
         CanonText.Text = sb.ToString();
 
         ulong recomputed = RecomputedHash(State);
-        bool match = recomputed == State.ZobristHash;
-        HashText.Text = $"0x{State.ZobristHash:X16}";
+        bool match = recomputed == State.Hash;
+        HashText.Text = $"0x{State.Hash:X16}";
         HashBadgeText.Text = match ? $"IncrementalHash == FullRecomputedHash  ✓   (0x{recomputed:X16})" : $"MISMATCH  ✗  recomputed 0x{recomputed:X16}";
         HashBadge.Background = Palette.Frozen(match ? Palette.GoodDeep : Palette.BadDeep);
         XorText.Text = _xor[_mode];
@@ -669,9 +669,9 @@ public partial class Lab3View : UserControl
 
     private string GoalText() => _mode switch
     {
-        0 => $"L-tromino in group {M.Goal.GoalGroupId} on anchor {M.Goal.GoalAnchor}",
+        0 => $"L-tromino in group {M.Domain.Goal.GroupId} on anchor {M.Domain.Goal.Anchor}",
         1 => "crates on anchors 8 and 32",
-        _ => $"glider on anchor {M.Goal.GoalAnchor}",
+        _ => $"glider on anchor {M.Domain.Goal.Anchor}",
     };
 
     private string ExtraReadout(EquivalenceGroup<Bitboard64> g, int anchor, Bitboard64 pieceMask)
@@ -696,8 +696,8 @@ public partial class Lab3View : UserControl
             case 1:
                 sb.AppendLine(_lastTable[1].Length > 0 ? _lastTable[1] : "No CompositeMove executed yet.");
                 sb.Append("Legal 1-step moves of this piece: ");
-                sb.Append(string.Join(", ", MovesFor(_selected).Where(m => m.DirectionIndex >= 0).Select(m =>
-                    $"{new[] { "Left", "Right", "Up", "Down" }[m.DirectionIndex]} ({(m.Count > 1 ? $"coupled x{m.Count}" : "single")})")));
+                sb.Append(string.Join(", ", MovesFor(_selected).Where(m => m.Kind == CompositeMoveKind.Step).Select(m =>
+                    $"{m.Direction} ({(m.Count > 1 ? $"coupled x{m.Count}" : "single")})")));
                 break;
             default:
                 sb.AppendLine("Direction  Steps  Terminal  StopReason            BlockingBitsMask");

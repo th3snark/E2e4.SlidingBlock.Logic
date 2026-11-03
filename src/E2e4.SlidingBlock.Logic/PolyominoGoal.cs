@@ -12,8 +12,16 @@ public sealed class PolyominoGoal<TBitboard> where TBitboard : unmanaged, IBitbo
     private readonly ulong _matchedGroups;
 
     /// <summary>Solved when group <paramref name="groupId"/> has exactly one piece, on <paramref name="anchor"/>.</summary>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="groupId"/> is negative or not below <see cref="PolyominoState{TBitboard}.MaxGroups"/>, or <paramref name="anchor"/> is not a
+    /// bit of the bitboard.
+    /// </exception>
     public PolyominoGoal(int groupId, int anchor)
     {
+        if ((uint)groupId >= PolyominoState<TBitboard>.MaxGroups)
+            throw new ArgumentOutOfRangeException(nameof(groupId), groupId, $"A position holds at most {PolyominoState<TBitboard>.MaxGroups} groups.");
+        if ((uint)anchor >= (uint)Bit<TBitboard>.Width)
+            throw new ArgumentOutOfRangeException(nameof(anchor), anchor, $"The anchor is not one of the {Bit<TBitboard>.Width} cells of the bitboard.");
         GroupId = groupId;
         Anchor = anchor;
     }
@@ -43,6 +51,16 @@ public sealed class PolyominoGoal<TBitboard> where TBitboard : unmanaged, IBitbo
 
     /// <summary>The goal position when there is one, otherwise null.</summary>
     public PolyominoState<TBitboard>? Position => HasPosition ? _position : null;
+
+    /// <summary>Throws when a single-group goal names a group or a cell that <paramref name="topology"/> does not have.</summary>
+    internal void CheckFits(PuzzleTopology<TBitboard> topology, string paramName)
+    {
+        if (HasPosition) return;
+        if (GroupId >= topology.Groups.Count)
+            throw new ArgumentException($"The goal names group {GroupId}, but the topology has {topology.Groups.Count} groups.", paramName);
+        if (Anchor >= topology.CellCount)
+            throw new ArgumentException($"The goal anchor {Anchor} is not a cell of the {topology.CellCount}-cell board.", paramName);
+    }
 
     /// <summary>True if <paramref name="state"/> meets the goal.</summary>
     public bool IsReached(in PolyominoState<TBitboard> state)

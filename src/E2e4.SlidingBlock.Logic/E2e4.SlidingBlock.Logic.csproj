@@ -31,6 +31,14 @@
     <None Include="..\..\assets\icon.png" Pack="true" PackagePath="\" />
   </ItemGroup>
 
+  <!-- Members tied to a packed representation (shape keys, slide masks, the from-scratch Zobrist check) are internal, so the packing can
+       change in a 1.x; the tests and the Labs still read them. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="E2e4.SlidingBlock.Logic.Test" />
+    <InternalsVisibleTo Include="E2e4.SlidingBlock.Logic.Test.NetStandard" />
+    <InternalsVisibleTo Include="E2e4.SlidingBlock.Logic.Labs.Wpf" />
+  </ItemGroup>
+
   <!-- nuget.org renders neither raw HTML nor relative paths, and shows images only from allowed hosts (raw.githubusercontent.com is one).
        The packed README is a copy whose icon <img> is a Markdown image on a raw URL pinned to the release tag, and whose repo-relative links are
        absolute links to that tag (GitHub keeps the original). -->
@@ -42,6 +50,7 @@
       <PackedReadmeText>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../../README.md'))</PackedReadmeText>
       <PackedReadmeText>$([System.Text.RegularExpressions.Regex]::Replace('$(PackedReadmeText)', '(?m)^&lt;img src="([^"]+)" alt="([^"]*)"[^\r\n]*', '![$2]($(RepoRaw)$1)'))</PackedReadmeText>
       <PackedReadmeText>$([System.Text.RegularExpressions.Regex]::Replace('$(PackedReadmeText)', '\]\((?!https?:|#)([^)]+)\)', ']($(RepoBlob)$1)'))</PackedReadmeText>
+      <PackedReadmeText>$(PackedReadmeText.Replace('github.com/th3snark/E2e4.SlidingBlock.Logic/blob/master/', 'github.com/th3snark/E2e4.SlidingBlock.Logic/blob/v$(Version)/'))</PackedReadmeText>
     </PropertyGroup>
     <WriteLinesToFile File="$(PackedReadme)" Lines="$([MSBuild]::Escape('$(PackedReadmeText)'))" Overwrite="true" />
     <ItemGroup>

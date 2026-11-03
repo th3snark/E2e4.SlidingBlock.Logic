@@ -38,7 +38,7 @@ public class GoldenTests
     {
         var b = PuzzleTopology<Bitboard64>.CreateBuilder(5, 5);
         b.AddWall(2, 2);
-        b.AddDiode(1, 3, 0b0010);
+        b.AddDiode(1, 3, GridDirections.Right);
         b.AddPressurePlate(1UL << 20, 1UL << 7);
         int dom = b.AddGroup("domino", [(0, 0), (0, 1)]);
         int horiz = b.AddGroup("horizontal", [(0, 0)], AllowedDirections.Horizontal);
@@ -130,7 +130,7 @@ public class GoldenTests
                 var g = topo.Groups[state.GroupOf(p.PieceId)];
                 int a = state.AnchorOf(p.PieceId);
                 Bitboard64 other = state.OccupancyMask ^ (g.BaseMask << a);
-                Bitboard64 reach = PolyominoState<Bitboard64>.FindReachableAnchors(a, g.BaseMask, g.ValidAnchorsMask, other, topo.Width, parent, out Bitboard64 straight, out Bitboard64 hook, g.Directions);
+                Bitboard64 reach = PolyominoFloodFill.FindReachableAnchors<Bitboard64>(a, g.BaseMask, g.ValidAnchorsMask, other, topo.Columns, parent, out Bitboard64 straight, out Bitboard64 hook, g.Directions);
                 h = (h ^ reach.Value ^ (straight << 1).Value ^ (hook << 2).Value) * 1099511628211UL;
                 for (int c = 0; c < topo.CellCount; c++) h = (h ^ (ulong)(byte)parent[c]) * 1099511628211UL;
             }
@@ -155,7 +155,7 @@ public class GoldenTests
         return h ^ (ulong)r.NodesExpanded << 20 ^ (ulong)r.Moves.Count;
     }
 
-    private static NPuzzleState Scrambled()
+    private static NPuzzle4x4State Scrambled()
     {
         var d = Fixtures.CreatePuzzle15();
         return PuzzleWalk.RandomWalk(d, d.Goal, 40, new Random(15));
@@ -202,7 +202,7 @@ public class GoldenTests
         var state = d.InitialState;
         for (int step = 0; step < 30; step++)
         {
-            Assert.Equal(state.ZobristHash, state.ComputeZobrist(d.Topology));
+            Assert.Equal(state.Hash, state.ComputeZobrist(d.Topology));
             int n = d.GenerateMoves(state, buffer);
             state = d.ApplyMove(state, buffer[(step * 7) % n]);
         }
@@ -235,11 +235,11 @@ public class GoldenTests
     {
         var narrow = new Bitboard64(0b1010UL << 8);
         var wide = new Bitboard128(1UL << 3, 1UL << 36);
-        Assert.Equal((9, 11, 2), (narrow.Lsb, narrow.Msb, narrow.PopCount()));
-        Assert.Equal((3, 100, 2), (wide.Lsb, wide.Msb, wide.PopCount()));
-        Assert.Equal(64, default(Bitboard64).Lsb);
-        Assert.Equal(128, default(Bitboard128).Lsb);
-        Assert.Equal(-1, default(Bitboard64).Msb);
+        Assert.Equal((9, 11, 2), (narrow.Lsb(), narrow.Msb(), narrow.PopCount()));
+        Assert.Equal((3, 100, 2), (wide.Lsb(), wide.Msb(), wide.PopCount()));
+        Assert.Equal(64, default(Bitboard64).Lsb());
+        Assert.Equal(128, default(Bitboard128).Lsb());
+        Assert.Equal(-1, default(Bitboard64).Msb());
         Assert.True(wide.HasBit(100));
         Assert.Equal(34, wide.ToHex().Length);
     }
@@ -256,9 +256,16 @@ public class GoldenTests
             for (int k = 0; k < n && states.Count < 40; k++) states.Add(domain.ApplyMove(states[i], buffer[k]));
         }
         foreach (var s in states) domain.GenerateMoves(s, buffer);   // warm up (JIT, caches)
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        foreach (var s in states) domain.GenerateMoves(s, buffer);
-        return GC.GetAllocatedBytesForCurrentThread() - before;
+        // The least of three passes: an allocation of the move generator shows in every pass, while the runtime may allocate once in a pass
+        // that happens to meet a tier-up under load (seen once on net8.0 with every target testing in parallel).
+        long least = long.MaxValue;
+        for (int pass = 0; pass < 3; pass++)
+        {
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            foreach (var s in states) domain.GenerateMoves(s, buffer);
+            least = Math.Min(least, GC.GetAllocatedBytesForCurrentThread() - before);
+        }
+        return least;
     }
 
     public static TheoryData<string> Domains => new()

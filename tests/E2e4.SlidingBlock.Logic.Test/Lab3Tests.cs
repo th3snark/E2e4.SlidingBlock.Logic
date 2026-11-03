@@ -11,7 +11,7 @@ internal static class Lab3Helpers
     }
 
     public static PolyominoState<Bitboard64> Play(Fixtures.Mode mode, PolyominoState<Bitboard64> s, int pieceId, int direction) =>
-        mode.Domain.ApplyMove(s, MovesOf(mode, s, pieceId).Single(m => m.DirectionIndex == direction));
+        mode.Domain.ApplyMove(s, MovesOf(mode, s, pieceId).Single(m => m.Direction == (GridDirection)direction));
 
     public static void AssertSolvable(Fixtures.Mode mode)
     {
@@ -31,7 +31,7 @@ public class Lab3RotationTests
     {
         var g = mode.Domain.Topology.Groups[s.GroupOf(Master)];
         int next = clockwise ? g.NextCwGroupId : g.NextCcwGroupId;
-        return Lab3Helpers.MovesOf(mode, s, Master).Where(m => m.DirectionIndex == -1 && m.AsSpan()[0].NewGroupId == next).Cast<CompositeMove?>().FirstOrDefault();
+        return Lab3Helpers.MovesOf(mode, s, Master).Where(m => m.Kind == CompositeMoveKind.Rotation && m.AsSpan()[0].NewGroupId == next).Cast<CompositeMove?>().FirstOrDefault();
     }
 
     [Fact]
@@ -61,10 +61,10 @@ public class Lab3RotationTests
             s = mode.Domain.ApplyMove(s, Rotation(mode, s, true)!.Value);
             Assert.Equal(groups[i], s.GroupOf(Master));
             Assert.Equal(anchors[i], s.AnchorOf(Master));
-            Assert.Equal(Cells.HashOf(topo, s), s.ZobristHash);
+            Assert.Equal(Cells.HashOf(topo, s), s.Hash);
         }
         Assert.Equal(start, s);
-        Assert.Equal(start.ZobristHash, s.ZobristHash);
+        Assert.Equal(start.Hash, s.Hash);
         for (int g = 0; g < topo.Groups.Count; g++) Assert.Equal(start.GroupAnchorsOf(g), s.GroupAnchorsOf(g));
     }
 
@@ -93,7 +93,7 @@ public class Lab3CarrierTests
     public void CarrierCouplesWithThePocketCrateOnlyWhenItPushesIt(int dir, int count)
     {
         var mode = Fixtures.CreateCarrier();
-        var move = Lab3Helpers.MovesOf(mode, mode.Domain.InitialState, Carrier).Single(m => m.DirectionIndex == dir);
+        var move = Lab3Helpers.MovesOf(mode, mode.Domain.InitialState, Carrier).Single(m => m.Direction == (GridDirection)dir);
         Assert.Equal(count, move.Count);
         var after = mode.Domain.ApplyMove(mode.Domain.InitialState, move);
         Assert.Equal(dir == 3 ? 19 : 14, after.AnchorOf(Carrier));
@@ -105,8 +105,8 @@ public class Lab3CarrierTests
     {
         var mode = Fixtures.CreateCarrier();
         var moves = Lab3Helpers.MovesOf(mode, mode.Domain.InitialState, Carrier);
-        Assert.DoesNotContain(moves, m => m.DirectionIndex == 0);   // the U's floor would cover the wall on bit 18
-        Assert.DoesNotContain(moves, m => m.DirectionIndex == 2);   // crate A would be lifted onto crate B, the chain hits the pusher and the edge
+        Assert.DoesNotContain(moves, m => m.Direction == GridDirection.Left);   // the U's floor would cover the wall on bit 18
+        Assert.DoesNotContain(moves, m => m.Direction == GridDirection.Up);   // crate A would be lifted onto crate B, the chain hits the pusher and the edge
     }
 
     [Fact]
@@ -114,13 +114,13 @@ public class Lab3CarrierTests
     {
         var mode = Fixtures.CreateCarrier();
         var s = Lab3Helpers.Play(mode, mode.Domain.InitialState, Carrier, 1);
-        var west = Lab3Helpers.MovesOf(mode, s, Carrier).Single(m => m.DirectionIndex == 0);
+        var west = Lab3Helpers.MovesOf(mode, s, Carrier).Single(m => m.Direction == GridDirection.Left);
         Assert.Equal(2, west.Count);
         s = mode.Domain.ApplyMove(s, west);
         Assert.Equal(mode.Domain.InitialState, s);
 
         s = Lab3Helpers.Play(mode, Lab3Helpers.Play(mode, s, CrateB, 0), CrateB, 0);   // crate B out of the way: 8 -> 6
-        var up = Lab3Helpers.MovesOf(mode, s, Carrier).Single(m => m.DirectionIndex == 2);
+        var up = Lab3Helpers.MovesOf(mode, s, Carrier).Single(m => m.Direction == GridDirection.Up);
         Assert.Equal(2, up.Count);
         s = mode.Domain.ApplyMove(s, up);
         Assert.Equal(7, s.AnchorOf(Carrier));
@@ -133,17 +133,17 @@ public class Lab3CarrierTests
         var mode = Fixtures.CreateCarrier();
         var topo = mode.Domain.Topology;
         var s = mode.Domain.InitialState;
-        var move = Lab3Helpers.MovesOf(mode, s, Carrier).Single(m => m.DirectionIndex == 1);
-        ulong expected = s.ZobristHash;
+        var move = Lab3Helpers.MovesOf(mode, s, Carrier).Single(m => m.Direction == GridDirection.Right);
+        ulong expected = s.Hash;
         foreach (var d in move.AsSpan()) expected ^= topo.ZobristKey(d.OldGroupId, d.OldAnchor) ^ topo.ZobristKey(d.NewGroupId, d.NewAnchor);
         s = mode.Domain.ApplyMove(s, move);
-        Assert.Equal(expected, s.ZobristHash);
-        Assert.Equal(Cells.HashOf(topo, s), s.ZobristHash);
+        Assert.Equal(expected, s.Hash);
+        Assert.Equal(Cells.HashOf(topo, s), s.Hash);
     }
 
     [Fact]
     public void PusherIsBlockedWhileTheChainEndsInTheCarrier() =>
-        Assert.DoesNotContain(Lab3Helpers.MovesOf(Fixtures.CreateCarrier(), Fixtures.CreateCarrier().Domain.InitialState, Pusher), m => m.DirectionIndex == 3);
+        Assert.DoesNotContain(Lab3Helpers.MovesOf(Fixtures.CreateCarrier(), Fixtures.CreateCarrier().Domain.InitialState, Pusher), m => m.Direction == GridDirection.Down);
 
     [Fact]
     public void GoalIsSolvable() => Lab3Helpers.AssertSolvable(Fixtures.CreateCarrier());

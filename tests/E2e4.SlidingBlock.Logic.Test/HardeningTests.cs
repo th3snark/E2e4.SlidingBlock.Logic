@@ -8,7 +8,7 @@ public class HardeningTests
     // A line of ten positions with a goal that may be off the end of it: the smallest domain that can be solved, run out of moves or cut short.
     private readonly record struct Spot(int X);
 
-    private sealed class Line(int goal) : ISlidingBlockDomain<Spot, int>
+    private sealed class Line(int goal) : IWeightedDomain<Spot, int>
     {
         public Spot InitialState => new(0);
         public int MaxMoves => 2;
@@ -24,6 +24,7 @@ public class HardeningTests
 
         public Spot ApplyMove(in Spot state, in int move) => new(state.X + move);
         public ulong GetHashCode64(in Spot state) => Hashing.Mix((ulong)state.X);
+        public long MoveCost(in Spot state, in int move) => 1;
     }
 
     [Fact]
@@ -95,19 +96,19 @@ public class HardeningTests
     {
         const ulong all9 = (1UL << 9) - 1;
         Span<sbyte> parents = stackalloc sbyte[9];
-        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<Bitboard64>.FindReachableAnchors(-1, 1UL, all9, 0UL, 3));
-        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<Bitboard64>.FindReachableAnchors(64, 1UL, all9, 0UL, 3));
-        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<Bitboard64>.FindReachableAnchors(0, 1UL, all9, 0UL, 0));
-        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<Bitboard64>.ReconstructHookPath(-1, 4, 1UL, all9, 0UL, 3));
-        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<Bitboard64>.ReconstructHookPath(0, 4, 1UL, all9, 0UL, -3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoFloodFill.FindReachableAnchors<Bitboard64>(-1, 1UL, all9, 0UL, 3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoFloodFill.FindReachableAnchors<Bitboard64>(64, 1UL, all9, 0UL, 3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoFloodFill.FindReachableAnchors<Bitboard64>(0, 1UL, all9, 0UL, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoFloodFill.ReconstructHookPath<Bitboard64>(-1, 4, 1UL, all9, 0UL, 3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoFloodFill.ReconstructHookPath<Bitboard64>(0, 4, 1UL, all9, 0UL, -3));
         var tooShort = new sbyte[4];
         try
         {
-            PolyominoState<Bitboard64>.FindReachableAnchors(6, 1UL, all9, 0UL, 3, tooShort, out _, out _);
+            PolyominoFloodFill.FindReachableAnchors<Bitboard64>(6, 1UL, all9, 0UL, 3, tooShort, out _, out _);
             Assert.Fail("A parent map shorter than the start anchor must be rejected.");
         }
         catch (ArgumentException ex) { Assert.Equal("parentMap", ex.ParamName); }
-        Assert.NotEqual(0UL, PolyominoState<Bitboard64>.FindReachableAnchors(6, 1UL, all9, 0UL, 3, parents, out _, out _));
+        Assert.NotEqual(0UL, PolyominoFloodFill.FindReachableAnchors<Bitboard64>(6, 1UL, all9, 0UL, 3, parents, out _, out _));
     }
 
     [Fact]
@@ -117,6 +118,83 @@ public class HardeningTests
         var line = new Line(9);
         Assert.False(new PuzzleSolver { MaxNodes = 8 }.SolveBfs(line, new Spot(0)).IsSolved);
         Assert.True(new PuzzleSolver { MaxNodes = 10 }.SolveBfs(line, new Spot(0)).IsSolved);
+    }
+
+    [Fact]
+    public void StateLimitStopsTheSearchesThatStorePositions()
+    {
+        // Reaching the end of the line stores all ten of its positions.
+        var line = new Line(9);
+        var capped = new PuzzleSolver { MaxStoredStates = 4 };
+        Assert.Equal(SolveStatus.StateLimit, capped.SolveBfs(line, line.InitialState).Status);
+        Assert.Equal(SolveStatus.StateLimit, capped.SolveAStar(line, line.InitialState, _ => 0).Status);
+        Assert.Equal(SolveStatus.StateLimit, capped.SolveDijkstra(line, line.InitialState).Status);
+        Assert.Equal(SolveStatus.StateLimit, capped.SolveWeightedAStar(line, line.InitialState, _ => 0L).Status);
+        Assert.True(capped.SolveIdaStar(line, line.InitialState, _ => 0).IsSolved);   // IDA* stores only its path
+        Assert.True(capped.SolveBfs(new Line(3), new Spot(0)).IsSolved);
+        Assert.True(new PuzzleSolver { MaxStoredStates = 10 }.SolveBfs(line, line.InitialState).IsSolved);
+        Assert.Equal(int.MaxValue, new PuzzleSolver().MaxStoredStates);
+        Assert.Throws<ArgumentOutOfRangeException>(() => new PuzzleSolver { MaxStoredStates = 0 });
+    }
+
+    // A walk over a square grid from one corner to the other, hashed either by the cell number alone or mixed over all 64 bits.
+    private readonly record struct Cell(int X, int Y);
+
+    private sealed class Walk(int size, bool mixHash) : ISlidingBlockDomain<Cell, int>
+    {
+        public Cell InitialState => new(0, 0);
+        public int MaxMoves => 4;
+        public bool IsGoal(in Cell state) => state.X == size - 1 && state.Y == size - 1;
+
+        public int GenerateMoves(in Cell state, Span<int> moveBuffer)
+        {
+            int n = 0;
+            if (state.X > 0) moveBuffer[n++] = 0;
+            if (state.X < size - 1) moveBuffer[n++] = 1;
+            if (state.Y > 0) moveBuffer[n++] = 2;
+            if (state.Y < size - 1) moveBuffer[n++] = 3;
+            return n;
+        }
+
+        public Cell ApplyMove(in Cell state, in int move) => move switch
+        {
+            0 => state with { X = state.X - 1 },
+            1 => state with { X = state.X + 1 },
+            2 => state with { Y = state.Y - 1 },
+            _ => state with { Y = state.Y + 1 },
+        };
+
+        public ulong GetHashCode64(in Cell state)
+        {
+            ulong cell = (ulong)(state.Y * size + state.X);
+            return mixHash ? Hashing.Mix(cell) : cell;
+        }
+    }
+
+    [Fact]
+    public void AHashThatVariesInFewBitsGivesTheSameSearch()
+    {
+        var plain = new PuzzleSolver().SolveBfs(new Walk(120, false), new Cell(0, 0));
+        var mixed = new PuzzleSolver().SolveBfs(new Walk(120, true), new Cell(0, 0));
+        Assert.True(plain.IsSolved);
+        Assert.Equal(2 * 119, plain.Moves.Count);
+        Assert.Equal(mixed.NodesExpanded, plain.NodesExpanded);
+    }
+
+    [Fact]
+    public void TableSlotsSpreadHashesThatVaryInFewBits()
+    {
+        // The table used to take the slot from the upper 32 bits alone, so these all landed on slot 0.
+        const int bits = 11;   // a table of 2048 slots
+        Assert.True(Distinct(h => h) > 1000);         // small numbers
+        Assert.True(Distinct(h => h << 40) > 1000);   // a few high bits
+
+        static int Distinct(Func<ulong, ulong> hash)
+        {
+            var slots = new HashSet<int>();
+            for (ulong h = 0; h < 1024; h++) slots.Add(PuzzleSolver.TableSlot(hash(h), bits));
+            return slots.Count;
+        }
     }
 
     [Fact]
@@ -130,29 +208,29 @@ public class HardeningTests
     [Fact]
     public void NPuzzleChecksItsPositions()
     {
-        var goal = new NPuzzleState(0xFEDCBA9876543210UL);
+        var goal = new NPuzzle4x4State(0xFEDCBA9876543210UL);
         Assert.True(goal.IsPermutation);
-        Assert.False(new NPuzzleState(0).IsPermutation);
-        Assert.Throws<ArgumentException>(() => new NPuzzleDomain(new NPuzzleState(0), goal));
-        Assert.Throws<ArgumentException>(() => new NPuzzleDomain(goal, new NPuzzleState(0)));
+        Assert.False(new NPuzzle4x4State(0).IsPermutation);
+        Assert.Throws<ArgumentException>(() => new NPuzzle4x4Domain(new NPuzzle4x4State(0), goal));
+        Assert.Throws<ArgumentException>(() => new NPuzzle4x4Domain(goal, new NPuzzle4x4State(0)));
         Assert.Equal(5, goal.SquareOf(5));
-        Assert.Equal(-1, new NPuzzleState(0).SquareOf(5));
+        Assert.Equal(-1, new NPuzzle4x4State(0).SquareOf(5));
     }
 
     [Fact]
     public void NPuzzleSolvabilityMatchesTheMoves()
     {
-        var goal = new NPuzzleState(0xFEDCBA9876543210UL);
-        var domain = new NPuzzleDomain(goal, goal);
+        var goal = new NPuzzle4x4State(0xFEDCBA9876543210UL);
+        var domain = new NPuzzle4x4Domain(goal, goal);
         Assert.True(domain.IsSolvable(goal));
         for (int seed = 0; seed < 20; seed++)
             Assert.True(domain.IsSolvable(PuzzleWalk.RandomWalk(domain, goal, 40, new Random(seed))));
 
         // Swapping two tiles is an odd permutation with the blank in place: no sequence of moves undoes it.
         ulong swapped = goal.PackedNibbles & ~(0xFFUL << 4) | (0x12UL << 4);
-        Assert.True(new NPuzzleState(swapped).IsPermutation);
-        Assert.False(domain.IsSolvable(new NPuzzleState(swapped)));
-        Assert.False(domain.IsSolvable(new NPuzzleState(0)));
+        Assert.True(new NPuzzle4x4State(swapped).IsPermutation);
+        Assert.False(domain.IsSolvable(new NPuzzle4x4State(swapped)));
+        Assert.False(domain.IsSolvable(new NPuzzle4x4State(0)));
     }
 
     [Fact]
@@ -182,18 +260,33 @@ public class HardeningTests
         var b = PuzzleTopology<Bitboard64>.CreateBuilder(3, 3);
         Assert.Throws<ArgumentOutOfRangeException>(() => b.AddWall(3, 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => b.AddWall(0, -1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => b.AddDiode(0, 3, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => b.AddDiode(0, 3, GridDirections.Left));
         Assert.Throws<ArgumentOutOfRangeException>(() => b.AddPiece(0, "a", 0));   // no group yet
         Assert.Throws<ArgumentException>(() => b.AddRotatableGroup("r", []));
         Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<Bitboard64>.CreateBuilder(100000, 100000));
     }
 
     [Fact]
+    public void TopologyQueriesCheckTheirGroupAndDirection()
+    {
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(3, 3);
+        b.AddPiece(b.AddGroup("one", [(0, 0)]), "a", 0);
+        var topo = b.Build();
+        Assert.Equal(topo.Groups[0].ValidAnchorsMask, topo.ValidAnchorsFor(0, GridDirection.Down));
+        Assert.True(topo.ForbiddenEntryCells(GridDirection.Left).IsEmpty);
+        Assert.Throws<ArgumentOutOfRangeException>(() => topo.ValidAnchorsFor(1, GridDirection.Down));
+        Assert.Throws<ArgumentOutOfRangeException>(() => topo.ValidAnchorsFor(-1, GridDirection.Down));
+        Assert.Throws<ArgumentOutOfRangeException>(() => topo.ValidAnchorsFor(0, GridDirection.UpRight));   // orthogonal board
+        Assert.Throws<ArgumentOutOfRangeException>(() => topo.ForbiddenEntryCells(GridDirection.DownLeft));
+        Assert.Throws<ArgumentOutOfRangeException>(() => topo.ForbiddenEntryCells((GridDirection)200));
+    }
+
+    [Fact]
     public void TopologyBuilderNamesTheBadBoardDimensionAndChecksLabelsNamesAndPlateMasks()
     {
-        Assert.Equal("width", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<Bitboard64>.CreateBuilder(0, 3)).ParamName);
-        Assert.Equal("height", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<Bitboard64>.CreateBuilder(3, -1)).ParamName);
-        Assert.Equal("height", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<Bitboard64>.CreateBuilder(9, 8)).ParamName);   // 72 cells, 64 bits
+        Assert.Equal("columns", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<Bitboard64>.CreateBuilder(0, 3)).ParamName);
+        Assert.Equal("rows", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<Bitboard64>.CreateBuilder(3, -1)).ParamName);
+        Assert.Equal("rows", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<Bitboard64>.CreateBuilder(9, 8)).ParamName);   // 72 cells, 64 bits
 
         var b = PuzzleTopology<Bitboard64>.CreateBuilder(3, 3);
         var one = b.AddGroup("one", [(0, 0)]);
@@ -285,6 +378,34 @@ public class HardeningTests
         Assert.Throws<ArgumentNullException>(() => new CompositeDomain<Bitboard64>(topology, null!));
         Assert.Throws<ArgumentOutOfRangeException>(() => new CompositeDomain<Bitboard64>(topology, goal, 0));
         Assert.Equal(1, new CompositeDomain<Bitboard64>(topology, goal).MaxPushDepth);
+    }
+
+    [Fact]
+    public void PolyominoGoalsMustFitThePositionAndTheBoard()
+    {
+        Assert.Equal("groupId", Assert.Throws<ArgumentOutOfRangeException>(() => new PolyominoGoal<Bitboard64>(16, 0)).ParamName);
+        Assert.Equal("groupId", Assert.Throws<ArgumentOutOfRangeException>(() => new PolyominoGoal<Bitboard64>(-1, 0)).ParamName);
+        Assert.Equal("anchor", Assert.Throws<ArgumentOutOfRangeException>(() => new PolyominoGoal<Bitboard64>(0, 64)).ParamName);
+        Assert.Equal(100, new PolyominoGoal<Bitboard128>(0, 100).Anchor);
+
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(3, 3);
+        b.AddPiece(b.AddGroup("one", Cells.One), "a", 0);
+        var topology = b.Build();
+        Assert.Throws<ArgumentNullException>(() => new PolyominoDomain<Bitboard64>(null!, 0, 8));
+        Assert.Throws<ArgumentNullException>(() => new PolyominoDomain<Bitboard64>(topology, (PolyominoGoal<Bitboard64>)null!));
+        Assert.Equal("goalGroupId", Assert.Throws<ArgumentOutOfRangeException>(() => new PolyominoDomain<Bitboard64>(topology, 1, 8)).ParamName);
+        Assert.Equal("goalAnchor", Assert.Throws<ArgumentOutOfRangeException>(() => new PolyominoDomain<Bitboard64>(topology, 0, 9)).ParamName);
+        Assert.Equal("goal", Assert.Throws<ArgumentException>(() => new PolyominoDomain<Bitboard64>(topology, new PolyominoGoal<Bitboard64>(3, 0))).ParamName);
+        Assert.Equal("goal", Assert.Throws<ArgumentException>(() => new CompositeDomain<Bitboard64>(topology, new PolyominoGoal<Bitboard64>(0, 9))).ParamName);
+        Assert.Equal(8, new PolyominoDomain<Bitboard64>(topology, 0, 8).Goal.Anchor);
+    }
+
+    [Fact]
+    public void LaneSlideChecksTheVehicleOfAQueryAtOnce()
+    {
+        var domain = new LaneSlideDomain<LaneState16, Bitboard64>([new(0, true, 2, 1, 0, 0)], 4, 1, 0, 2);
+        Assert.Throws<ArgumentOutOfRangeException>(() => domain.ReachableOffsets(domain.InitialState, 1));   // thrown before any enumeration
+        Assert.Equal([1, 2], domain.ReachableOffsets(domain.InitialState, 0));
     }
 
     [Fact]

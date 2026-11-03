@@ -40,26 +40,52 @@ public enum RoleFlags : byte
     Magnetic = 1 << 3,
 }
 
-/// <summary>A cell that can only be entered from the directions set in <see cref="AllowedEntryDirectionsMask"/> (bit d = direction d).</summary>
-public readonly record struct DirectionalDiode(int CellIndex, byte AllowedEntryDirectionsMask);
+/// <summary>A cell that can only be entered by a step in one of <see cref="AllowedEntryDirections"/>.</summary>
+public readonly record struct DirectionalDiode(int CellIndex, GridDirections AllowedEntryDirections);
 
-/// <summary>The engine's direction numbers (bit d of a diode mask, the <see cref="Partition.Direction"/> of a partition).</summary>
-public static class GridDirection
+/// <summary>
+/// A direction of one step on the board. The four orthogonal directions exist on every board; <see cref="UpRight"/> and
+/// <see cref="DownLeft"/> only on a <see cref="GridGeometry.HexagonalAxial"/> one (see <see cref="PuzzleTopology{TBitboard}.DirectionCount"/>).
+/// The value is the index of the direction in <see cref="PuzzleTopology{TBitboard}.GetDirectionDeltas"/>.
+/// </summary>
+public enum GridDirection : byte
 {
     /// <summary>One cell towards column 0.</summary>
-    public const int Left = 0;
+    Left = 0,
     /// <summary>One cell towards the last column.</summary>
-    public const int Right = 1;
+    Right = 1,
     /// <summary>One row towards row 0.</summary>
-    public const int Up = 2;
+    Up = 2,
     /// <summary>One row towards the last row.</summary>
-    public const int Down = 3;
+    Down = 3,
 
     /// <summary>Hex grids only: up and to the right (-W + 1).</summary>
-    public const int UpRight = 4;
+    UpRight = 4,
 
     /// <summary>Hex grids only: down and to the left (+W - 1).</summary>
-    public const int DownLeft = 5;
+    DownLeft = 5,
+}
+
+/// <summary>A set of <see cref="GridDirection"/> values: the flag of direction d is bit d.</summary>
+[Flags]
+public enum GridDirections : byte
+{
+    /// <summary>No direction.</summary>
+    None = 0,
+    /// <summary><see cref="GridDirection.Left"/>.</summary>
+    Left = 1 << GridDirection.Left,
+    /// <summary><see cref="GridDirection.Right"/>.</summary>
+    Right = 1 << GridDirection.Right,
+    /// <summary><see cref="GridDirection.Up"/>.</summary>
+    Up = 1 << GridDirection.Up,
+    /// <summary><see cref="GridDirection.Down"/>.</summary>
+    Down = 1 << GridDirection.Down,
+    /// <summary><see cref="GridDirection.UpRight"/> (hex grids only).</summary>
+    UpRight = 1 << GridDirection.UpRight,
+    /// <summary><see cref="GridDirection.DownLeft"/> (hex grids only).</summary>
+    DownLeft = 1 << GridDirection.DownLeft,
+    /// <summary>Every direction of either geometry.</summary>
+    All = Left | Right | Up | Down | UpRight | DownLeft,
 }
 
 /// <summary>
@@ -68,10 +94,10 @@ public static class GridDirection
 /// being <see cref="GridDirection.Right"/>, <see cref="GridDirection.Down"/> or <see cref="GridDirection.DownLeft"/> (the neighbour has
 /// the higher cell index), so equal partitions compare equal however they were declared.
 /// </summary>
-public readonly record struct Partition(int Cell, int Direction)
+public readonly record struct Partition(int Cell, GridDirection Direction)
 {
-    /// <summary>The cell on the other side of the partition, on a board <paramref name="width"/> cells wide.</summary>
-    public int Neighbour(int width) => Cell + Grid.Delta(width, Direction);
+    /// <summary>The cell on the other side of the partition, on a board of <paramref name="columns"/> columns.</summary>
+    public int Neighbour(int columns) => Cell + Grid.Delta(columns, (int)Direction);
 }
 
 /// <summary>
@@ -83,7 +109,7 @@ public readonly record struct PressurePlateRule<TBitboard>(TBitboard TriggerCell
     where TBitboard : unmanaged, IBitboard<TBitboard>;
 
 /// <summary>Diagnostic record of one glide, for UI visualization.</summary>
-public readonly record struct RaycastTrace<TBitboard>(int Direction, int StartAnchor, int TerminalAnchor, int StepCount,
+public readonly record struct RaycastTrace<TBitboard>(GridDirection Direction, int StartAnchor, int TerminalAnchor, int StepCount,
     TBitboard SweptCellsMask, TBitboard BlockingBitsMask)
     where TBitboard : unmanaged, IBitboard<TBitboard>;
 

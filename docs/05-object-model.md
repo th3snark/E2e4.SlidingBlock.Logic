@@ -29,7 +29,7 @@ classDiagram
         +Apply() Undo() Redo() Reset()
     }
     class PuzzleTopology~TBitboard~ {
-        +Width, Height
+        +Columns, Rows
         +StaticWallsMask
         +Groups
         +Pieces
@@ -65,7 +65,7 @@ classDiagram
     PuzzleSolver ..> ISlidingBlockDomain : solves any
     PuzzleWalk ..> ISlidingBlockDomain : walks any
     PlaySession ..> ISlidingBlockDomain : plays any
-    ISlidingBlockDomain <|.. NPuzzleDomain
+    ISlidingBlockDomain <|.. NPuzzle4x4Domain
     ISlidingBlockDomain <|.. KlotskiDomain
     ISlidingBlockDomain <|.. LaneSlideDomain~TState,TBitboard~
     ISlidingBlockDomain <|.. PushDomain
@@ -77,11 +77,11 @@ classDiagram
 
 ## 5.1a What the engine does not know
 
-Goals are data. `NPuzzleDomain(initial, goal)`, `KlotskiDomain(topology, masterPieceId, goalAnchor)`, `LaneSlideDomain<TState, TBitboard>(vehicles, columns, rows, goalVehicle, goalOffset, maxStep)` (`LaneState16` or `LaneState64` for the position; `Bitboard64` for up to 64 cells, `Bitboard128` for up to 128; Rush Hour is `maxStep: 1` with the red car as the goal vehicle),
+Goals are data. `NPuzzle4x4Domain(initial, goal)`, `KlotskiDomain(topology, masterPieceId, goalAnchor)`, `LaneSlideDomain<TState, TBitboard>(vehicles, columns, rows, goalVehicle, goalOffset, maxStep)` (`LaneState16` or `LaneState64` for the position; `Bitboard64` for up to 64 cells, `Bitboard128` for up to 128; Rush Hour is `maxStep: 1` with the red car as the goal vehicle),
 `PushDomain(columns, rows, floor, targets, cases, player)`
 and `PolyominoDomain<TBitboard>(topology, goalGroupId, goalAnchor)` (or `PolyominoDomain(topology, goalPosition)` for a whole-position goal where identical pieces are interchangeable, optionally ignoring some groups; both build a `PolyominoGoal`, which `CompositeDomain` takes too) receive the answer from the puzzle that uses them. The engine has no layouts
 (the classic Klotski map, the Rush Hour boards), no notion of where the blank belongs, no goal-relative heuristic baked into a state
-(`NPuzzleDomain.ManhattanDistance` is measured against the goal it was given) and no colours. Layouts and goals live in the puzzle
+(`NPuzzle4x4Domain.ManhattanDistance` is measured against the goal it was given) and no colours. Layouts and goals live in the puzzle
 definitions of the application that uses the engine (`LabPuzzles` in the Labs is one).
 
 The `E2e4.SlidingBlock.Logic.Text` namespace reads diagrams (one string per row) into those data: `TopologyMap.Parse`, `LaneDiagram.Parse` and
@@ -106,10 +106,10 @@ Pieces whose normalised shape, directions and role match join the same group. `L
 
 | State | Size | Fields |
 |-------|------|--------|
-| `NPuzzleState` (`readonly struct`) | 8 bytes | `PackedNibbles` |
+| `NPuzzle4x4State` (`readonly struct`) | 8 bytes | `PackedNibbles` |
 | `LaneState16` / `LaneState64` (`readonly struct`) | 8 / 32 bytes | packed offsets, 4 bits per vehicle (16 / 64 vehicles) |
 | `KlotskiState` (`readonly struct`) | | `[InlineArray(10)]` piece anchors, `OccupancyMask` (20 bits), `CanonicalShapeKey` (60 bits) |
-| `PolyominoState` (`struct`) | | `[InlineArray(16)]` `GroupAnchors`, `[InlineArray(16)]` piece anchors, `OccupancyMask`, `ZobristHash` |
+| `PolyominoState` (`struct`) | | `[InlineArray(16)]` `GroupAnchors`, `[InlineArray(16)]` piece anchors, `OccupancyMask`, `Hash` (Zobrist) |
 
 `[InlineArray]` gives fixed-size buffers inside the struct with no heap object. For `PolyominoState` and `KlotskiState`, equality
 deliberately ignores the per-piece anchor buffer; see [section 4](04-zobrist-and-group-anchors.md).
@@ -118,12 +118,15 @@ deliberately ignores the per-piece anchor buffer; see [section 4](04-zobrist-and
 
 | Domain | Move | Meaning |
 |--------|------|---------|
-| `NPuzzleDomain` | `NPuzzleMove(From, To)` | the tile on `From` slides into the blank on `To` |
+| `NPuzzle4x4Domain` | `NPuzzle4x4Move(From, To)` | the tile on `From` slides into the blank on `To` |
 | `KlotskiDomain` | `KlotskiMove(Piece, From, To)` | one-cell step of a piece (single-step metric) |
 | `LaneSlideDomain<TState, TBitboard>` | `LaneMove(Vehicle, Offset)` | the vehicle slides to `Offset` along its lane, at most `maxStep` cells (1 for Rush Hour) |
 | `PushDomain` | `PushMove(Case, To, PlayerAt)` | one case pushed to `To` in as many pushes as it takes; the storeman's walking is free |
 | `ShuntingDomain<TBitboard>` | `ShuntingMove(Mover, Lead, FrontLength, RearLength, FrontChoices, RearChoices)` | one engine moves one slot, pushing the train ahead and pulling any rear prefix; a turntable turn is a move too; costs come from `IWeightedDomain` (see [shunting](shunting.md)) |
 | `PolyominoDomain` | `PolyominoMove(PieceId, TargetAnchor)` | one turn, including multi-step hooks |
+| `CompositeDomain` | `CompositeMove` (`Kind`, `Direction`, `AsSpan()`) | a one-cell step of a piece with whatever it pushes, carries or drags (`Step`), a rotation, or one piece's flood-fill slide or glide (`MultiStep`) |
+
+What counts as one move is part of each domain's contract from 1.0: a different count would come as an option, never as a changed default.
 
 ## 5.5 Solving
 
@@ -135,8 +138,9 @@ flowchart LR
     B & A & I --> R["SolveResult(Status, Moves, NodesExpanded)"]
 ```
 
-All three accept a `CancellationToken` (cancelling throws `OperationCanceledException`). `PuzzleSolver.MaxNodes` bounds the search, and a search that finds nothing returns
-a result with no moves whose `Status` tells `Unsolvable` (the reachable positions ran out) from `NodeLimit` (the search stopped first); check `IsSolved`.
+All three accept a `CancellationToken` (cancelling throws `OperationCanceledException`). `PuzzleSolver.MaxNodes` bounds the search's time and
+`MaxStoredStates` the positions BFS and A* keep (IDA* keeps only its path). A search that finds nothing returns a result with no moves whose
+`Status` tells `Unsolvable` (the reachable positions ran out) from `NodeLimit` or `StateLimit` (the search stopped first); check `IsSolved`.
 IDA* avoids immediately returning to the parent state by comparing states for equality, so it works with any domain.
 
 ## 5.6 Move generation in one picture (polyominoes)
@@ -146,11 +150,12 @@ sequenceDiagram
     participant S as Solver
     participant D as PolyominoDomain
     participant P as PolyominoState
+    participant F as PolyominoFloodFill
     S->>D: GenerateMoves(state, buffer)
     loop each piece
         D->>D: other = occupancy ^ (BaseMask << anchor)
-        D->>P: FindReachableAnchors(anchor, BaseMask, ValidAnchorsMask, other, W, directions)
-        P-->>D: reachable anchor bitboard
+        D->>F: FindReachableAnchors(anchor, BaseMask, ValidAnchorsMask, other, W, directions)
+        F-->>D: reachable anchor bitboard
         D->>D: one move per set bit (tzcnt loop)
     end
     S->>D: ApplyMove(state, move)

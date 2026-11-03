@@ -60,6 +60,6 @@ So every occupied bit of `BaseMask` has an index `>= 0`, with bit `0` always set
 
 ## 2.4 In the code
 
-`PuzzleTopologyBuilder.Normalize(cells, boardWidth)` lays the cells in their bounding box, shifts by `tzcnt`, and also returns the cells
+`PuzzleTopologyBuilder.Normalize(cells, boardColumns)` lays the cells in their bounding box, shifts by `tzcnt`, and also returns the cells
 relative to the anchor (`EquivalenceGroup.RelativeCells`). `BaseMask` shifted by an anchor is only meaningful when the anchor is
 valid, which is what [`ValidAnchorsMask`](03-valid-anchors-and-hook-moves.md) guarantees.

@@ -19,44 +19,69 @@ public enum AllowedDirections : byte
 /// A set of interchangeable pieces. <see cref="BaseMask"/> is LSB-normalized (bit 0 is always set);
 /// <see cref="ValidAnchorsMask"/> has bit s set iff placing the shape with its LSB cell on square s
 /// stays inside the board and off static walls. The remaining properties default to the classic sliding behaviour.
+/// Only <see cref="PuzzleTopologyBuilder{TBitboard}"/> makes groups, so the masks always agree with the board; read them from
+/// <see cref="PuzzleTopology{TBitboard}.Groups"/>.
 /// </summary>
-public sealed record EquivalenceGroup<TBitboard>(
-    int GroupId,
-    string Name,
-    TBitboard BaseMask,
-    TBitboard ValidAnchorsMask,
-    AllowedDirections Directions,
-    IReadOnlyList<(int dRow, int dCol)> RelativeCells)
+public sealed record EquivalenceGroup<TBitboard>
     where TBitboard : unmanaged, IBitboard<TBitboard>
 {
+    internal EquivalenceGroup(int groupId, string name, TBitboard baseMask, TBitboard validAnchorsMask, AllowedDirections directions,
+        IReadOnlyList<(int dRow, int dCol)> relativeCells)
+    {
+        GroupId = groupId;
+        Name = name;
+        BaseMask = baseMask;
+        ValidAnchorsMask = validAnchorsMask;
+        Directions = directions;
+        RelativeCells = relativeCells;
+    }
+
+    /// <summary>The group's index in <see cref="PuzzleTopology{TBitboard}.Groups"/>.</summary>
+    public int GroupId { get; }
+
+    /// <summary>The name the group was added with; the engine does not read it.</summary>
+    public string Name { get; }
+
+    /// <summary>The shape with its first cell (in row-major order) on bit 0.</summary>
+    public TBitboard BaseMask { get; }
+
+    /// <summary>Bit s is set iff the shape anchored on cell s stays on the board and off the walls.</summary>
+    public TBitboard ValidAnchorsMask { get; }
+
+    /// <summary>The axes the group may slide along.</summary>
+    public AllowedDirections Directions { get; }
+
+    /// <summary>The cells of the shape as (row, column) offsets from its anchor cell.</summary>
+    public IReadOnlyList<(int dRow, int dCol)> RelativeCells { get; }
+
     /// <summary>Bit 0 = ground layer, bit 1 = upper layer, 0b11 = full-height block.</summary>
-    public byte ElevationMask { get; init; } = 0b01;
+    public byte ElevationMask { get; internal init; } = 0b01;
 
     /// <summary>How the group travels: one cell, any distance, or until blocked.</summary>
-    public SlidePhysics SlidePhysics { get; init; } = SlidePhysics.ContinuousFloodFill;
+    public SlidePhysics SlidePhysics { get; internal init; } = SlidePhysics.ContinuousFloodFill;
     /// <summary>What the group does to other pieces when it moves: push, carry or attract them.</summary>
-    public RoleFlags Roles { get; init; } = RoleFlags.None;
+    public RoleFlags Roles { get; internal init; } = RoleFlags.None;
 
     /// <summary>True if the group is one orientation of a rotation ring.</summary>
-    public bool CanRotate { get; init; }
+    public bool CanRotate { get; internal init; }
     /// <summary>The group this one turns into when rotated clockwise, or -1 if it cannot rotate.</summary>
-    public int NextCwGroupId { get; init; } = -1;
+    public int NextCwGroupId { get; internal init; } = -1;
     /// <summary>The group this one turns into when rotated anticlockwise, or -1 if it cannot rotate.</summary>
-    public int NextCcwGroupId { get; init; } = -1;
+    public int NextCcwGroupId { get; internal init; } = -1;
 
     /// <summary>Offset from the LSB anchor to the top-left square of the rotation box.</summary>
-    public int BoxOriginDelta { get; init; }
+    public int BoxOriginDelta { get; internal init; }
 
     /// <summary>How far the anchor moves when the piece rotates clockwise.</summary>
-    public int AnchorDeltaCw { get; init; }
+    public int AnchorDeltaCw { get; internal init; }
     /// <summary>How far the anchor moves when the piece rotates anticlockwise.</summary>
-    public int AnchorDeltaCcw { get; init; }
+    public int AnchorDeltaCcw { get; internal init; }
 
     /// <summary>Side of the square rotation box.</summary>
-    public int RotationBoxSize { get; init; }
+    public int RotationBoxSize { get; internal init; }
 
     /// <summary>Origin-normalized mask of the whole rotation box (every cell swept while turning).</summary>
-    public TBitboard SweptClearanceMask { get; init; }
+    public TBitboard SweptClearanceMask { get; internal init; }
 }
 
 /// <summary>
