@@ -128,8 +128,8 @@ public readonly record struct LaneMove(byte Vehicle, byte Offset);
 /// yards. A move takes one vehicle through free cells, up to <c>maxStep</c> cells; <c>1</c> counts one cell at a time and the default
 /// counts any distance as one move. The position is the packed lane offsets, four bits each, in <typeparamref name="TState"/>:
 /// <see cref="LaneState16"/> for up to 16 vehicles, <see cref="LaneState64"/> for up to 64, far past the polyomino domain's 16 pieces.
-/// <typeparamref name="TBitboard"/> is the board's cell register, as for the polyomino domain: <see cref="ulong"/> for boards of up to 64
-/// cells, <c>UInt128</c> for up to 128. The puzzle is solved when the goal vehicle reaches the goal offset.
+/// <typeparamref name="TBitboard"/> is the board's cell register, as for the polyomino domain: <see cref="Bitboard64"/> for boards of up
+/// to 64 cells, <see cref="Bitboard128"/> for up to 128. The puzzle is solved when the goal vehicle reaches the goal offset.
 /// </summary>
 public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TState, LaneMove>
     where TState : struct, ILaneState<TState>

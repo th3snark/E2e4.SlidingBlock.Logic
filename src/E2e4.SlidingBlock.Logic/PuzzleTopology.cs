@@ -7,7 +7,7 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBitb
 {
     internal const ulong ZobristSeed = 0x9E3779B97F4A7C15UL;
 
-    /// <summary>Columns of <see cref="ZobristTable"/>: enough for a <c>UInt128</c> board.</summary>
+    /// <summary>Columns of <see cref="ZobristTable"/>: enough for a <see cref="Bitboard128"/> board.</summary>
     internal const int ZobristColumns = 128;
 
     internal PuzzleTopology(int columns, int rows, GridGeometry geometry, TBitboard walls, EquivalenceGroup<TBitboard>[] groups,

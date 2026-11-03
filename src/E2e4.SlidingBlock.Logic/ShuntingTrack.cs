@@ -17,7 +17,7 @@ public readonly record struct ShuntingEdge(int To, int ToEnd, int Turntable, int
 /// </summary>
 public sealed class ShuntingTrack
 {
-    /// <summary>The most slots a track may have: the width of the widest bitboard the engine supports (<c>UInt128</c>).</summary>
+    /// <summary>The most slots a track may have: the width of the widest bitboard the engine supports (<see cref="Bitboard128"/>).</summary>
     public const int MaxSlots = 128;
 
     private readonly ShuntingEdge[][] _edges;

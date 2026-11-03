@@ -263,7 +263,7 @@ internal static class MoveGen<TBitboard> where TBitboard : unmanaged, IBitboard<
 /// The rules of a polyomino puzzle: pieces of any shape slide through free cells (one cell, any distance or until blocked, as their group says)
 /// on a board with walls, one-way cells, partitions, elevation layers and pressure plates. Pieces of one group are interchangeable.
 /// </summary>
-/// <typeparam name="TBitboard"><see cref="ulong"/> for boards of up to 64 cells, <c>UInt128</c> for up to 128.</typeparam>
+/// <typeparam name="TBitboard"><see cref="Bitboard64"/> for boards of up to 64 cells, <see cref="Bitboard128"/> for up to 128.</typeparam>
 public sealed class PolyominoDomain<TBitboard> : ISlidingBlockDomain<PolyominoState<TBitboard>, PolyominoMove>
     where TBitboard : unmanaged, IBitboard<TBitboard>
 {
