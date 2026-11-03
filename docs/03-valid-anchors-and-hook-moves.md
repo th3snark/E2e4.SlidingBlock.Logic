@@ -55,12 +55,12 @@ The four neighbour shifts of the frontier are:
 | down | `frontier << W` | none (bits past the board are never free) |
 | up | `frontier >> W` | none |
 
-`PolyominoState.FindReachableAnchors(...)` takes an `AllowedDirections` argument, so horizontal-only or vertical-only pieces simply skip
+`PolyominoFloodFill.FindReachableAnchors(...)` takes an `AllowedDirections` argument, so horizontal-only or vertical-only pieces simply skip
 the other pair of shifts.
 
 ### Classifying a destination
 
-`PolyominoState.ReconstructHookPath(start, target, ...)` returns the shortest step-by-step anchor trajectory (start to target
+`PolyominoFloodFill.ReconstructHookPath(start, target, ...)` returns the shortest step-by-step anchor trajectory (start to target
 inclusive) for UI animation. The labs classify a destination from that path:
 
 | Kind | Path | Marker colour |

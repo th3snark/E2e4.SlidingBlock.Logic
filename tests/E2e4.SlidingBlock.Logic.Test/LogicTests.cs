@@ -104,7 +104,7 @@ public class ReachableAnchorsTests
     public void FindsCornerHookDestinations()
     {
         // 1x1 piece at (0,0), block at (0,1): (1,1) is reachable only by going down then right.
-        Bitboard64 reach = PolyominoState<Bitboard64>.FindReachableAnchors(0, 1UL, All9, 1UL << 1, W);
+        Bitboard64 reach = PolyominoFloodFill.FindReachableAnchors<Bitboard64>(0, 1UL, All9, 1UL << 1, W);
         Assert.True((reach >> 4 & 1) != 0, "hook destination (1,1)");
         Assert.True((reach >> 3 & 1) != 0);
         Assert.True((reach >> 8 & 1) != 0);
@@ -115,7 +115,7 @@ public class ReachableAnchorsTests
     [Fact]
     public void RejectsBlockedCorners()
     {
-        Bitboard64 reach = PolyominoState<Bitboard64>.FindReachableAnchors(0, 1UL, All9, (1UL << 1) | (1UL << 3), W);
+        Bitboard64 reach = PolyominoFloodFill.FindReachableAnchors<Bitboard64>(0, 1UL, All9, (1UL << 1) | (1UL << 3), W);
         Assert.Equal(0UL, reach);
     }
 
@@ -123,23 +123,23 @@ public class ReachableAnchorsTests
     public void DoesNotWrapAcrossRows()
     {
         // 3-wide board, piece at (0,2); +1 shift would wrap to (1,0) which must not be reached directly.
-        Bitboard64 reach = PolyominoState<Bitboard64>.FindReachableAnchors(2, 1UL, All9, (1UL << 5) | (1UL << 1), W);
+        Bitboard64 reach = PolyominoFloodFill.FindReachableAnchors<Bitboard64>(2, 1UL, All9, (1UL << 5) | (1UL << 1), W);
         Assert.Equal(0UL, reach);
     }
 
     [Fact]
     public void RespectsAllowedDirections()
     {
-        Bitboard64 horiz = PolyominoState<Bitboard64>.FindReachableAnchors(0, 1UL, All9, 0, W, AllowedDirections.Horizontal);
+        Bitboard64 horiz = PolyominoFloodFill.FindReachableAnchors<Bitboard64>(0, 1UL, All9, 0, W, AllowedDirections.Horizontal);
         Assert.Equal(0b110UL, horiz);
     }
 
     [Fact]
     public void HookPathIsContiguousAndAvoidsObstacles()
     {
-        var path = PolyominoState<Bitboard64>.ReconstructHookPath(0, 4, 1UL, All9, 1UL << 1, W);
+        var path = PolyominoFloodFill.ReconstructHookPath<Bitboard64>(0, 4, 1UL, All9, 1UL << 1, W);
         Assert.Equal(new[] { 0, 3, 4 }, path);
-        Assert.Empty(PolyominoState<Bitboard64>.ReconstructHookPath(0, 4, 1UL, All9, (1UL << 1) | (1UL << 3), W));
+        Assert.Empty(PolyominoFloodFill.ReconstructHookPath<Bitboard64>(0, 4, 1UL, All9, (1UL << 1) | (1UL << 3), W));
     }
 
     [Fact]
@@ -156,7 +156,7 @@ public class ReachableAnchorsTests
             for (Bitboard64 r = reach; !r.IsEmpty; r = r.ClearLowest())
             {
                 int target = r.TrailingZeroCount();
-                var path = PolyominoState<Bitboard64>.ReconstructHookPath(a, target, g.BaseMask, g.ValidAnchorsMask, other, 5);
+                var path = PolyominoFloodFill.ReconstructHookPath<Bitboard64>(a, target, g.BaseMask, g.ValidAnchorsMask, other, 5);
                 Assert.Equal(a, path[0]);
                 Assert.Equal(target, path[^1]);
                 foreach (int step in path) Assert.Equal(0UL, (g.BaseMask << step) & other);
@@ -374,8 +374,8 @@ public class LabSpecTests
         // 3x3 board, 1x1 piece at 0, blocker at 4: 8 is reachable only by turning a corner.
         const ulong All9 = 0x1FFUL;
         var parent = new sbyte[9];
-        Bitboard64 reach = PolyominoState<Bitboard64>.FindReachableAnchors(0, 1UL, All9, 1UL << 4, 3, parent, out Bitboard64 straight, out Bitboard64 hook);
-        Assert.Equal(reach, PolyominoState<Bitboard64>.FindReachableAnchors(0, 1UL, All9, 1UL << 4, 3));
+        Bitboard64 reach = PolyominoFloodFill.FindReachableAnchors<Bitboard64>(0, 1UL, All9, 1UL << 4, 3, parent, out Bitboard64 straight, out Bitboard64 hook);
+        Assert.Equal(reach, PolyominoFloodFill.FindReachableAnchors<Bitboard64>(0, 1UL, All9, 1UL << 4, 3));
         Assert.Equal(straight | hook, reach);
         Assert.Equal(0UL, straight & hook);
         Assert.NotEqual(0UL, straight & (1UL << 2)); // same row, no corner
@@ -385,7 +385,7 @@ public class LabSpecTests
         rebuilt.Add(0);
         rebuilt.Reverse();
         Assert.Equal(5, rebuilt.Count); // 0, 1, 2, 5, 8 or 0, 3, 6, 7, 8
-        Assert.Equal(PolyominoState<Bitboard64>.ReconstructHookPath(0, 8, 1UL, All9, 1UL << 4, 3).Count, rebuilt.Count);
+        Assert.Equal(PolyominoFloodFill.ReconstructHookPath<Bitboard64>(0, 8, 1UL, All9, 1UL << 4, 3).Count, rebuilt.Count);
     }
 
     [Fact]
@@ -398,9 +398,9 @@ public class LabSpecTests
         var g = t.Groups[t.Pieces[a].GroupId];
         Bitboard64 other = s.OccupancyMask ^ (g.BaseMask << 7);
         var parent = new sbyte[25];
-        PolyominoState<Bitboard64>.FindReachableAnchors(7, g.BaseMask, g.ValidAnchorsMask, other, 5, parent, out _, out Bitboard64 hook);
+        PolyominoFloodFill.FindReachableAnchors<Bitboard64>(7, g.BaseMask, g.ValidAnchorsMask, other, 5, parent, out _, out Bitboard64 hook);
         Assert.NotEqual(0UL, hook & (1UL << 17));
-        Assert.Equal([7, 8, 13, 18, 17], PolyominoState<Bitboard64>.ReconstructHookPath(7, 17, g.BaseMask, g.ValidAnchorsMask, other, 5));
+        Assert.Equal([7, 8, 13, 18, 17], PolyominoFloodFill.ReconstructHookPath<Bitboard64>(7, 17, g.BaseMask, g.ValidAnchorsMask, other, 5));
     }
 
     [Fact]

@@ -146,11 +146,12 @@ sequenceDiagram
     participant S as Solver
     participant D as PolyominoDomain
     participant P as PolyominoState
+    participant F as PolyominoFloodFill
     S->>D: GenerateMoves(state, buffer)
     loop each piece
         D->>D: other = occupancy ^ (BaseMask << anchor)
-        D->>P: FindReachableAnchors(anchor, BaseMask, ValidAnchorsMask, other, W, directions)
-        P-->>D: reachable anchor bitboard
+        D->>F: FindReachableAnchors(anchor, BaseMask, ValidAnchorsMask, other, W, directions)
+        F-->>D: reachable anchor bitboard
         D->>D: one move per set bit (tzcnt loop)
     end
     S->>D: ApplyMove(state, move)

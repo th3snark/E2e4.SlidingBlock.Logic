@@ -18,6 +18,7 @@ follows [Semantic Versioning](https://semver.org/). While the version is below 1
 - `MoveDeltaBuffer`, `LayerOccupancyBuffer<T>` and `CompositeMove.Deltas` are internal, and `CompositeMove.Count` / `DirectionIndex` are get-only properties: read a move through `AsSpan()`.
 - On the netstandard targets the Zobrist keys of `PushDomain` and `ShuntingDomain` come from the same seeded `Random` sequence as on .NET 6 and later, so hashes match across targets.
 - **Breaking:** `KlotskiState.CanonicalShapeKey` and `SpreadCells`, `NPuzzleState.SlideMask` and `PolyominoState.ComputeZobrist` are internal: they expose a packing that a 1.x may change. Compare Klotski positions with `==`.
+- **Breaking:** `FindReachableAnchors` and `ReconstructHookPath` moved from `PolyominoState<TBitboard>` to the static class `PolyominoFloodFill`, with the bitboard type as a method type argument: `PolyominoFloodFill.FindReachableAnchors<Bitboard64>(...)`, or inferred when a mask argument is a bitboard.
 
 - Shunting fouling sets: `ShuntingTrackBuilder.AddFoulingSet`, `ShuntingTrack.FoulingSets` and the `foul` keyword in `ShuntingMap`. At most one slot
   of a set may hold a piece, so a wagon left just past a switch blocks the other leg.

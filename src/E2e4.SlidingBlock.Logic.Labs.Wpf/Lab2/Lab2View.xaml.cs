@@ -255,7 +255,7 @@ public partial class Lab2View : UserControl
         for (Bitboard64 r = reach; !r.IsEmpty; r = r.ClearLowest())
         {
             int target = r.TrailingZeroCount();
-            var path = PolyominoState<Bitboard64>.ReconstructHookPath(a, target, g.BaseMask, g.ValidAnchorsMask, other, N, g.Directions);
+            var path = PolyominoFloodFill.ReconstructHookPath<Bitboard64>(a, target, g.BaseMask, g.ValidAnchorsMask, other, N, g.Directions);
             if (path.Count < 2) continue;
             string kind = Classify(path);
             var color = KindColor(kind);
@@ -468,7 +468,7 @@ public partial class Lab2View : UserControl
         var m = buf[Random.Shared.Next(n)];
         _selected = m.PieceId;
         var (other, g, a) = Context(m.PieceId);
-        MoveSelected(m.TargetAnchor, PolyominoState<Bitboard64>.ReconstructHookPath(a, m.TargetAnchor, g.BaseMask, g.ValidAnchorsMask, other, N, g.Directions));
+        MoveSelected(m.TargetAnchor, PolyominoFloodFill.ReconstructHookPath<Bitboard64>(a, m.TargetAnchor, g.BaseMask, g.ValidAnchorsMask, other, N, g.Directions));
     }
 
     /// <summary>Moves the 1x1 block A above the wall and clears the right-hand side, so reaching anchor 17 needs a 4-step hook around the wall.</summary>
@@ -611,7 +611,7 @@ public partial class Lab2View : UserControl
             var piece = _t.Pieces[_selected];
             Bitboard64 shifted = g.BaseMask << a, valid = g.ValidAnchorsMask;
             var parent = new sbyte[N * N];
-            Bitboard64 reach = PolyominoState<Bitboard64>.FindReachableAnchors(a, g.BaseMask, valid, other, N, parent, out Bitboard64 straight, out Bitboard64 hook, g.Directions);
+            Bitboard64 reach = PolyominoFloodFill.FindReachableAnchors<Bitboard64>(a, g.BaseMask, valid, other, N, parent, out Bitboard64 straight, out Bitboard64 hook, g.Directions);
             string offsets = string.Join("  ", g.RelativeCells.Select(c => $"({c.dRow},{c.dCol})->{N * c.dRow + c.dCol}"));
             sb.AppendLine(CultureInfo.InvariantCulture, $"Piece                 {piece.Label}  (PieceId {piece.PieceId})  {g.Name}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"EquivalenceGroupId    {g.GroupId}");

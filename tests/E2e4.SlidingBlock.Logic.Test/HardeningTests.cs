@@ -95,19 +95,19 @@ public class HardeningTests
     {
         const ulong all9 = (1UL << 9) - 1;
         Span<sbyte> parents = stackalloc sbyte[9];
-        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<Bitboard64>.FindReachableAnchors(-1, 1UL, all9, 0UL, 3));
-        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<Bitboard64>.FindReachableAnchors(64, 1UL, all9, 0UL, 3));
-        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<Bitboard64>.FindReachableAnchors(0, 1UL, all9, 0UL, 0));
-        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<Bitboard64>.ReconstructHookPath(-1, 4, 1UL, all9, 0UL, 3));
-        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<Bitboard64>.ReconstructHookPath(0, 4, 1UL, all9, 0UL, -3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoFloodFill.FindReachableAnchors<Bitboard64>(-1, 1UL, all9, 0UL, 3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoFloodFill.FindReachableAnchors<Bitboard64>(64, 1UL, all9, 0UL, 3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoFloodFill.FindReachableAnchors<Bitboard64>(0, 1UL, all9, 0UL, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoFloodFill.ReconstructHookPath<Bitboard64>(-1, 4, 1UL, all9, 0UL, 3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoFloodFill.ReconstructHookPath<Bitboard64>(0, 4, 1UL, all9, 0UL, -3));
         var tooShort = new sbyte[4];
         try
         {
-            PolyominoState<Bitboard64>.FindReachableAnchors(6, 1UL, all9, 0UL, 3, tooShort, out _, out _);
+            PolyominoFloodFill.FindReachableAnchors<Bitboard64>(6, 1UL, all9, 0UL, 3, tooShort, out _, out _);
             Assert.Fail("A parent map shorter than the start anchor must be rejected.");
         }
         catch (ArgumentException ex) { Assert.Equal("parentMap", ex.ParamName); }
-        Assert.NotEqual(0UL, PolyominoState<Bitboard64>.FindReachableAnchors(6, 1UL, all9, 0UL, 3, parents, out _, out _));
+        Assert.NotEqual(0UL, PolyominoFloodFill.FindReachableAnchors<Bitboard64>(6, 1UL, all9, 0UL, 3, parents, out _, out _));
     }
 
     [Fact]
