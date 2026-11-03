@@ -4,7 +4,7 @@ Runs the checks that .github/workflows/ci.yml runs, locally.
 
 .DESCRIPTION
 Use it before pushing or merging a pull request while CI is not available. With -Puzzles it also runs the same checks in the sibling
-E2e4.SlidingBlock.Puzzles repository (which builds against this checkout). Stops at the first failing step.
+E2e4.SlidingBlock.Puzzles repository, built against this checkout rather than the published package. Stops at the first failing step.
 #>
 [CmdletBinding()]
 param(
@@ -82,6 +82,7 @@ try {
 finally { Pop-Location }
 
 if ($Puzzles) {
+    $env:UseLocalLogic = 'true'  # Puzzles uses the Logic package unless told to build the sibling checkout
     Invoke-RepoChecks (Resolve-Path $PuzzlesPath) 'E2e4.SlidingBlock.Puzzles.slnx'
 }
 
