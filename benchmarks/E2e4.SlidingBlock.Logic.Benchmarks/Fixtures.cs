@@ -29,7 +29,7 @@ internal static class Fixtures
     /// <summary>The classic 4x5 layout: one 2x2, four 1x2 vertical, one 2x1 horizontal, four 1x1; the 2x2 has to reach anchor 13.</summary>
     public static KlotskiDomain CreateKlotski()
     {
-        var topo = TopologyMap.Parse<ulong>(KlotskiMap,
+        var topo = TopologyMap.Parse<Bitboard64>(KlotskiMap,
         [
             // Legend order fixes the shape class: 1 = 1x1, 2 = 1x2 vertical, 3 = 2x1 horizontal, 4 = 2x2.
             ('e', new PieceKind("Single 1x1", Key: "single")),
@@ -60,21 +60,21 @@ internal static class Fixtures
         "..EEE.",
     ];
 
-    public static LaneSlideDomain<LaneState16, ulong> CreateRushHour() => RushHour(RushHourMap);
+    public static LaneSlideDomain<LaneState16, Bitboard64> CreateRushHour() => RushHour(RushHourMap);
 
     /// <summary>The red car (X, a horizontal one) is vehicle 0 and has to reach the far end of its row; a move is one cell.</summary>
-    public static LaneSlideDomain<LaneState16, ulong> RushHour(IReadOnlyList<string> rows)
+    public static LaneSlideDomain<LaneState16, Bitboard64> RushHour(IReadOnlyList<string> rows)
     {
         var vehicles = LaneDiagram.Parse(rows, LaneDiagram.SymbolsOf(rows, leadingLabels: "X"));
-        return new LaneSlideDomain<LaneState16, ulong>(vehicles, rows[0].Length, rows.Count, 0, rows[0].Length - vehicles[0].Length, maxStep: 1);
+        return new LaneSlideDomain<LaneState16, Bitboard64>(vehicles, rows[0].Length, rows.Count, 0, rows[0].Length - vehicles[0].Length, maxStep: 1);
     }
 
     // ---- Polyominoes  ------------------------------------------------------------------------
 
     /// <summary>The 5x5 board: L-tromino, upward T, J-tromino, two identical 1x1 blocks, wall at index 12; the L has to reach anchor 16.</summary>
-    public static PolyominoDomain<ulong> CreateLab2()
+    public static PolyominoDomain<Bitboard64> CreateLab2()
     {
-        var b = PuzzleTopology<ulong>.CreateBuilder(5, 5);
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(5, 5);
         b.AddWall(2, 2);
         int l = b.AddGroup("L-Tromino", [(0, 0), (1, 0), (1, 1)]);
         int t = b.AddGroup("Upward T", [(0, 0), (1, -1), (1, 0), (1, 1)]);
@@ -85,7 +85,7 @@ internal static class Fixtures
         b.AddPiece(j, "J", 4);
         b.AddPiece(s, "A", 2);
         b.AddPiece(s, "B", 14);
-        return new PolyominoDomain<ulong>(b.Build(), 0, 16);
+        return new PolyominoDomain<Bitboard64>(b.Build(), 0, 16);
     }
 
     // ---- Extended mechanics  ------------------------------------------------------------------
@@ -93,28 +93,28 @@ internal static class Fixtures
     private const int Width = 6;
 
     /// <summary>One board of the extended mechanics: its domain for play and solving, and the plain polyomino domain that owns the goal.</summary>
-    public sealed record Mode(PolyominoDomain<ulong> Goal, CompositeDomain<ulong> Domain);
+    public sealed record Mode(PolyominoDomain<Bitboard64> Goal, CompositeDomain<Bitboard64> Domain);
 
     /// <summary>An L-tromino turns through four orientation groups; a blocker sits in the empty corner of its 2x2 rotation box.</summary>
     public static Mode CreateRotation()
     {
-        var b = PuzzleTopology<ulong>.CreateBuilder(Width, Width);
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(Width, Width);
         b.AddWall(4, 4);
         var ring = b.AddRotatableGroup("L-Tromino", [(0, 0), (1, 0), (1, 1)]);
         int blocker = b.AddGroup("1x1 Blocker", [(0, 0)]);
         b.AddPiece(ring[0], "L", 7);
         b.AddPiece(blocker, "A", 8);
         b.AddPiece(blocker, "B", 20);
-        var goal = new PolyominoDomain<ulong>(b.Build(), ring[3], 15);
-        return new Mode(goal, new CompositeDomain<ulong>(goal));
+        var goal = new PolyominoDomain<Bitboard64>(b.Build(), ring[3], 15);
+        return new Mode(goal, new CompositeDomain<Bitboard64>(goal));
     }
 
     /// <summary>A hollow U carries the crate in its pocket; the pusher avatar shoves crates in a chain.</summary>
     public static Mode CreateCarrier()
     {
-        static PuzzleTopology<ulong> Build(int crateA)
+        static PuzzleTopology<Bitboard64> Build(int crateA)
         {
-            var b = PuzzleTopology<ulong>.CreateBuilder(Width, Width);
+            var b = PuzzleTopology<Bitboard64>.CreateBuilder(Width, Width);
             b.AddWall(3, 0);
             b.AddWall(3, 5);
             int u = b.AddGroup("Hollow U-Carrier", [(0, 0), (0, 2), (1, 0), (1, 1), (1, 2)], physics: SlidePhysics.SingleStep,
@@ -130,14 +130,14 @@ internal static class Fixtures
 
         var topo = Build(14);
         // Both crates have to match; the carrier and the pusher may end anywhere.
-        var goal = new PolyominoDomain<ulong>(topo, PolyominoState<ulong>.FromTopology(Build(32)), 1UL << 1);
-        return new Mode(goal, new CompositeDomain<ulong>(goal, maxPushDepth: 3));
+        var goal = new PolyominoDomain<Bitboard64>(topo, PolyominoState<Bitboard64>.FromTopology(Build(32)), 1UL << 1);
+        return new Mode(goal, new CompositeDomain<Bitboard64>(goal, maxPushDepth: 3));
     }
 
     /// <summary>Frictionless ice: pieces glide until a wall, the edge or another piece stops them.</summary>
     public static Mode CreateIce()
     {
-        var b = PuzzleTopology<ulong>.CreateBuilder(Width, Width);
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(Width, Width);
         b.AddWall(0, 4);
         b.AddWall(2, 0);
         b.AddWall(5, 3);
@@ -147,8 +147,8 @@ internal static class Fixtures
         b.AddPiece(glider, "G", 0);
         b.AddPiece(bar, "I", 19);
         b.AddPiece(block, "L", 15);
-        var goal = new PolyominoDomain<ulong>(b.Build(), glider, 20);
-        return new Mode(goal, new CompositeDomain<ulong>(goal));
+        var goal = new PolyominoDomain<Bitboard64>(b.Build(), glider, 20);
+        return new Mode(goal, new CompositeDomain<Bitboard64>(goal));
     }
 
     // ---- Shunting -------------------------------------------------------------------------------------------
@@ -157,7 +157,7 @@ internal static class Fixtures
     /// A small yard: a main line 0-4, a siding 5-7 forking off slot 2, an engine behind two wagons, and the goal of getting wagon A to the end of
     /// the main line.
     /// </summary>
-    public static ShuntingDomain<ulong> CreateYard() => ShuntingMap.CreateDomain<ulong>(
+    public static ShuntingDomain<Bitboard64> CreateYard() => ShuntingMap.CreateDomain<Bitboard64>(
     [
         "track 8",
         "join 0.1 1.0",

@@ -24,7 +24,7 @@ public sealed record LaneVehicle(int Index, bool IsHorizontal, int Length, int B
 public interface ILaneState<TState> : IEquatable<TState> where TState : struct, ILaneState<TState>
 {
     /// <summary>How many vehicles the position holds: 16 to a 64-bit word.</summary>
-    static abstract int Capacity { get; }
+    int Capacity { get; }
 
     /// <summary>The position of a vehicle along its lane: the column (horizontal) or row (vertical) of its first cell.</summary>
     int OffsetOf(int vehicle);
@@ -47,7 +47,7 @@ public readonly struct LaneState16 : ILaneState<LaneState16>
     private LaneState16(ulong word) => _word = word;
 
     /// <inheritdoc/>
-    public static int Capacity => 16;
+    public int Capacity => 16;
 
     /// <inheritdoc/>
     public ulong Word(int index) => _word;
@@ -84,10 +84,10 @@ public readonly struct LaneState64 : ILaneState<LaneState64>
     }
 
     /// <inheritdoc/>
-    public static int Capacity => 64;
+    public int Capacity => 64;
 
     /// <inheritdoc/>
-    public ulong Word(int index) => Unsafe.Add(ref Unsafe.AsRef(in _w0), index & 3);   // the four words are laid out in order
+    public ulong Word(int index) => (index & 3) switch { 0 => _w0, 1 => _w1, 2 => _w2, _ => _w3 };
     /// <inheritdoc/>
     public int OffsetOf(int vehicle) => (int)((Word(vehicle >> 4) >> (4 * (vehicle & 15))) & 0xF);
 
@@ -129,11 +129,11 @@ public readonly record struct LaneMove(byte Vehicle, byte Offset);
 /// counts any distance as one move. The position is the packed lane offsets, four bits each, in <typeparamref name="TState"/>:
 /// <see cref="LaneState16"/> for up to 16 vehicles, <see cref="LaneState64"/> for up to 64, far past the polyomino domain's 16 pieces.
 /// <typeparamref name="TBitboard"/> is the board's cell register, as for the polyomino domain: <see cref="ulong"/> for boards of up to 64
-/// cells, <see cref="UInt128"/> for up to 128. The puzzle is solved when the goal vehicle reaches the goal offset.
+/// cells, <c>UInt128</c> for up to 128. The puzzle is solved when the goal vehicle reaches the goal offset.
 /// </summary>
 public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TState, LaneMove>
     where TState : struct, ILaneState<TState>
-    where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>
+    where TBitboard : unmanaged, IBitboard<TBitboard>
 {
     private const int Stride = 16;   // offsets per vehicle in the mask table: lanes are at most 16 cells
     // The cells covered at an offset, and the cells that sliding one cell forward / backward from an offset newly covers (every cell, so never free, at the end of the lane).
@@ -159,7 +159,8 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
         ArgumentOutOfRangeException.ThrowIfLessThan(columns, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(rows, 1);
         if (vehicles.Count == 0) throw new ArgumentException("There must be at least one vehicle.", nameof(vehicles));
-        if (vehicles.Count > TState.Capacity) throw new ArgumentException($"At most {TState.Capacity} vehicles.", nameof(vehicles));
+        int capacity = default(TState).Capacity;
+        if (vehicles.Count > capacity) throw new ArgumentException($"At most {capacity} vehicles.", nameof(vehicles));
         if (columns * rows > Grid.BitWidth<TBitboard>()) throw new ArgumentException($"The board has at most {Grid.BitWidth<TBitboard>()} cells.");
         ArgumentOutOfRangeException.ThrowIfLessThan(maxStep, 1);
         if (goalVehicle < 0 || goalVehicle >= vehicles.Count) throw new ArgumentOutOfRangeException(nameof(goalVehicle));
@@ -191,17 +192,17 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
             for (int o = 0; o <= _maxOffset[v.Index]; o++)
             {
                 int i = v.Index * Stride + o;
-                _forward[i] = o < _maxOffset[v.Index] ? _masks[i + 1] & ~_masks[i] : ~TBitboard.Zero;
-                _backward[i] = o > 0 ? _masks[i - 1] & ~_masks[i] : ~TBitboard.Zero;
+                _forward[i] = o < _maxOffset[v.Index] ? _masks[i + 1].AndNot(_masks[i]) : Bit<TBitboard>.All;
+                _backward[i] = o > 0 ? _masks[i - 1].AndNot(_masks[i]) : Bit<TBitboard>.All;
             }
         var state = default(TState);
-        var covered = TBitboard.Zero;
+        var covered = Bit<TBitboard>.Zero;
         foreach (var v in vehicles)
         {
             state = state.WithOffset(v.Index, v.InitialOffset);
             var mask = _masks[v.Index * Stride + v.InitialOffset];
-            if ((covered & mask) != TBitboard.Zero) throw new ArgumentException($"Vehicle {v.Index} overlaps another at the start.", nameof(vehicles));
-            covered |= mask;
+            if (covered.Intersects(mask)) throw new ArgumentException($"Vehicle {v.Index} overlaps another at the start.", nameof(vehicles));
+            covered = covered.Or(mask);
         }
         InitialState = state;
         MaxMoves = vehicles.Sum(v => 2 * Math.Min(_maxOffset[v.Index], maxStep));
@@ -235,9 +236,9 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
     /// <summary>The cells every vehicle covers in a position.</summary>
     public TBitboard Occupancy(in TState state)
     {
-        TBitboard occupied = TBitboard.Zero;
+        TBitboard occupied = Bit<TBitboard>.Zero;
         ReadOnlySpan<TBitboard> masks = _masks;
-        for (int v = 0; v < _count; v++) occupied |= masks[v * Stride + state.OffsetOf(v)];
+        for (int v = 0; v < _count; v++) occupied = occupied.Or(masks[v * Stride + state.OffsetOf(v)]);
         return occupied;
     }
 
@@ -245,10 +246,10 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
     public IEnumerable<int> ReachableOffsets(TState state, int vehicle)
     {
         int at = state.OffsetOf(vehicle), baseIndex = vehicle * Stride;
-        var others = Occupancy(state) & ~_masks[baseIndex + at];
+        var others = Occupancy(state).AndNot(_masks[baseIndex + at]);
         int max = _maxOffset[vehicle], up = MaxStep < max - at ? at + MaxStep : max, down = MaxStep < at ? at - MaxStep : 0;
-        for (int o = at + 1; o <= up && (_masks[baseIndex + o] & others) == TBitboard.Zero; o++) yield return o;
-        for (int o = at - 1; o >= down && (_masks[baseIndex + o] & others) == TBitboard.Zero; o--) yield return o;
+        for (int o = at + 1; o <= up && !_masks[baseIndex + o].Intersects(others); o++) yield return o;
+        for (int o = at - 1; o >= down && !_masks[baseIndex + o].Intersects(others); o--) yield return o;
     }
 
     /// <inheritdoc/>
@@ -260,11 +261,11 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
         int n = 0;
         ReadOnlySpan<TBitboard> masks = _masks, forward = _forward, backward = _backward;
         ReadOnlySpan<int> maxOffset = _maxOffset;
-        TBitboard occupied = TBitboard.Zero;
+        TBitboard occupied = Bit<TBitboard>.Zero;
         for (int v = 0, w = 0; v < _count; w++)
         {
             ulong packed = state.Word(w);
-            for (int end = Math.Min(v + 16, _count); v < end; v++, packed >>= 4) occupied |= masks[v * Stride + (int)(packed & 0xF)];
+            for (int end = Math.Min(v + 16, _count); v < end; v++, packed >>= 4) occupied = occupied.Or(masks[v * Stride + (int)(packed & 0xF)]);
         }
         if (MaxStep == 1)
         {
@@ -272,8 +273,8 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
             for (int v = 0; v < _count; v++)
             {
                 int at = state.OffsetOf(v), i = v * Stride + at;
-                if ((forward[i] & occupied) == TBitboard.Zero) moveBuffer[n++] = new LaneMove((byte)v, (byte)(at + 1));
-                if ((backward[i] & occupied) == TBitboard.Zero) moveBuffer[n++] = new LaneMove((byte)v, (byte)(at - 1));
+                if (!forward[i].Intersects(occupied)) moveBuffer[n++] = new LaneMove((byte)v, (byte)(at + 1));
+                if (!backward[i].Intersects(occupied)) moveBuffer[n++] = new LaneMove((byte)v, (byte)(at - 1));
             }
             return n;
         }
@@ -282,8 +283,8 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
             // Sliding to an offset needs only the cells newly covered to be free: the vehicle's own cells are not among them.
             int at = state.OffsetOf(v), baseIndex = v * Stride;
             int max = maxOffset[v], up = MaxStep < max - at ? at + MaxStep : max, down = MaxStep < at ? at - MaxStep : 0;
-            for (int o = at; o < up && (forward[baseIndex + o] & occupied) == TBitboard.Zero; o++) moveBuffer[n++] = new LaneMove((byte)v, (byte)(o + 1));
-            for (int o = at; o > down && (backward[baseIndex + o] & occupied) == TBitboard.Zero; o--) moveBuffer[n++] = new LaneMove((byte)v, (byte)(o - 1));
+            for (int o = at; o < up && !forward[baseIndex + o].Intersects(occupied); o++) moveBuffer[n++] = new LaneMove((byte)v, (byte)(o + 1));
+            for (int o = at; o > down && !backward[baseIndex + o].Intersects(occupied); o--) moveBuffer[n++] = new LaneMove((byte)v, (byte)(o - 1));
         }
         return n;
     }
@@ -296,12 +297,12 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
 
     private TBitboard MaskOf(LaneVehicle v, int offset)
     {
-        TBitboard mask = TBitboard.Zero;
+        TBitboard mask = Bit<TBitboard>.Zero;
         for (int along = 0; along < v.Length; along++)
             for (int across = 0; across < v.Breadth; across++)
             {
                 int row = v.IsHorizontal ? v.Lane + across : offset + along, col = v.IsHorizontal ? offset + along : v.Lane + across;
-                mask |= TBitboard.One << (row * Columns + col);
+                mask = mask.Or(Bit<TBitboard>.One.ShiftLeft(row * Columns + col));
             }
         return mask;
     }

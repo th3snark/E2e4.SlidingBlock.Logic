@@ -18,7 +18,7 @@ application, as for every other domain.
   of each leg past a switch: a wagon left there blocks the other leg, so a train cannot drop it and push the rest down the other leg in one run.
   Without fouling sets a piece one slot past a switch is out of the way, which makes some puzzles easier than the real ones.
 
-The number of slots is bounded by the bitboard: 64 with `ulong`, 128 with `UInt128`.
+The number of slots is bounded by the bitboard: 64 with `Bitboard64`, 128 with `Bitboard128`.
 
 ## Pieces and moves
 

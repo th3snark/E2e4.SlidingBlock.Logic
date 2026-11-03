@@ -41,5 +41,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/E2e4.SlidingBlock.Logic.Test/E2e4.SlidingBlock.Logic.Test.csproj" />
+    <Project Path="tests/E2e4.SlidingBlock.Logic.Test.NetStandard/E2e4.SlidingBlock.Logic.Test.NetStandard.csproj" />
   </Folder>
 </Solution>

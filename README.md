@@ -2,8 +2,8 @@
 
 <img src="assets/icon.png" alt="E2e4.SlidingBlock.Logic icon" width="96" height="96" align="right">
 
-A small, dependency-free sliding block puzzle engine for .NET: bitboard-driven state structs with allocation-free move generation, and generic
-solvers, for the N-puzzle, Klotski, Rush Hour, Soko-style pushing and general polyominoes. It targets `net10.0` (the current LTS) only. Install from NuGet:
+A small sliding block puzzle engine for .NET: bitboard-driven state structs with allocation-free move generation, and generic
+solvers, for the N-puzzle, Klotski, Rush Hour, Soko-style pushing and general polyominoes. It targets `net10.0`, `net8.0` and `netstandard2.0`, so it runs on every current .NET on Windows, Linux and macOS, and through the `netstandard2.0` build on .NET Framework 4.6.1 and later, Mono and Unity. The `net10.0` and `net8.0` builds have no dependencies; `netstandard2.0` depends on `System.Memory` for `Span<T>`. Install from NuGet:
 `E2e4.SlidingBlock.Logic`.
 
 Every puzzle is an `ISlidingBlockDomain<TState, TMove>` (initial state, goal test, move generation, move application and a 64-bit state hash),
@@ -15,15 +15,15 @@ var goal = new NPuzzleState(0xFEDCBA9876543210UL);
 var domain = new NPuzzleDomain(goal, goal);
 var start = PuzzleWalk.RandomWalk(domain, goal, 25, new Random(3));
 
-SolveResult<NPuzzleMove>? result = new PuzzleSolver().SolveIdaStar(domain, start, domain.ManhattanDistance);
-Console.WriteLine(result?.Moves.Count);
+SolveResult<NPuzzleMove> result = new PuzzleSolver().SolveIdaStar(domain, start, domain.ManhattanDistance);
+Console.WriteLine(result.IsSolved ? result.Moves.Count : -1);
 
 // Rush Hour: the vehicles are read off a diagram (using E2e4.SlidingBlock.Logic.Text), the red car X is vehicle 0 and has to reach
 // the far end of its row (offset 4 for a car two cells long); a move slides a vehicle one cell.
 string[] diagram = ["CCH..F", "..HB.F", ".XXB..", "D..B..", "DGG...", "..EEE."];
 var vehicles = LaneDiagram.Parse(diagram, LaneDiagram.SymbolsOf(diagram, leadingLabels: "X"));
-var rushHour = new LaneSlideDomain<LaneState16, ulong>(vehicles, columns: 6, rows: 6, goalVehicle: 0, goalOffset: 4, maxStep: 1);
-Console.WriteLine(new PuzzleSolver().SolveBfs(rushHour, rushHour.InitialState)?.Moves.Count);
+var rushHour = new LaneSlideDomain<LaneState16, Bitboard64>(vehicles, columns: 6, rows: 6, goalVehicle: 0, goalOffset: 4, maxStep: 1);
+Console.WriteLine(new PuzzleSolver().SolveBfs(rushHour, rushHour.InitialState).Moves.Count);
 ```
 
 ## What is in it
@@ -39,7 +39,7 @@ Console.WriteLine(new PuzzleSolver().SolveBfs(rushHour, rushHour.InitialState)?.
   valid-anchor masks.
 - `E2e4.SlidingBlock.Logic.Text`: `TopologyMap`, `LaneDiagram` and `PushMap` read boards, vehicles and warehouses from diagrams (one string
   per row, with the symbols you choose). The domains themselves take plain data, so a layout can come from anywhere.
-- `PuzzleSolver`: generic BFS, A* and IDA*, with a node limit and cancellation; the `out SolveStatus` overloads say whether a search found nothing because
+- `PuzzleSolver`: generic BFS, A* and IDA*, with a node limit and cancellation; `SolveResult.Status` says whether a search found nothing because
   the puzzle is unsolvable or because it hit the limit.
 - `PuzzleWalk` and `PlaySession<TState, TMove>`: a generic random walk (for solvable shuffles) and the undo, redo and reset bookkeeping
   every interactive puzzle needs.

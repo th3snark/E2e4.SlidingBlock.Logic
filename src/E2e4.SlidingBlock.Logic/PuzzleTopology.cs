@@ -3,11 +3,11 @@ using System.Numerics;
 namespace E2e4.SlidingBlock.Logic;
 
 /// <summary>Immutable puzzle description: board size, walls, equivalence groups, pieces, board cells with state and Zobrist keys.</summary>
-public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>
+public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBitboard<TBitboard>
 {
     internal const ulong ZobristSeed = 0x9E3779B97F4A7C15UL;
 
-    /// <summary>Columns of <see cref="ZobristTable"/>: enough for a <see cref="UInt128"/> board.</summary>
+    /// <summary>Columns of <see cref="ZobristTable"/>: enough for a <c>UInt128</c> board.</summary>
     internal const int ZobristColumns = 128;
 
     internal PuzzleTopology(int width, int height, GridGeometry geometry, TBitboard walls, EquivalenceGroup<TBitboard>[] groups,
@@ -117,7 +117,7 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBina
     public ReadOnlySpan<int> GetDirectionDeltas() => _deltas;
 
     /// <summary>The cells piece <paramref name="pieceId"/> covers if its <em>starting</em> shape is anchored on <paramref name="anchor"/> (a rotated piece has another shape).</summary>
-    public TBitboard PieceMask(int pieceId, int anchor) => Groups[Pieces[pieceId].GroupId].BaseMask << anchor;
+    public TBitboard PieceMask(int pieceId, int anchor) => Groups[Pieces[pieceId].GroupId].BaseMask.ShiftLeft(anchor);
 
     /// <summary>Starts describing a board of <paramref name="width"/> x <paramref name="height"/> cells.</summary>
     public static PuzzleTopologyBuilder<TBitboard> CreateBuilder(int width, int height, GridGeometry geometry = GridGeometry.Orthogonal4Way) =>
@@ -145,11 +145,11 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBina
         var forbidden = new TBitboard[_deltas.Length];
         foreach (var diode in DiodeTable)
             for (int d = 0; d < forbidden.Length; d++)
-                if ((diode.AllowedEntryDirectionsMask >> d & 1) == 0) forbidden[d] |= TBitboard.One << diode.CellIndex;
+                if ((diode.AllowedEntryDirectionsMask >> d & 1) == 0) forbidden[d] = forbidden[d].Or(Bit<TBitboard>.One.ShiftLeft(diode.CellIndex));
         foreach (var partition in PartitionTable)
         {
-            forbidden[partition.Direction] |= TBitboard.One << (partition.Cell + _deltas[partition.Direction]);
-            forbidden[partition.Direction ^ 1] |= TBitboard.One << partition.Cell;
+            forbidden[partition.Direction] = forbidden[partition.Direction].Or(Bit<TBitboard>.One.ShiftLeft(partition.Cell + _deltas[partition.Direction]));
+            forbidden[partition.Direction ^ 1] = forbidden[partition.Direction ^ 1].Or(Bit<TBitboard>.One.ShiftLeft(partition.Cell));
         }
         return forbidden;
     }
@@ -178,14 +178,14 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBina
             for (int d = 0; d < dirs; d++)
             {
                 TBitboard valid = group.ValidAnchorsMask;
-                if (_forbiddenEntry[d] != TBitboard.Zero)
+                if (!_forbiddenEntry[d].IsEmpty)
                 {
                     foreach (int n in Grid.Bits(group.ValidAnchorsMask))
                     {
                         int prev = n - _deltas[d];
-                        TBitboard before = (uint)prev < (uint)cells ? group.BaseMask << prev : TBitboard.Zero;
-                        TBitboard entered = (group.BaseMask << n) & ~before;
-                        if ((entered & _forbiddenEntry[d]) != TBitboard.Zero) valid &= ~(TBitboard.One << n);
+                        TBitboard before = (uint)prev < (uint)cells ? group.BaseMask.ShiftLeft(prev) : Bit<TBitboard>.Zero;
+                        TBitboard entered = group.BaseMask.ShiftLeft(n).AndNot(before);
+                        if (entered.Intersects(_forbiddenEntry[d])) valid = valid.AndNot(Bit<TBitboard>.One.ShiftLeft(n));
                     }
                 }
                 table[g * dirs + d] = valid;
@@ -196,7 +196,7 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBina
 }
 
 /// <summary>Describes a board, its shape classes and its pieces, and builds the immutable <see cref="PuzzleTopology{TBitboard}"/>.</summary>
-public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>
+public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged, IBitboard<TBitboard>
 {
     private sealed record GroupDef(string Name, IReadOnlyList<(int dRow, int dCol)> Cells, TBitboard Base, AllowedDirections Dirs,
         byte Elevation, SlidePhysics Physics, RoleFlags Roles)
@@ -240,7 +240,7 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     public PuzzleTopologyBuilder<TBitboard> AddWall(int row, int col)
     {
         CheckCell(row, col);
-        _walls |= TBitboard.One << (row * _width + col);
+        _walls = _walls.Or(Bit<TBitboard>.One.ShiftLeft(row * _width + col));
         return this;
     }
 
@@ -283,9 +283,9 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     public PuzzleTopologyBuilder<TBitboard> AddPressurePlate(TBitboard triggerCellsMask, TBitboard gateCellsMask, byte triggerElevationMask = 0b01,
         bool normallyClosed = true)
     {
-        TBitboard board = TBitboard.AllBitsSet >> (Grid.BitWidth<TBitboard>() - _width * _height);
-        if ((triggerCellsMask & ~board) != TBitboard.Zero) throw new ArgumentException("The trigger cells are not all on the board.", nameof(triggerCellsMask));
-        if ((gateCellsMask & ~board) != TBitboard.Zero) throw new ArgumentException("The gate cells are not all on the board.", nameof(gateCellsMask));
+        TBitboard board = Bit<TBitboard>.All.ShiftRight(Grid.BitWidth<TBitboard>() - _width * _height);
+        if (!triggerCellsMask.AndNot(board).IsEmpty) throw new ArgumentException("The trigger cells are not all on the board.", nameof(triggerCellsMask));
+        if (!gateCellsMask.AndNot(board).IsEmpty) throw new ArgumentException("The gate cells are not all on the board.", nameof(gateCellsMask));
         _plates.Add(new PressurePlateRule<TBitboard>(triggerCellsMask, gateCellsMask, triggerElevationMask, normallyClosed));
         return this;
     }
@@ -377,9 +377,9 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
             {
                 int i = d.RingIndex, len = d.RingLength;
                 int next = d.RingStart + (i + 1) % len, prev = d.RingStart + (i + len - 1) % len;
-                TBitboard box = TBitboard.Zero;
+                TBitboard box = Bit<TBitboard>.Zero;
                 for (int r = 0; r < d.BoxSize; r++)
-                    for (int c = 0; c < d.BoxSize; c++) box |= TBitboard.One << (r * _width + c);
+                    for (int c = 0; c < d.BoxSize; c++) box = box.Or(Bit<TBitboard>.One.ShiftLeft(r * _width + c));
                 group = group with
                 {
                     CanRotate = true,
@@ -400,14 +400,14 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
         foreach (var p in _pieces)
         {
             var g = groups[p.GroupId];
-            if (((g.ValidAnchorsMask >> p.InitialAnchor) & TBitboard.One) == TBitboard.Zero)
+            if (!g.ValidAnchorsMask.HasBit(p.InitialAnchor))
                 throw new InvalidOperationException($"Piece {p.Label} has invalid initial anchor {p.InitialAnchor}.");
-            TBitboard m = g.BaseMask << p.InitialAnchor;
+            TBitboard m = g.BaseMask.ShiftLeft(p.InitialAnchor);
             for (int layer = 0; layer < 2; layer++)
             {
                 if ((g.ElevationMask >> layer & 1) == 0) continue;
-                if ((layers[layer] & m) != TBitboard.Zero) throw new InvalidOperationException($"Piece {p.Label} overlaps another piece or wall.");
-                layers[layer] |= m;
+                if (layers[layer].Intersects(m)) throw new InvalidOperationException($"Piece {p.Label} overlaps another piece or wall.");
+                layers[layer] = layers[layer].Or(m);
             }
         }
         return new PuzzleTopology<TBitboard>(_width, _height, _geometry, _walls, groups.ToArray(), _pieces.ToArray(), _diodes.ToArray(), _plates.ToArray(), _partitions.ToArray());
@@ -415,7 +415,7 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
 
     private TBitboard ComputeValidAnchors(IReadOnlyList<(int dRow, int dCol)> rel)
     {
-        TBitboard valid = TBitboard.Zero;
+        TBitboard valid = Bit<TBitboard>.Zero;
         for (int s = 0; s < _width * _height; s++)
         {
             int r = s / _width, c = s % _width;
@@ -423,9 +423,9 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
             foreach (var (dr, dc) in rel)
             {
                 int rr = r + dr, cc = c + dc;
-                if (rr < 0 || rr >= _height || cc < 0 || cc >= _width || ((_walls >> (rr * _width + cc)) & TBitboard.One) != TBitboard.Zero) { ok = false; break; }
+                if (rr < 0 || rr >= _height || cc < 0 || cc >= _width || _walls.HasBit(rr * _width + cc)) { ok = false; break; }
             }
-            if (ok) valid |= TBitboard.One << s;
+            if (ok) valid = valid.Or(Bit<TBitboard>.One.ShiftLeft(s));
         }
         return valid;
     }
@@ -449,14 +449,14 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
         var list = Canonical(cells);
         int minR = list.Min(c => c.dRow), minC = list.Min(c => c.dCol), maxC = list.Max(c => c.dCol);
         if (maxC - minC + 1 > boardWidth) throw new ArgumentException("Piece is wider than the board.", nameof(cells));
-        TBitboard raw = TBitboard.Zero;
+        TBitboard raw = Bit<TBitboard>.Zero;
         foreach (var (r, c) in list)
         {
             int bit = (r - minR) * boardWidth + (c - minC);
             if (bit >= Grid.BitWidth<TBitboard>()) throw new ArgumentException("Piece does not fit in the bitboard.", nameof(cells));
-            raw |= TBitboard.One << bit;
+            raw = raw.Or(Bit<TBitboard>.One.ShiftLeft(bit));
         }
-        TBitboard baseMask = raw >> Grid.Lsb(raw);
+        TBitboard baseMask = raw.ShiftRight(Grid.Lsb(raw));
         var origin = list[0];
         var rel = list.Select(c => (c.dRow - origin.dRow, c.dCol - origin.dCol)).ToArray();
         return (baseMask, rel);

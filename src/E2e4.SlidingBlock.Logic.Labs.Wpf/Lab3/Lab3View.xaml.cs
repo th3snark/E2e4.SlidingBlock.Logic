@@ -19,27 +19,27 @@ public partial class Lab3View : UserControl
     private const int Bits = N * N;
 
     private readonly LabPuzzles.Lab3Mode[] _modes = [LabPuzzles.CreateLab3Rotation(), LabPuzzles.CreateLab3Carrier(), LabPuzzles.CreateLab3Ice()];
-    private readonly PlaySession<PolyominoState<ulong>, CompositeMove>[]? _sessions;
+    private readonly PlaySession<PolyominoState<Bitboard64>, CompositeMove>[]? _sessions;
     private readonly string[] _xor = ["No action yet.", "No action yet.", "No action yet."];
     private readonly string[] _lastTable = ["", "", ""];
-    private readonly ulong[] _lastCluster = new ulong[3];
+    private readonly Bitboard64[] _lastCluster = new Bitboard64[3];
     private readonly Dictionary<int, Canvas> _visuals = [];
     private readonly List<UIElement> _hover = [];
     private int _mode, _selected = -1;
     private bool _busy;
-    private ulong _hoverCluster;
+    private Bitboard64 _hoverCluster;
 
     public Lab3View()
     {
         InitializeComponent();
-        _sessions = [.. _modes.Select(m => new PlaySession<PolyominoState<ulong>, CompositeMove>(m.Domain, m.Domain.InitialState))];
+        _sessions = [.. _modes.Select(m => new PlaySession<PolyominoState<Bitboard64>, CompositeMove>(m.Domain, m.Domain.InitialState))];
         LoadMode(0);
     }
 
     private LabPuzzles.Lab3Mode M => _modes[_mode];
-    private PuzzleTopology<ulong> T => M.Domain.Topology;
-    private PlaySession<PolyominoState<ulong>, CompositeMove> S => _sessions![_mode];
-    private PolyominoState<ulong> State => S.State;
+    private PuzzleTopology<Bitboard64> T => M.Domain.Topology;
+    private PlaySession<PolyominoState<Bitboard64>, CompositeMove> S => _sessions![_mode];
+    private PolyominoState<Bitboard64> State => S.State;
 
     private static Point Pos(int anchor) => new(anchor % N * Cell, anchor / N * Cell);
     private static Point Center(int anchor) => new(anchor % N * Cell + Cell / 2, anchor / N * Cell + Cell / 2);
@@ -113,8 +113,8 @@ public partial class Lab3View : UserControl
         else if (M.Goal.GoalPosition is { } goal)
             for (int g = 0; g < T.Groups.Count; g++)
                 if (T.Groups[g].Name == "Crate")
-                    for (ulong m = goal.GroupAnchorsOf(g); m != 0; m &= m - 1)
-                        AddGoalOutline(FootprintGeometry(T.Groups[g], 0), BitOperations.TrailingZeroCount(m), dash);
+                    for (Bitboard64 m = goal.GroupAnchorsOf(g); !m.IsEmpty; m = m.ClearLowest())
+                        AddGoalOutline(FootprintGeometry(T.Groups[g], 0), m.TrailingZeroCount(), dash);
     }
 
     private void AddGoalOutline(Geometry geometry, int anchor, Brush stroke)
@@ -130,7 +130,7 @@ public partial class Lab3View : UserControl
         });
     }
 
-    private static Geometry FootprintGeometry(EquivalenceGroup<ulong> g, double inset = 2) => DrawHelpers.FootprintGeometry(g, Cell, inset);
+    private static Geometry FootprintGeometry(EquivalenceGroup<Bitboard64> g, double inset = 2) => DrawHelpers.FootprintGeometry(g, Cell, inset);
 
     // ---- pieces -----------------------------------------------------------------------------------------------
 
@@ -226,9 +226,9 @@ public partial class Lab3View : UserControl
         return null;
     }
 
-    private static ulong FootprintOf(PuzzleTopology<ulong> t, PieceDelta d) => t.Groups[d.NewGroupId].BaseMask << d.NewAnchor;
+    private static Bitboard64 FootprintOf(PuzzleTopology<Bitboard64> t, PieceDelta d) => t.Groups[d.NewGroupId].BaseMask << d.NewAnchor;
 
-    private IReadOnlyList<int> PathFor(PolyominoState<ulong> before, PieceDelta d, int moveCount)
+    private IReadOnlyList<int> PathFor(PolyominoState<Bitboard64> before, PieceDelta d, int moveCount)
     {
         if (d.OldGroupId != d.NewGroupId) return [d.OldAnchor];
         if (moveCount == 1 && T.Groups[d.OldGroupId].SlidePhysics == SlidePhysics.ContinuousFloodFill)
@@ -255,7 +255,7 @@ public partial class Lab3View : UserControl
         S.Apply(move);
         _xor[_mode] = Derivation(move, before.ZobristHash, State.ZobristHash);
         _lastTable[_mode] = DeltaTable(move);
-        _lastCluster[_mode] = deltas.Aggregate(0UL, (acc, d) => acc | FootprintOf(T, d));
+        _lastCluster[_mode] = deltas.Aggregate(default(Bitboard64), (acc, d) => acc | FootprintOf(T, d));
         Banner.Visibility = Visibility.Collapsed;
         BuildPieces();
         _busy = false;
@@ -363,9 +363,9 @@ public partial class Lab3View : UserControl
                 Opacity = 0.7,
                 IsHitTestVisible = false,
             });
-            for (ulong m = r.BlockingBitsMask; m != 0; m &= m - 1)
+            for (Bitboard64 m = r.BlockingBitsMask; !m.IsEmpty; m = m.ClearLowest())
             {
-                var p = Pos(BitOperations.TrailingZeroCount(m));
+                var p = Pos(m.TrailingZeroCount());
                 var box = new Rectangle { Width = Cell - 6, Height = Cell - 6, Stroke = new SolidColorBrush(red), StrokeThickness = 3, IsHitTestVisible = false };
                 Canvas.SetLeft(box, p.X + 3);
                 Canvas.SetTop(box, p.Y + 3);
@@ -412,7 +412,7 @@ public partial class Lab3View : UserControl
     private void Hover(CompositeMove move, Color color, string text)
     {
         ClearHover();
-        ulong cluster = 0;
+        Bitboard64 cluster = default;
         foreach (var d in move.AsSpan())
         {
             var ghost = new Path
@@ -446,11 +446,11 @@ public partial class Lab3View : UserControl
 
     // ---- overlay ----------------------------------------------------------------------------------------------
 
-    private void Tint(ulong mask, Color color, byte alpha)
+    private void Tint(Bitboard64 mask, Color color, byte alpha)
     {
-        for (ulong m = mask; m != 0; m &= m - 1)
+        for (Bitboard64 m = mask; !m.IsEmpty; m = m.ClearLowest())
         {
-            int bit = BitOperations.TrailingZeroCount(m);
+            int bit = m.TrailingZeroCount();
             var rect = new Rectangle { Width = Cell, Height = Cell, Fill = Brush(color, alpha), IsHitTestVisible = false };
             Canvas.SetLeft(rect, bit % N * Cell);
             Canvas.SetTop(rect, bit / N * Cell);
@@ -459,7 +459,7 @@ public partial class Lab3View : UserControl
     }
 
     /// <summary>Swept rotation box, the cells blocking it, and why a turn is not possible, for the selected piece.</summary>
-    private (ulong Swept, ulong Collision, string Why) RotationCheck(int pieceId, bool clockwise)
+    private (Bitboard64 Swept, Bitboard64 Collision, string Why) RotationCheck(int pieceId, bool clockwise)
     {
         var g = T.Groups[State.GroupOf(pieceId)];
         int a = State.AnchorOf(pieceId);
@@ -467,15 +467,15 @@ public partial class Lab3View : UserControl
         int nextAnchor = a + (clockwise ? g.AnchorDeltaCw : g.AnchorDeltaCcw);
         int box = a + g.BoxOriginDelta, size = g.RotationBoxSize;
         bool boxOnBoard = box >= 0 && box % N + size <= N && box / N + size <= N;
-        ulong swept = boxOnBoard ? g.SweptClearanceMask << box : 0;
-        ulong collision = ((State.OccupancyMask ^ (g.BaseMask << a)) | T.StaticWallsMask) & swept;
+        Bitboard64 swept = boxOnBoard ? g.SweptClearanceMask << box : 0;
+        Bitboard64 collision = ((State.OccupancyMask ^ (g.BaseMask << a)) | T.StaticWallsMask) & swept;
         string why = "";
         if ((uint)nextAnchor >= (uint)Bits || ((T.Groups[next].ValidAnchorsMask >> nextAnchor) & 1UL) == 0)
             why = $"the next orientation would have anchor {nextAnchor}, which is not a valid anchor for group {next}";
         else if (!boxOnBoard)
             why = $"the {size}x{size} rotation box at bit {box} leaves the board";
         else if (collision != 0)
-            why = $"bit(s) {Indices(collision)} inside the swept box {swept.ToHex(9)} are occupied (OtherOccupancy & SweptFootprint != 0)";
+            why = $"bit(s) {Indices(collision.Value)} inside the swept box {swept.ToHex(9)} are occupied (OtherOccupancy & SweptFootprint != 0)";
         return (swept, collision, why);
     }
 
@@ -565,7 +565,7 @@ public partial class Lab3View : UserControl
         return l.Count == 0 ? "-" : string.Join(",", l);
     }
 
-    private ulong RecomputedHash(in PolyominoState<ulong> state) => state.ComputeZobrist(T);
+    private ulong RecomputedHash(in PolyominoState<Bitboard64> state) => state.ComputeZobrist(T);
 
     private string Derivation(CompositeMove move, ulong previous, ulong result)
     {
@@ -589,7 +589,7 @@ public partial class Lab3View : UserControl
     {
         var sb = new StringBuilder();
         sb.AppendLine("PieceId  OldGroup -> NewGroup  OldAnchor -> NewAnchor");
-        ulong cluster = 0;
+        Bitboard64 cluster = default;
         foreach (var d in move.AsSpan())
         {
             sb.AppendLine(CultureInfo.InvariantCulture, $"{d.PieceId,-8} {d.OldGroupId,-8} -> {d.NewGroupId,-8}  {d.OldAnchor,-9} -> {d.NewAnchor}");
@@ -618,7 +618,7 @@ public partial class Lab3View : UserControl
             var piece = T.Pieces[_selected];
             var g = T.Groups[State.GroupOf(_selected)];
             int a = State.AnchorOf(_selected);
-            ulong pieceMask = g.BaseMask << a;
+            Bitboard64 pieceMask = g.BaseMask << a;
             sb.AppendLine(CultureInfo.InvariantCulture, $"Piece                 {piece.Label}  (PieceId {piece.PieceId})  {g.Name}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"EquivalenceGroupId    {g.GroupId}     RoleFlags {g.Roles}     {g.SlidePhysics}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"BaseMask[g]           {g.BaseMask.ToHex(9)}   {g.BaseMask.ToBinary(Bits)}");
@@ -640,8 +640,8 @@ public partial class Lab3View : UserControl
         sb.Clear();
         for (int g = 0; g < T.Groups.Count; g++)
         {
-            ulong ga = State.GroupAnchorsOf(g);
-            sb.AppendLine(CultureInfo.InvariantCulture, $"GroupAnchors[{g}] = {ga.ToBinary(Bits)} = {ga.ToHex(9)}  anchors {{{Indices(ga)}}}  {T.Groups[g].Name}");
+            Bitboard64 ga = State.GroupAnchorsOf(g);
+            sb.AppendLine(CultureInfo.InvariantCulture, $"GroupAnchors[{g}] = {ga.ToBinary(Bits)} = {ga.ToHex(9)}  anchors {{{Indices(ga.Value)}}}  {T.Groups[g].Name}");
         }
         sb.Append(CultureInfo.InvariantCulture, $"OccupancyMask   = {State.OccupancyMask.ToBinary(Bits)} = {State.OccupancyMask.ToHex(9)}   (+ static walls {T.StaticWallsMask.ToHex(9)})");
         CanonText.Text = sb.ToString();
@@ -674,7 +674,7 @@ public partial class Lab3View : UserControl
         _ => $"glider on anchor {M.Goal.GoalAnchor}",
     };
 
-    private string ExtraReadout(EquivalenceGroup<ulong> g, int anchor, ulong pieceMask)
+    private string ExtraReadout(EquivalenceGroup<Bitboard64> g, int anchor, Bitboard64 pieceMask)
     {
         var sb = new StringBuilder();
         switch (_mode)
@@ -689,7 +689,7 @@ public partial class Lab3View : UserControl
                 sb.AppendLine(CultureInfo.InvariantCulture, $"BoxOrigin             Anchor + BoxOriginDelta = {anchor} + {g.BoxOriginDelta} = {box}");
                 sb.AppendLine(CultureInfo.InvariantCulture, $"AnchorDelta           CW {g.AnchorDeltaCw:+0;-0;0} (-> group {g.NextCwGroupId})    CCW {g.AnchorDeltaCcw:+0;-0;0} (-> group {g.NextCcwGroupId})");
                 sb.AppendLine(CultureInfo.InvariantCulture, $"SweptFootprint        {g.SweptClearanceMask.ToHex(9)} << {box} = {cw.Swept.ToHex(9)}");
-                sb.AppendLine(CultureInfo.InvariantCulture, $"CollisionBits         OtherOccupancy & SweptFootprint = {cw.Collision.ToHex(9)}   bits: {Indices(cw.Collision)}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"CollisionBits         OtherOccupancy & SweptFootprint = {cw.Collision.ToHex(9)}   bits: {Indices(cw.Collision.Value)}");
                 bool cwOk = RotationMove(_selected, true) is not null, ccwOk = RotationMove(_selected, false) is not null;
                 sb.Append(CultureInfo.InvariantCulture, $"Rotation              CW {(cwOk ? "legal" : "blocked")}   CCW {(ccwOk ? "legal" : "blocked")}");
                 break;

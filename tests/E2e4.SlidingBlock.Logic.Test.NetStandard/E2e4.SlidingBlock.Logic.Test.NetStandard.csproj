@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The same tests as E2e4.SlidingBlock.Logic.Test, run against the netstandard2.0 build of the library on a modern runtime. It works on every OS,
+       unlike net48; the net48 run on Windows still covers the .NET Framework runtime itself. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>E2e4.SlidingBlock.Logic.Test</RootNamespace>
+    <Product>E2e4 Sliding Block Logic Tests (netstandard2.0 build)</Product>
+    <Description>xUnit tests for the netstandard2.0 build of E2e4.SlidingBlock.Logic.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\E2e4.SlidingBlock.Logic.Test\**\*.cs" Exclude="..\E2e4.SlidingBlock.Logic.Test\obj\**;..\E2e4.SlidingBlock.Logic.Test\bin\**" LinkBase="Shared" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\E2e4.SlidingBlock.Logic\E2e4.SlidingBlock.Logic.csproj" SetTargetFramework="TargetFramework=netstandard2.0" />
+  </ItemGroup>
+
+</Project>

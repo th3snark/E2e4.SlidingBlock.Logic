@@ -53,7 +53,7 @@ public static class PushMap
                 floorCells.Add(cell);
                 if (ch == target) targets.Add(cell);
                 else if (ch == player) storeman = cell;
-                else if (caseSymbols.IndexOf(ch, StringComparison.Ordinal) is int id and >= 0) cases[id] = cell;
+                else if (caseSymbols.IndexOf(ch) is int id and >= 0) cases[id] = cell;
                 else if (ch != floor) throw new ArgumentException($"Unknown map symbol '{ch}'.", nameof(map));
             }
         if (storeman < 0) throw new ArgumentException("The map has no storeman.", nameof(map));

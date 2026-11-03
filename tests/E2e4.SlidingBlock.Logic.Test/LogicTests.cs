@@ -22,7 +22,7 @@ public class LsbNormalizationTests
     [InlineData("J", 0x31UL)]
     public void KnownBaseMasksOnFiveWideBoard(string shape, ulong expected)
     {
-        var (mask, _) = PuzzleTopologyBuilder<ulong>.Normalize(Shapes[shape], 5);
+        var (mask, _) = PuzzleTopologyBuilder<Bitboard64>.Normalize(Shapes[shape], 5);
         Assert.Equal(expected, mask);
     }
 
@@ -37,9 +37,9 @@ public class LsbNormalizationTests
     {
         for (int width = 3; width <= 8; width++)
         {
-            var (mask, rel) = PuzzleTopologyBuilder<ulong>.Normalize(Shapes[shape], width);
+            var (mask, rel) = PuzzleTopologyBuilder<Bitboard64>.Normalize(Shapes[shape], width);
             Assert.Equal(1UL, mask & 1UL);
-            Assert.Equal(0, BitOperations.TrailingZeroCount(mask));
+            Assert.Equal(0, mask.TrailingZeroCount());
             Assert.Equal((0, 0), rel[0]);
             foreach (var (dr, dc) in rel)
             {
@@ -49,7 +49,7 @@ public class LsbNormalizationTests
                 if (dr == 0) Assert.True(dc >= 0);
                 else Assert.True(dr >= 1);
             }
-            Assert.Equal(rel.Count, BitOperations.PopCount(mask));
+            Assert.Equal(rel.Count, mask.PopCount());
         }
     }
 
@@ -58,8 +58,8 @@ public class LsbNormalizationTests
     {
         var d = Fixtures.CreateLab2();
         var s = d.InitialState;
-        Assert.Equal(16, BitOperations.TrailingZeroCount(d.Topology.PieceMask(1, s.AnchorOf(1))));
-        Assert.Equal(4, BitOperations.TrailingZeroCount(d.Topology.PieceMask(2, s.AnchorOf(2))));
+        Assert.Equal(16, d.Topology.PieceMask(1, s.AnchorOf(1)).TrailingZeroCount());
+        Assert.Equal(4, d.Topology.PieceMask(2, s.AnchorOf(2)).TrailingZeroCount());
     }
 }
 
@@ -104,7 +104,7 @@ public class ReachableAnchorsTests
     public void FindsCornerHookDestinations()
     {
         // 1x1 piece at (0,0), block at (0,1): (1,1) is reachable only by going down then right.
-        ulong reach = PolyominoState<ulong>.FindReachableAnchors(0, 1UL, All9, 1UL << 1, W);
+        Bitboard64 reach = PolyominoState<Bitboard64>.FindReachableAnchors(0, 1UL, All9, 1UL << 1, W);
         Assert.True((reach >> 4 & 1) != 0, "hook destination (1,1)");
         Assert.True((reach >> 3 & 1) != 0);
         Assert.True((reach >> 8 & 1) != 0);
@@ -115,7 +115,7 @@ public class ReachableAnchorsTests
     [Fact]
     public void RejectsBlockedCorners()
     {
-        ulong reach = PolyominoState<ulong>.FindReachableAnchors(0, 1UL, All9, (1UL << 1) | (1UL << 3), W);
+        Bitboard64 reach = PolyominoState<Bitboard64>.FindReachableAnchors(0, 1UL, All9, (1UL << 1) | (1UL << 3), W);
         Assert.Equal(0UL, reach);
     }
 
@@ -123,23 +123,23 @@ public class ReachableAnchorsTests
     public void DoesNotWrapAcrossRows()
     {
         // 3-wide board, piece at (0,2); +1 shift would wrap to (1,0) which must not be reached directly.
-        ulong reach = PolyominoState<ulong>.FindReachableAnchors(2, 1UL, All9, (1UL << 5) | (1UL << 1), W);
+        Bitboard64 reach = PolyominoState<Bitboard64>.FindReachableAnchors(2, 1UL, All9, (1UL << 5) | (1UL << 1), W);
         Assert.Equal(0UL, reach);
     }
 
     [Fact]
     public void RespectsAllowedDirections()
     {
-        ulong horiz = PolyominoState<ulong>.FindReachableAnchors(0, 1UL, All9, 0, W, AllowedDirections.Horizontal);
+        Bitboard64 horiz = PolyominoState<Bitboard64>.FindReachableAnchors(0, 1UL, All9, 0, W, AllowedDirections.Horizontal);
         Assert.Equal(0b110UL, horiz);
     }
 
     [Fact]
     public void HookPathIsContiguousAndAvoidsObstacles()
     {
-        var path = PolyominoState<ulong>.ReconstructHookPath(0, 4, 1UL, All9, 1UL << 1, W);
+        var path = PolyominoState<Bitboard64>.ReconstructHookPath(0, 4, 1UL, All9, 1UL << 1, W);
         Assert.Equal(new[] { 0, 3, 4 }, path);
-        Assert.Empty(PolyominoState<ulong>.ReconstructHookPath(0, 4, 1UL, All9, (1UL << 1) | (1UL << 3), W));
+        Assert.Empty(PolyominoState<Bitboard64>.ReconstructHookPath(0, 4, 1UL, All9, (1UL << 1) | (1UL << 3), W));
     }
 
     [Fact]
@@ -151,12 +151,12 @@ public class ReachableAnchorsTests
         {
             var g = d.Topology.Groups[d.Topology.Pieces[p].GroupId];
             int a = s.AnchorOf(p);
-            ulong other = s.OccupancyMask ^ (g.BaseMask << a);
-            ulong reach = d.ReachableFor(s, p);
-            for (ulong r = reach; r != 0; r &= r - 1)
+            Bitboard64 other = s.OccupancyMask ^ (g.BaseMask << a);
+            Bitboard64 reach = d.ReachableFor(s, p);
+            for (Bitboard64 r = reach; !r.IsEmpty; r = r.ClearLowest())
             {
-                int target = BitOperations.TrailingZeroCount(r);
-                var path = PolyominoState<ulong>.ReconstructHookPath(a, target, g.BaseMask, g.ValidAnchorsMask, other, 5);
+                int target = r.TrailingZeroCount();
+                var path = PolyominoState<Bitboard64>.ReconstructHookPath(a, target, g.BaseMask, g.ValidAnchorsMask, other, 5);
                 Assert.Equal(a, path[0]);
                 Assert.Equal(target, path[^1]);
                 foreach (int step in path) Assert.Equal(0UL, (g.BaseMask << step) & other);
@@ -206,7 +206,7 @@ public class SymmetryTests
             foreach (var p in d.Topology.Pieces)
             {
                 h ^= d.Topology.ZobristKey(p.GroupId, s.AnchorOf(p.PieceId));
-                occ |= d.Topology.PieceMask(p.PieceId, s.AnchorOf(p.PieceId));
+                occ |= d.Topology.PieceMask(p.PieceId, s.AnchorOf(p.PieceId)).Value;
             }
             Assert.Equal(h, s.ZobristHash);
             Assert.Equal(occ, s.OccupancyMask);
@@ -272,9 +272,9 @@ public class DomainTests
         var start = PuzzleWalk.RandomWalk(solved, solved.Goal, 25, new Random(3));
         var domain = new NPuzzleDomain(start, solved.Goal);
         var result = new PuzzleSolver().SolveIdaStar(domain, start, domain.ManhattanDistance);
-        Assert.NotNull(result);
+        Assert.True(result.IsSolved);
         var s = start;
-        foreach (var mv in result!.Moves) s = domain.ApplyMove(s, mv);
+        foreach (var mv in result.Moves) s = domain.ApplyMove(s, mv);
         Assert.True(domain.IsGoal(s));
     }
 
@@ -283,13 +283,13 @@ public class DomainTests
     {
         var d = Fixtures.RushHourDefault();
         var result = new PuzzleSolver().SolveBfs(d, d.InitialState);
-        Assert.NotNull(result);
+        Assert.True(result.IsSolved);
         var s = d.InitialState;
-        foreach (var mv in result!.Moves)
+        foreach (var mv in result.Moves)
         {
             s = d.ApplyMove(s, mv);
             var occ = d.Occupancy(s);
-            Assert.Equal(d.Vehicles.Sum(v => v.Length), BitOperations.PopCount(occ));
+            Assert.Equal(d.Vehicles.Sum(v => v.Length), occ.PopCount());
         }
         Assert.True(d.IsGoal(s));
     }
@@ -300,8 +300,8 @@ public class DomainTests
         var d = Fixtures.CreateKlotski();
         Assert.Equal(20 - 2, BitOperations.PopCount(d.InitialState.OccupancyMask));
         var result = new PuzzleSolver().SolveBfs(d, d.InitialState);
-        Assert.NotNull(result);
-        Assert.Equal(116, result!.Moves.Count);
+        Assert.True(result.IsSolved);
+        Assert.Equal(116, result.Moves.Count);
     }
 
     [Fact]
@@ -324,9 +324,9 @@ public class DomainTests
     {
         var d = Fixtures.CreateLab2();
         var result = new PuzzleSolver().SolveBfs(d, d.InitialState);
-        Assert.NotNull(result);
+        Assert.True(result.IsSolved);
         var s = d.InitialState;
-        foreach (var mv in result!.Moves) s = d.ApplyMove(s, mv);
+        foreach (var mv in result.Moves) s = d.ApplyMove(s, mv);
         Assert.True(d.IsGoal(s));
     }
 }
@@ -351,7 +351,7 @@ public class LabSpecTests
             Assert.Equal(expected[v].length, t.Vehicles[v].Length);
             Assert.Equal(expected[v].horizontal, t.Vehicles[v].IsHorizontal);
         }
-        Assert.NotNull(new PuzzleSolver().SolveBfs(d, d.InitialState));
+        Assert.True(new PuzzleSolver().SolveBfs(d, d.InitialState).IsSolved);
     }
 
     [Fact]
@@ -374,8 +374,8 @@ public class LabSpecTests
         // 3x3 board, 1x1 piece at 0, blocker at 4: 8 is reachable only by turning a corner.
         const ulong All9 = 0x1FFUL;
         var parent = new sbyte[9];
-        ulong reach = PolyominoState<ulong>.FindReachableAnchors(0, 1UL, All9, 1UL << 4, 3, parent, out ulong straight, out ulong hook);
-        Assert.Equal(reach, PolyominoState<ulong>.FindReachableAnchors(0, 1UL, All9, 1UL << 4, 3));
+        Bitboard64 reach = PolyominoState<Bitboard64>.FindReachableAnchors(0, 1UL, All9, 1UL << 4, 3, parent, out Bitboard64 straight, out Bitboard64 hook);
+        Assert.Equal(reach, PolyominoState<Bitboard64>.FindReachableAnchors(0, 1UL, All9, 1UL << 4, 3));
         Assert.Equal(straight | hook, reach);
         Assert.Equal(0UL, straight & hook);
         Assert.NotEqual(0UL, straight & (1UL << 2)); // same row, no corner
@@ -385,7 +385,7 @@ public class LabSpecTests
         rebuilt.Add(0);
         rebuilt.Reverse();
         Assert.Equal(5, rebuilt.Count); // 0, 1, 2, 5, 8 or 0, 3, 6, 7, 8
-        Assert.Equal(PolyominoState<ulong>.ReconstructHookPath(0, 8, 1UL, All9, 1UL << 4, 3).Count, rebuilt.Count);
+        Assert.Equal(PolyominoState<Bitboard64>.ReconstructHookPath(0, 8, 1UL, All9, 1UL << 4, 3).Count, rebuilt.Count);
     }
 
     [Fact]
@@ -396,11 +396,11 @@ public class LabSpecTests
         int a = t.Pieces.First(p => p.Label == "A").PieceId, j = t.Pieces.First(p => p.Label == "J").PieceId;
         var s = d.InitialState.WithPieceMoved(t, a, 7).WithPieceMoved(t, j, 19);
         var g = t.Groups[t.Pieces[a].GroupId];
-        ulong other = s.OccupancyMask ^ (g.BaseMask << 7);
+        Bitboard64 other = s.OccupancyMask ^ (g.BaseMask << 7);
         var parent = new sbyte[25];
-        PolyominoState<ulong>.FindReachableAnchors(7, g.BaseMask, g.ValidAnchorsMask, other, 5, parent, out _, out ulong hook);
+        PolyominoState<Bitboard64>.FindReachableAnchors(7, g.BaseMask, g.ValidAnchorsMask, other, 5, parent, out _, out Bitboard64 hook);
         Assert.NotEqual(0UL, hook & (1UL << 17));
-        Assert.Equal([7, 8, 13, 18, 17], PolyominoState<ulong>.ReconstructHookPath(7, 17, g.BaseMask, g.ValidAnchorsMask, other, 5));
+        Assert.Equal([7, 8, 13, 18, 17], PolyominoState<Bitboard64>.ReconstructHookPath(7, 17, g.BaseMask, g.ValidAnchorsMask, other, 5));
     }
 
     [Fact]
@@ -473,7 +473,7 @@ public class PolyominoGoalPositionTests
     {
         var lab = Fixtures.CreateLab2();
         var topo = lab.Topology;
-        var domain = new PolyominoDomain<ulong>(topo, lab.InitialState);
+        var domain = new PolyominoDomain<Bitboard64>(topo, lab.InitialState);
         Assert.NotNull(domain.GoalPosition);
         Assert.Equal(-1, domain.GoalGroupId);
         Assert.True(domain.IsGoal(domain.InitialState));
@@ -492,7 +492,7 @@ public class PolyominoGoalPositionTests
         var lab = Fixtures.CreateLab2();
         var topo = lab.Topology;
         // Only group 0 (the L) has to match: moving the T (group 1) does not matter, moving the L does.
-        var domain = new PolyominoDomain<ulong>(topo, lab.InitialState, matchedGroups: 1UL << 0);
+        var domain = new PolyominoDomain<Bitboard64>(topo, lab.InitialState, matchedGroups: 1UL << 0);
         Assert.True(domain.IsGoal(lab.InitialState));
         Assert.True(domain.IsGoal(lab.InitialState.WithPieceMoved(topo, 1, 22)));
         Assert.False(domain.IsGoal(lab.InitialState.WithPieceMoved(topo, 0, 22)));
@@ -501,13 +501,13 @@ public class PolyominoGoalPositionTests
     [Fact]
     public void StateHoldsSixteenGroups()
     {
-        var b = PuzzleTopology<ulong>.CreateBuilder(4, 4);
-        for (int g = 0; g < PolyominoState<ulong>.MaxGroups; g++)
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(4, 4);
+        for (int g = 0; g < PolyominoState<Bitboard64>.MaxGroups; g++)
         {
             int group = b.AddGroup($"g{g}", [(0, 0)]);
             b.AddPiece(group, $"p{g}", g);
         }
-        var state = PolyominoState<ulong>.FromTopology(b.Build());
-        for (int g = 0; g < PolyominoState<ulong>.MaxGroups; g++) Assert.Equal(1UL << g, state.GroupAnchorsOf(g));
+        var state = PolyominoState<Bitboard64>.FromTopology(b.Build());
+        for (int g = 0; g < PolyominoState<Bitboard64>.MaxGroups; g++) Assert.Equal(1UL << g, state.GroupAnchorsOf(g));
     }
 }

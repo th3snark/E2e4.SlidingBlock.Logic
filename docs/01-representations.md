@@ -31,7 +31,7 @@ nibble:    F  E  D  C ... 3  2  1  0      0xFEDCBA9876543210  (solved: tile k on
 
 Cars (`1x2`) and trucks (`1x3`) cannot change lane or rotate, so each vehicle has exactly one degree of freedom: its offset
 `0..15` along its fixed row or column (a lane is at most 16 cells). That is 4 bits per vehicle, packed 16 to a `ulong`
-(`LaneState16` holds 16 vehicles in one word, `LaneState64` holds 64 in four), so up to 64 vehicles on a board of up to 128 cells (a `UInt128` cell register) fit. The same `LaneSlideDomain<TState, TBitboard>` plays
+(`LaneState16` holds 16 vehicles in one word, `LaneState64` holds 64 in four), so up to 64 vehicles on a board of up to 128 cells (a `Bitboard128` cell register) fit. The same `LaneSlideDomain<TState, TBitboard>` plays
 classic Rush Hour (`maxStep` 1, one cell per move) and the garage puzzles (any distance is one move).
 
 - Occupancy is rebuilt in O(N) from a precomputed table `MaskAt(vehicle, offset)`.

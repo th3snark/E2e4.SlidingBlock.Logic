@@ -34,9 +34,9 @@ public class GoldenTests
         return h ^ (ulong)seen.Count;
     }
 
-    internal static PolyominoDomain<ulong> FeatureDomain()
+    internal static PolyominoDomain<Bitboard64> FeatureDomain()
     {
-        var b = PuzzleTopology<ulong>.CreateBuilder(5, 5);
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(5, 5);
         b.AddWall(2, 2);
         b.AddDiode(1, 3, 0b0010);
         b.AddPressurePlate(1UL << 20, 1UL << 7);
@@ -49,31 +49,31 @@ public class GoldenTests
         b.AddPiece(high, "u", 13);
         b.AddPiece(tall, "t", 15);
         b.AddPiece(horiz, "g", 24);
-        return new PolyominoDomain<ulong>(b.Build(), dom, 18);
+        return new PolyominoDomain<Bitboard64>(b.Build(), dom, 18);
     }
 
-    internal static PolyominoDomain<UInt128> WideDomain()
+    internal static PolyominoDomain<Bitboard128> WideDomain()
     {
-        var b = PuzzleTopology<UInt128>.CreateBuilder(10, 10);
+        var b = PuzzleTopology<Bitboard128>.CreateBuilder(10, 10);
         b.AddWall(5, 5);
         int dom = b.AddGroup("domino", [(0, 0), (0, 1)]);
         int one = b.AddGroup("one", [(0, 0)]);
         b.AddPiece(dom, "d", 95);
         b.AddPiece(one, "a", 0);
         b.AddPiece(one, "b", 44);
-        return new PolyominoDomain<UInt128>(b.Build(), dom, 0);
+        return new PolyominoDomain<Bitboard128>(b.Build(), dom, 0);
     }
 
-    internal static PolyominoDomain<ulong> HexDomain()
+    internal static PolyominoDomain<Bitboard64> HexDomain()
     {
-        var b = PuzzleTopology<ulong>.CreateBuilder(4, 4, GridGeometry.HexagonalAxial);
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(4, 4, GridGeometry.HexagonalAxial);
         b.AddWall(1, 1);
         int one = b.AddGroup("one", [(0, 0)]);
         int dom = b.AddGroup("domino", [(0, 0), (0, 1)]);
         b.AddPiece(one, "a", 0);
         b.AddPiece(one, "b", 15);
         b.AddPiece(dom, "d", 9);
-        return new PolyominoDomain<ulong>(b.Build(), dom, 0);
+        return new PolyominoDomain<Bitboard64>(b.Build(), dom, 0);
     }
 
     public static TheoryData<string, ulong> Expected => new()
@@ -113,7 +113,7 @@ public class GoldenTests
 
 
     /// <summary>Reachable sets, straight/hook split, parent maps and animated paths from several positions of the Lab 2 and feature boards.</summary>
-    private static ulong PathFingerprint(PolyominoDomain<ulong> domain)
+    private static ulong PathFingerprint(PolyominoDomain<Bitboard64> domain)
     {
         var buffer = new PolyominoMove[domain.MaxMoves];
         var state = domain.InitialState;
@@ -129,9 +129,9 @@ public class GoldenTests
             {
                 var g = topo.Groups[state.GroupOf(p.PieceId)];
                 int a = state.AnchorOf(p.PieceId);
-                ulong other = state.OccupancyMask ^ (g.BaseMask << a);
-                ulong reach = PolyominoState<ulong>.FindReachableAnchors(a, g.BaseMask, g.ValidAnchorsMask, other, topo.Width, parent, out ulong straight, out ulong hook, g.Directions);
-                h = (h ^ reach ^ (straight << 1) ^ (hook << 2)) * 1099511628211UL;
+                Bitboard64 other = state.OccupancyMask ^ (g.BaseMask << a);
+                Bitboard64 reach = PolyominoState<Bitboard64>.FindReachableAnchors(a, g.BaseMask, g.ValidAnchorsMask, other, topo.Width, parent, out Bitboard64 straight, out Bitboard64 hook, g.Directions);
+                h = (h ^ reach.Value ^ (straight << 1).Value ^ (hook << 2).Value) * 1099511628211UL;
                 for (int c = 0; c < topo.CellCount; c++) h = (h ^ (ulong)(byte)parent[c]) * 1099511628211UL;
             }
             state = domain.ApplyMove(state, buffer[step % n]);
@@ -147,9 +147,9 @@ public class GoldenTests
 
     // ---- solvers ---------------------------------------------------------------------------------------------
 
-    private static ulong Fold<TMove>(SolveResult<TMove>? r) where TMove : notnull
+    private static ulong Fold<TMove>(SolveResult<TMove> r) where TMove : notnull
     {
-        if (r is null) return 0;
+        if (!r.IsSolved) return 0;
         ulong h = 1469598103934665603UL;
         foreach (var m in r.Moves) h = (h ^ (ulong)m.GetHashCode()) * 1099511628211UL;
         return h ^ (ulong)r.NodesExpanded << 20 ^ (ulong)r.Moves.Count;
@@ -224,22 +224,22 @@ public class GoldenTests
     public void GoalIsSharedByBothDomains()
     {
         var d = FeatureDomain();
-        var composite = new CompositeDomain<ulong>(d);
+        var composite = new CompositeDomain<Bitboard64>(d);
         Assert.Same(d.Goal, composite.Goal);
-        var built = new CompositeDomain<ulong>(d.Topology, d.Goal);
+        var built = new CompositeDomain<Bitboard64>(d.Topology, d.Goal);
         Assert.Equal(composite.InitialState, built.InitialState);
     }
 
     [Fact]
     public void BitboardExtensionsServeEveryWidth()
     {
-        ulong narrow = 0b1010UL << 8;
-        UInt128 wide = UInt128.One << 100 | UInt128.One << 3;
-        Assert.Equal((9, 11, 2), (narrow.Lsb, narrow.Msb, narrow.BitCount));
-        Assert.Equal((3, 100, 2), (wide.Lsb, wide.Msb, wide.BitCount));
-        Assert.Equal(64, 0UL.Lsb);
-        Assert.Equal(128, UInt128.Zero.Lsb);
-        Assert.Equal(-1, 0UL.Msb);
+        var narrow = new Bitboard64(0b1010UL << 8);
+        var wide = new Bitboard128(1UL << 3, 1UL << 36);
+        Assert.Equal((9, 11, 2), (narrow.Lsb, narrow.Msb, narrow.PopCount()));
+        Assert.Equal((3, 100, 2), (wide.Lsb, wide.Msb, wide.PopCount()));
+        Assert.Equal(64, default(Bitboard64).Lsb);
+        Assert.Equal(128, default(Bitboard128).Lsb);
+        Assert.Equal(-1, default(Bitboard64).Msb);
         Assert.True(wide.HasBit(100));
         Assert.Equal(34, wide.ToHex().Length);
     }
@@ -261,7 +261,12 @@ public class GoldenTests
         return GC.GetAllocatedBytesForCurrentThread() - before;
     }
 
-    public static TheoryData<string> Domains => new() { "npuzzle", "klotski", "rushhour", "lab2", "lab3-rotation", "lab3-carrier", "lab3-ice", "feature", "wide", "hex" };
+    public static TheoryData<string> Domains => new()
+    {
+        "npuzzle", "klotski", "rushhour", "lab2", "lab3-rotation", "lab3-carrier", "lab3-ice", "feature",
+        "wide",
+        "hex",
+    };
 
     [Theory]
     [MemberData(nameof(Domains))]

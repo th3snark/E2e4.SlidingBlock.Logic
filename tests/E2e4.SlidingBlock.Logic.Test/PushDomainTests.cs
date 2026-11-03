@@ -46,8 +46,8 @@ public class PushDomainTests
     public void TheSolversSolveItInOneMove()
     {
         var d = PushMap.CreateDomain(Corridor, Fixtures.CaseSymbols);
-        var bfs = new PuzzleSolver().SolveBfs(d, d.InitialState)!;
-        var astar = new PuzzleSolver().SolveAStar(d, d.InitialState, s => d.Heuristic(s))!;
+        var bfs = new PuzzleSolver().SolveBfs(d, d.InitialState);
+        var astar = new PuzzleSolver().SolveAStar(d, d.InitialState, s => d.Heuristic(s));
         Assert.Single(bfs.Moves);
         Assert.Single(astar.Moves);
     }

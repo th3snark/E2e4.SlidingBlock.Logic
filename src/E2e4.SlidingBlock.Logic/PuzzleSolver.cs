@@ -3,16 +3,20 @@ using System.Runtime.InteropServices;
 
 namespace E2e4.SlidingBlock.Logic;
 
-/// <summary>A solution: the moves from the start position to a goal and the number of nodes the search expanded.</summary>
-/// <param name="Moves">The moves in order; empty when the start is already a goal.</param>
-/// <param name="NodesExpanded">How many nodes the search expanded to find them.</param>
-public sealed record SolveResult<TMove>(IReadOnlyList<TMove> Moves, long NodesExpanded)
+/// <summary>The outcome of a search: whether it found a solution and, if so, the moves from the start position to a goal.</summary>
+/// <param name="Status">Whether a solution was found, and if not, why.</param>
+/// <param name="Moves">The moves in order; empty when the start is already a goal, and also when no solution was found.</param>
+/// <param name="NodesExpanded">How many nodes the search expanded.</param>
+public sealed record SolveResult<TMove>(SolveStatus Status, IReadOnlyList<TMove> Moves, long NodesExpanded)
 {
+    /// <summary>True when <see cref="Moves"/> leads from the start to a goal.</summary>
+    public bool IsSolved => Status == SolveStatus.Solved;
+
     /// <summary>The total cost of <see cref="Moves"/> for the weighted solvers; 0 for the others, which count moves.</summary>
     public long Cost { get; init; }
 }
 
-/// <summary>Why a solver returned no solution. Cancellation is not a status: it throws <see cref="OperationCanceledException"/>.</summary>
+/// <summary>How a search ended. Cancellation is not a status: it throws <see cref="OperationCanceledException"/>.</summary>
 public enum SolveStatus
 {
     /// <summary>A solution was found.</summary>
@@ -27,8 +31,8 @@ public enum SolveStatus
 
 /// <summary>
 /// Generic BFS / A* / IDA* solvers over any <see cref="ISlidingBlockDomain{TState,TMove}"/>. The solver holds no state between calls, so one instance
-/// can serve several threads as long as the domain does. Each method returns null when there is no solution; the overloads with an
-/// <c>out</c> <see cref="SolveStatus"/> say whether the puzzle is unsolvable or the node limit was hit. Cancelling through the token throws.
+/// can serve several threads as long as the domain does. Each method returns a <see cref="SolveResult{TMove}"/> whose
+/// <see cref="SolveResult{TMove}.Status"/> says whether a solution was found, the puzzle is unsolvable or the node limit was hit. Cancelling through the token throws.
 /// </summary>
 public sealed class PuzzleSolver
 {
@@ -45,25 +49,19 @@ public sealed class PuzzleSolver
         }
     }
 
-    /// <summary>Breadth-first search; optimal in number of moves. Returns null if unsolvable or the node cap is hit.</summary>
-    public SolveResult<TMove>? SolveBfs<TState, TMove>(ISlidingBlockDomain<TState, TMove> domain, TState start, CancellationToken ct = default)
-        where TState : struct, IEquatable<TState> =>
-        SolveBfs(domain, start, out _, ct);
-
-    /// <summary>Breadth-first search as <see cref="SolveBfs{TState,TMove}(ISlidingBlockDomain{TState,TMove},TState,CancellationToken)"/>, reporting why it found nothing.</summary>
-    public SolveResult<TMove>? SolveBfs<TState, TMove>(ISlidingBlockDomain<TState, TMove> domain, TState start, out SolveStatus status, CancellationToken ct = default)
+    /// <summary>Breadth-first search; optimal in number of moves.</summary>
+    public SolveResult<TMove> SolveBfs<TState, TMove>(ISlidingBlockDomain<TState, TMove> domain, TState start, CancellationToken ct = default)
         where TState : struct, IEquatable<TState>
     {
         ArgumentNullException.ThrowIfNull(domain);
-        status = SolveStatus.Solved;
         var graph = new SearchGraph<TState, TMove>(start, domain.GetHashCode64(start));
         var buffer = new TMove[domain.MaxMoves];
-        if (domain.IsGoal(start)) return new SolveResult<TMove>([], 0);
+        if (domain.IsGoal(start)) return new SolveResult<TMove>(SolveStatus.Solved, [], 0);
 
         for (int head = 0; head < graph.Count; head++)
         {
             if ((head & 1023) == 0) ct.ThrowIfCancellationRequested();
-            if (head >= MaxNodes) { status = SolveStatus.NodeLimit; return null; }
+            if (head >= MaxNodes) return Failure<TMove>(SolveStatus.NodeLimit, head);
             TState cur = graph.StateAt(head);
             int n = domain.GenerateMoves(cur, buffer);
             for (int i = 0; i < n; i++)
@@ -72,25 +70,18 @@ public sealed class PuzzleSolver
                 ulong hash = domain.GetHashCode64(next);
                 if (graph.Find(next, hash, out _)) continue;
                 int added = graph.Add(next, hash, head, buffer[i]);
-                if (domain.IsGoal(next)) return new SolveResult<TMove>(graph.Trace(added), head + 1);
+                if (domain.IsGoal(next)) return new SolveResult<TMove>(SolveStatus.Solved, graph.Trace(added), head + 1);
             }
         }
-        status = SolveStatus.Unsolvable;
-        return null;
+        return Failure<TMove>(SolveStatus.Unsolvable, graph.Count);
     }
 
     /// <summary>A* with an admissible heuristic.</summary>
-    public SolveResult<TMove>? SolveAStar<TState, TMove>(ISlidingBlockDomain<TState, TMove> domain, TState start, Func<TState, int> heuristic, CancellationToken ct = default)
-        where TState : struct, IEquatable<TState> =>
-        SolveAStar(domain, start, heuristic, out _, ct);
-
-    /// <summary>A* as <see cref="SolveAStar{TState,TMove}(ISlidingBlockDomain{TState,TMove},TState,Func{TState,int},CancellationToken)"/>, reporting why it found nothing.</summary>
-    public SolveResult<TMove>? SolveAStar<TState, TMove>(ISlidingBlockDomain<TState, TMove> domain, TState start, Func<TState, int> heuristic, out SolveStatus status, CancellationToken ct = default)
+    public SolveResult<TMove> SolveAStar<TState, TMove>(ISlidingBlockDomain<TState, TMove> domain, TState start, Func<TState, int> heuristic, CancellationToken ct = default)
         where TState : struct, IEquatable<TState>
     {
         ArgumentNullException.ThrowIfNull(domain);
         ArgumentNullException.ThrowIfNull(heuristic);
-        status = SolveStatus.Solved;
         var graph = new SearchGraph<TState, TMove>(start, domain.GetHashCode64(start));
         var g = new List<int> { 0 };
         // Ordered by f, then by h, packed so one integer comparison does both.
@@ -103,10 +94,10 @@ public sealed class PuzzleSolver
         while (open.TryDequeue(out int idx, out _))
         {
             if ((++expanded & 1023) == 0) ct.ThrowIfCancellationRequested();
-            if (expanded > MaxNodes) { status = SolveStatus.NodeLimit; return null; }
+            if (expanded > MaxNodes) return Failure<TMove>(SolveStatus.NodeLimit, expanded);
             TState cur = graph.StateAt(idx);
             if (graph.Find(cur, domain.GetHashCode64(cur), out int best) && g[best] < g[idx]) continue;
-            if (domain.IsGoal(cur)) return new SolveResult<TMove>(graph.Trace(idx), expanded);
+            if (domain.IsGoal(cur)) return new SolveResult<TMove>(SolveStatus.Solved, graph.Trace(idx), expanded);
             int n = domain.GenerateMoves(cur, buffer);
             for (int i = 0; i < n; i++)
             {
@@ -120,35 +111,25 @@ public sealed class PuzzleSolver
                 open.Enqueue(added, Priority(ng + h, h));
             }
         }
-        status = SolveStatus.Unsolvable;
-        return null;
+        return Failure<TMove>(SolveStatus.Unsolvable, expanded);
     }
+
+    private static SolveResult<TMove> Failure<TMove>(SolveStatus status, long nodes) => new(status, [], nodes);
 
     private static long Priority(int f, int h) => ((long)f << 32) | (uint)h;
 
-    /// <summary>Dijkstra: the cheapest solution under <see cref="IWeightedDomain{TState,TMove}.MoveCost"/>. Returns null if unsolvable or the node cap is hit.</summary>
-    public SolveResult<TMove>? SolveDijkstra<TState, TMove>(IWeightedDomain<TState, TMove> domain, TState start, CancellationToken ct = default)
+    /// <summary>Dijkstra: the cheapest solution under <see cref="IWeightedDomain{TState,TMove}.MoveCost"/>.</summary>
+    public SolveResult<TMove> SolveDijkstra<TState, TMove>(IWeightedDomain<TState, TMove> domain, TState start, CancellationToken ct = default)
         where TState : struct, IEquatable<TState> =>
-        SolveWeightedAStar(domain, start, static _ => 0, out _, ct);
+        SolveWeightedAStar(domain, start, static _ => 0, ct);
 
-    /// <summary>Dijkstra as <see cref="SolveDijkstra{TState,TMove}(IWeightedDomain{TState,TMove},TState,CancellationToken)"/>, reporting why it found nothing.</summary>
-    public SolveResult<TMove>? SolveDijkstra<TState, TMove>(IWeightedDomain<TState, TMove> domain, TState start, out SolveStatus status, CancellationToken ct = default)
-        where TState : struct, IEquatable<TState> =>
-        SolveWeightedAStar(domain, start, static _ => 0, out status, ct);
-
-    /// <summary>A* over move costs; the heuristic must never overestimate the remaining cost. Returns null if unsolvable or the node cap is hit.</summary>
-    public SolveResult<TMove>? SolveWeightedAStar<TState, TMove>(IWeightedDomain<TState, TMove> domain, TState start, Func<TState, long> heuristic, CancellationToken ct = default)
-        where TState : struct, IEquatable<TState> =>
-        SolveWeightedAStar(domain, start, heuristic, out _, ct);
-
-    /// <summary>Weighted A* as <see cref="SolveWeightedAStar{TState,TMove}(IWeightedDomain{TState,TMove},TState,Func{TState,long},CancellationToken)"/>, reporting why it found nothing.</summary>
+    /// <summary>A* over move costs; the heuristic must never overestimate the remaining cost.</summary>
     /// <exception cref="InvalidOperationException">The domain returned a negative move cost.</exception>
-    public SolveResult<TMove>? SolveWeightedAStar<TState, TMove>(IWeightedDomain<TState, TMove> domain, TState start, Func<TState, long> heuristic, out SolveStatus status, CancellationToken ct = default)
+    public SolveResult<TMove> SolveWeightedAStar<TState, TMove>(IWeightedDomain<TState, TMove> domain, TState start, Func<TState, long> heuristic, CancellationToken ct = default)
         where TState : struct, IEquatable<TState>
     {
         ArgumentNullException.ThrowIfNull(domain);
         ArgumentNullException.ThrowIfNull(heuristic);
-        status = SolveStatus.Solved;
         var graph = new SearchGraph<TState, TMove>(start, domain.GetHashCode64(start));
         var g = new List<long> { 0 };
         // Ordered by f, then by h, so ties go to the node nearer the goal.
@@ -161,10 +142,10 @@ public sealed class PuzzleSolver
         while (open.TryDequeue(out int idx, out _))
         {
             if ((++expanded & 1023) == 0) ct.ThrowIfCancellationRequested();
-            if (expanded > MaxNodes) { status = SolveStatus.NodeLimit; return null; }
+            if (expanded > MaxNodes) return Failure<TMove>(SolveStatus.NodeLimit, expanded);
             TState cur = graph.StateAt(idx);
             if (graph.Find(cur, domain.GetHashCode64(cur), out int best) && g[best] < g[idx]) continue;
-            if (domain.IsGoal(cur)) return new SolveResult<TMove>(graph.Trace(idx), expanded) { Cost = g[idx] };
+            if (domain.IsGoal(cur)) return new SolveResult<TMove>(SolveStatus.Solved, graph.Trace(idx), expanded) { Cost = g[idx] };
             int n = domain.GenerateMoves(cur, buffer);
             for (int i = 0; i < n; i++)
             {
@@ -180,32 +161,25 @@ public sealed class PuzzleSolver
                 open.Enqueue(added, (ng + h, h));
             }
         }
-        status = SolveStatus.Unsolvable;
-        return null;
+        return Failure<TMove>(SolveStatus.Unsolvable, expanded);
     }
 
     /// <summary>Iterative-deepening A*; memory-light, suited to large state spaces with a strong heuristic.</summary>
-    public SolveResult<TMove>? SolveIdaStar<TState, TMove>(ISlidingBlockDomain<TState, TMove> domain, TState start, Func<TState, int> heuristic, CancellationToken ct = default)
-        where TState : struct, IEquatable<TState> =>
-        SolveIdaStar(domain, start, heuristic, out _, ct);
-
-    /// <summary>IDA* as <see cref="SolveIdaStar{TState,TMove}(ISlidingBlockDomain{TState,TMove},TState,Func{TState,int},CancellationToken)"/>, reporting why it found nothing.</summary>
     /// <exception cref="InsufficientExecutionStackException">The solution is so long that the recursion would overflow the stack; use A* instead.</exception>
-    public SolveResult<TMove>? SolveIdaStar<TState, TMove>(ISlidingBlockDomain<TState, TMove> domain, TState start, Func<TState, int> heuristic, out SolveStatus status, CancellationToken ct = default)
+    public SolveResult<TMove> SolveIdaStar<TState, TMove>(ISlidingBlockDomain<TState, TMove> domain, TState start, Func<TState, int> heuristic, CancellationToken ct = default)
         where TState : struct, IEquatable<TState>
     {
         ArgumentNullException.ThrowIfNull(domain);
         ArgumentNullException.ThrowIfNull(heuristic);
-        status = SolveStatus.Solved;
         var search = new IdaSearch<TState, TMove>(domain, heuristic, MaxNodes, ct);
         int bound = heuristic(start);
         while (true)
         {
             search.Path.Clear();
             int t = search.Search(start, start, false, 0, bound);
-            if (t == IdaSearch<TState, TMove>.Solved) return new SolveResult<TMove>(search.Path.ToArray(), search.Nodes);
-            if (t == IdaSearch<TState, TMove>.Aborted) { status = SolveStatus.NodeLimit; return null; }
-            if (t == int.MaxValue) { status = SolveStatus.Unsolvable; return null; }
+            if (t == IdaSearch<TState, TMove>.Solved) return new SolveResult<TMove>(SolveStatus.Solved, search.Path.ToArray(), search.Nodes);
+            if (t == IdaSearch<TState, TMove>.Aborted) return Failure<TMove>(SolveStatus.NodeLimit, search.Nodes);
+            if (t == int.MaxValue) return Failure<TMove>(SolveStatus.Unsolvable, search.Nodes);
             bound = t;
         }
     }
@@ -264,7 +238,8 @@ public sealed class PuzzleSolver
     /// </summary>
     private sealed class SearchGraph<TState, TMove> where TState : struct, IEquatable<TState>
     {
-        private readonly List<TState> _states = [];
+        private TState[] _states = new TState[16];   // grows by doubling; states can be large, and many searches are tiny
+        private int _count;
         private readonly List<int> _parent = [];
         private readonly List<TMove> _move = [];
         private int[] _slots = new int[1024];   // node index + 1; 0 = empty
@@ -276,7 +251,7 @@ public sealed class PuzzleSolver
             Add(start, hash, -1, default!);
         }
 
-        public int Count => _states.Count;
+        public int Count => _count;
 
         public TState StateAt(int node) => _states[node];
 
@@ -284,7 +259,7 @@ public sealed class PuzzleSolver
         public bool Find(in TState state, ulong hash, out int node)
         {
             int mask = _slots.Length - 1;
-            var states = CollectionsMarshal.AsSpan(_states);
+            var states = _states;
             for (int i = (int)(hash >> 32) & mask; ; i = (i + 1) & mask)
             {
                 int v = _slots[i];
@@ -296,13 +271,14 @@ public sealed class PuzzleSolver
         /// <summary>Adds a node for the position and makes it the latest one for its table entry.</summary>
         public int Add(in TState state, ulong hash, int parent, TMove move)
         {
-            int node = _states.Count;
-            _states.Add(state);
+            int node = _count;
+            if (node == _states.Length) Array.Resize(ref _states, node * 2);
+            _states[_count++] = state;
             _parent.Add(parent);
             _move.Add(move);
             if ((_filled + 1) * 2 > _slots.Length) Grow();
             int mask = _slots.Length - 1;
-            var states = CollectionsMarshal.AsSpan(_states);
+            var states = _states;
             int i = (int)(hash >> 32) & mask;
             for (; _slots[i] != 0; i = (i + 1) & mask)
             {

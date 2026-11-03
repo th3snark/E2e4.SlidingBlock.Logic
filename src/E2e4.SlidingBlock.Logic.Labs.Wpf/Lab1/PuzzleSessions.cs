@@ -329,8 +329,8 @@ public sealed class KlotskiSession : PuzzleSession<KlotskiState, KlotskiMove>
         var t = _k.Topology;
         var piece = t.Pieces[m.Piece];
         var g = t.Groups[piece.GroupId];
-        ulong pieceMask = g.BaseMask << m.From, other = before.OccupancyMask ^ pieceMask, target = g.BaseMask << m.To;
-        ulong delta = (KlotskiState.SpreadCells(pieceMask) ^ KlotskiState.SpreadCells(target)) * (ulong)(g.GroupId + 1);
+        Bitboard64 pieceMask = g.BaseMask << m.From, other = before.OccupancyMask ^ pieceMask, target = g.BaseMask << m.To;
+        ulong delta = (KlotskiState.SpreadCells(pieceMask.Value) ^ KlotskiState.SpreadCells(target.Value)) * (ulong)(g.GroupId + 1);
         var sb = new StringBuilder();
         sb.Append(CultureInfo.InvariantCulture, $"piece '{piece.Label}' ({g.Name}, shape class {g.GroupId + 1}) anchor {m.From} -> {m.To}\n\n");
         int dr = m.To / t.Width - m.From / t.Width, dc = m.To % t.Width - m.From % t.Width;
@@ -360,9 +360,9 @@ public sealed class KlotskiSession : PuzzleSession<KlotskiState, KlotskiMove>
 // ---------------------------------------------------------------------------------------------------------------
 public sealed class RushHourSession : PuzzleSession<LaneState16, LaneMove>
 {
-    private readonly LaneSlideDomain<LaneState16, ulong> _r;
+    private readonly LaneSlideDomain<LaneState16, Bitboard64> _r;
 
-    private RushHourSession(LaneSlideDomain<LaneState16, ulong> d) : base(d)
+    private RushHourSession(LaneSlideDomain<LaneState16, Bitboard64> d) : base(d)
     {
         _r = d;
         Reset();

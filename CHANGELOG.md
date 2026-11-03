@@ -7,6 +7,17 @@ follows [Semantic Versioning](https://semver.org/). While the version is below 1
 
 ### Added
 
+- Multi-targeting: the library now builds for `net10.0`, `net8.0` and `netstandard2.0` (it was `net10.0` only), like E2e4.Chess.Logic. `netstandard2.0` depends on `System.Memory`; the others have no dependencies. The tests run on `net10.0`, `net8.0` and (on Windows) `net48`, and a second test project runs them against the `netstandard2.0` build on any OS.
+- `IBitboard<TSelf>` with the structs `Bitboard64` (64 cells) and `Bitboard128` (128 cells, two `ulong` words, so no `UInt128` is needed on any target). They have the bitwise and shift operators and convert implicitly from `ulong`.
+
+### Changed
+
+- **Breaking:** the bitboard type parameter is constrained to `unmanaged, IBitboard<TBitboard>` instead of `IBinaryInteger<T>, IUnsignedNumber<T>`: write `PolyominoDomain<Bitboard64>` where it was `PolyominoDomain<ulong>`, and `Bitboard128` for `UInt128`. A wrong type argument is now a compile error. The bitboard diagnostics (`Lsb`, `Msb`, `HasBit`, `ToHex`, `ToBinary`, `ToGrid`) are extensions on every `IBitboard<T>`; `BitCount` is `PopCount()`.
+- **Breaking:** every `PuzzleSolver.Solve*` method returns a `SolveResult<TMove>` with a `Status` (`Solved`, `Unsolvable`, `NodeLimit`) and an `IsSolved` flag, instead of `SolveResult?` plus an `out SolveStatus` overload. Check `IsSolved` where you compared with `null`.
+- `ILaneState<TState>.Capacity` is an instance property instead of a static abstract one.
+- `MoveDeltaBuffer`, `LayerOccupancyBuffer<T>` and `CompositeMove.Deltas` are internal, and `CompositeMove.Count` / `DirectionIndex` are get-only properties: read a move through `AsSpan()`.
+- On the netstandard targets the Zobrist keys of `PushDomain` and `ShuntingDomain` come from the same seeded `Random` sequence as on .NET 6 and later, so hashes match across targets.
+
 - Shunting fouling sets: `ShuntingTrackBuilder.AddFoulingSet`, `ShuntingTrack.FoulingSets` and the `foul` keyword in `ShuntingMap`. At most one slot
   of a set may hold a piece, so a wagon left just past a switch blocks the other leg.
 - `ShuntingMetric.DirectionChanges`: Hordern's count of changes of direction. Each engine remembers the sense it last moved in, so setting off from

@@ -33,8 +33,8 @@ public class WeightedSolverTests
         var shortest = solver.SolveBfs(domain, domain.InitialState);
         var cheapest = solver.SolveDijkstra(domain, domain.InitialState);
 
-        Assert.Equal([6], shortest!.Moves);
-        Assert.Equal(6, cheapest!.Cost);
+        Assert.Equal([6], shortest.Moves);
+        Assert.Equal(6, cheapest.Cost);
         Assert.Equal(6, cheapest.Moves.Count);
     }
 
@@ -45,7 +45,7 @@ public class WeightedSolverTests
 
         var result = new PuzzleSolver().SolveDijkstra(domain, domain.InitialState);
 
-        Assert.Equal([6], result!.Moves);
+        Assert.Equal([6], result.Moves);
         Assert.Equal(3, result.Cost);
     }
 
@@ -58,7 +58,7 @@ public class WeightedSolverTests
         var plain = solver.SolveDijkstra(domain, domain.InitialState);
         var guided = solver.SolveWeightedAStar(domain, domain.InitialState, p => Math.Max(0, 17 - p.Value) / 6);
 
-        Assert.Equal(plain!.Cost, guided!.Cost);
+        Assert.Equal(plain.Cost, guided.Cost);
         Assert.True(guided.NodesExpanded <= plain.NodesExpanded);
     }
 
@@ -67,11 +67,9 @@ public class WeightedSolverTests
     {
         var domain = new NumberLine(10, 11);
 
-        Assert.Null(new PuzzleSolver().SolveDijkstra(domain, domain.InitialState, out var status));
-        Assert.Equal(SolveStatus.Unsolvable, status);
+        Assert.Equal(SolveStatus.Unsolvable, new PuzzleSolver().SolveDijkstra(domain, domain.InitialState).Status);
 
-        Assert.Null(new PuzzleSolver { MaxNodes = 2 }.SolveDijkstra(new NumberLine(1000, 999), new NumberLine.Pos(0), out status));
-        Assert.Equal(SolveStatus.NodeLimit, status);
+        Assert.Equal(SolveStatus.NodeLimit, new PuzzleSolver { MaxNodes = 2 }.SolveDijkstra(new NumberLine(1000, 999), new NumberLine.Pos(0)).Status);
     }
 
     [Fact]

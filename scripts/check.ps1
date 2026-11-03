@@ -32,7 +32,7 @@ function Invoke-RepoChecks([string] $Root, [string] $Solution) {
 }
 
 $logicRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
-if (-not $PuzzlesPath) { $PuzzlesPath = Join-Path $logicRoot '..\E2e4.SlidingBlock.Puzzles' }
+if (-not $PuzzlesPath) { $PuzzlesPath = Join-Path (Split-Path $logicRoot -Parent) 'E2e4.SlidingBlock.Puzzles' }
 Invoke-RepoChecks $logicRoot 'E2e4.SlidingBlock.Logic.slnx'
 
 Push-Location $logicRoot
@@ -52,7 +52,7 @@ try {
         Invoke-Step 'Pack' {
             dotnet pack src/E2e4.SlidingBlock.Logic/E2e4.SlidingBlock.Logic.csproj --configuration Release --no-build --output $packDir
         }
-        Invoke-Step 'No package dependencies in the package' {
+        Invoke-Step 'Only System.Memory (netstandard2.0) as a dependency' {
             Add-Type -AssemblyName System.IO.Compression.FileSystem
             $nupkg = Get-ChildItem $packDir -Filter 'E2e4.SlidingBlock.Logic.*.nupkg' | Where-Object Name -notlike '*.symbols.*' | Select-Object -First 1
             $zip = [IO.Compression.ZipFile]::OpenRead($nupkg.FullName)
@@ -63,8 +63,15 @@ try {
                 $reader.Dispose()
             }
             finally { $zip.Dispose() }
-            if ($nuspec -match '<dependency ') {
-                Write-Host 'The library must have no package dependencies.' -ForegroundColor Red
+            # netstandard2.0 takes the one System package that gives it Span<T>; net8.0 and net10.0 take nothing.
+            $allowed = 'System.Memory'
+            $unexpected = ([xml] $nuspec).package.metadata.dependencies.group | ForEach-Object {
+                $group = $_
+                @($group.dependency) | Where-Object { $_ -and ($group.targetFramework -notlike '.NETStandard*' -or $_.id -notin $allowed) } |
+                    ForEach-Object { "$($group.targetFramework): $($_.id)" }
+            }
+            if ($unexpected) {
+                Write-Host "Unexpected package dependencies: $($unexpected -join ', ')" -ForegroundColor Red
                 $global:LASTEXITCODE = 1
             }
             else { $global:LASTEXITCODE = 0 }

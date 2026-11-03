@@ -6,7 +6,7 @@ namespace E2e4.SlidingBlock.Logic;
 /// When a polyomino puzzle is solved. Shared by <see cref="PolyominoDomain{TBitboard}"/> and <see cref="CompositeDomain{TBitboard}"/>, which differ in
 /// how pieces move but not in what they are asked to reach.
 /// </summary>
-public sealed class PolyominoGoal<TBitboard> where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>
+public sealed class PolyominoGoal<TBitboard> where TBitboard : unmanaged, IBitboard<TBitboard>
 {
     private readonly PolyominoState<TBitboard> _position;
     private readonly ulong _matchedGroups;
@@ -47,13 +47,13 @@ public sealed class PolyominoGoal<TBitboard> where TBitboard : unmanaged, IBinar
     /// <summary>True if <paramref name="state"/> meets the goal.</summary>
     public bool IsReached(in PolyominoState<TBitboard> state)
     {
-        if (!HasPosition) return state.GroupAnchorsOf(GroupId) == TBitboard.One << Anchor;
+        if (!HasPosition) return state.GroupAnchorsOf(GroupId).Equals(Bit<TBitboard>.One.ShiftLeft(Anchor));
         if (_matchedGroups == ulong.MaxValue) return state.Equals(_position);
         for (ulong m = _matchedGroups; m != 0; m &= m - 1)
         {
-            int g = BitOperations.TrailingZeroCount(m);
+            int g = BitOps.TrailingZeroCount(m);
             if (g >= GroupAnchorBuffer<TBitboard>.Length) break;
-            if (state.GroupAnchorsOf(g) != _position.GroupAnchorsOf(g)) return false;
+            if (!state.GroupAnchorsOf(g).Equals(_position.GroupAnchorsOf(g))) return false;
         }
         return true;
     }

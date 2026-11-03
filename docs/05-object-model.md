@@ -77,7 +77,7 @@ classDiagram
 
 ## 5.1a What the engine does not know
 
-Goals are data. `NPuzzleDomain(initial, goal)`, `KlotskiDomain(topology, masterPieceId, goalAnchor)`, `LaneSlideDomain<TState, TBitboard>(vehicles, columns, rows, goalVehicle, goalOffset, maxStep)` (`LaneState16` or `LaneState64` for the position; `ulong` for up to 64 cells, `UInt128` for up to 128; Rush Hour is `maxStep: 1` with the red car as the goal vehicle),
+Goals are data. `NPuzzleDomain(initial, goal)`, `KlotskiDomain(topology, masterPieceId, goalAnchor)`, `LaneSlideDomain<TState, TBitboard>(vehicles, columns, rows, goalVehicle, goalOffset, maxStep)` (`LaneState16` or `LaneState64` for the position; `Bitboard64` for up to 64 cells, `Bitboard128` for up to 128; Rush Hour is `maxStep: 1` with the red car as the goal vehicle),
 `PushDomain(columns, rows, floor, targets, cases, player)`
 and `PolyominoDomain<TBitboard>(topology, goalGroupId, goalAnchor)` (or `PolyominoDomain(topology, goalPosition)` for a whole-position goal where identical pieces are interchangeable, optionally ignoring some groups; both build a `PolyominoGoal`, which `CompositeDomain` takes too) receive the answer from the puzzle that uses them. The engine has no layouts
 (the classic Klotski map, the Rush Hour boards), no notion of where the blank belongs, no goal-relative heuristic baked into a state
@@ -132,11 +132,11 @@ flowchart LR
     D[ISlidingBlockDomain] --> B[SolveBfs<br/>optimal, Klotski and Rush Hour]
     D --> A[SolveAStar<br/>needs admissible heuristic]
     D --> I[SolveIdaStar<br/>memory-light, 15-puzzle with Manhattan]
-    B & A & I --> R["SolveResult(Moves, NodesExpanded)<br/>or null + SolveStatus"]
+    B & A & I --> R["SolveResult(Status, Moves, NodesExpanded)"]
 ```
 
 All three accept a `CancellationToken` (cancelling throws `OperationCanceledException`). `PuzzleSolver.MaxNodes` bounds the search, and a search that finds nothing returns
-`null`; the overloads with an `out SolveStatus` tell `Unsolvable` (the reachable positions ran out) from `NodeLimit` (the search stopped first).
+a result with no moves whose `Status` tells `Unsolvable` (the reachable positions ran out) from `NodeLimit` (the search stopped first); check `IsSolved`.
 IDA* avoids immediately returning to the parent state by comparing states for equality, so it works with any domain.
 
 ## 5.6 Move generation in one picture (polyominoes)

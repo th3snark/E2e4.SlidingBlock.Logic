@@ -17,10 +17,10 @@ public partial class Lab2View : UserControl
     private const double Cell = 88;
     private const int N = 5;
 
-    private readonly PolyominoDomain<ulong> _d = LabPuzzles.CreateLab2();
+    private readonly PolyominoDomain<Bitboard64> _d = LabPuzzles.CreateLab2();
     private readonly Dictionary<int, Canvas> _visuals = [];
-    private PuzzleTopology<ulong> _t = null!;
-    private PolyominoState<ulong> _state;
+    private PuzzleTopology<Bitboard64> _t = null!;
+    private PolyominoState<Bitboard64> _state;
     private int _selected = -1;
     private bool _busy;
     private int _moves;
@@ -31,7 +31,7 @@ public partial class Lab2View : UserControl
     private readonly Stack<Entry> _history = new();
 
     /// <summary>One undoable action: the state before it and the piece trajectories it animated.</summary>
-    private sealed record Entry(PolyominoState<ulong> Before, int MovesBefore, List<(int piece, IReadOnlyList<int> path)> Jobs);
+    private sealed record Entry(PolyominoState<Bitboard64> Before, int MovesBefore, List<(int piece, IReadOnlyList<int> path)> Jobs);
 
     public Lab2View()
     {
@@ -100,7 +100,7 @@ public partial class Lab2View : UserControl
         GridLayer.Children.Add(goal);
     }
 
-    private static Geometry FootprintGeometry(EquivalenceGroup<ulong> g, double inset = 2) => DrawHelpers.FootprintGeometry(g, Cell, inset);
+    private static Geometry FootprintGeometry(EquivalenceGroup<Bitboard64> g, double inset = 2) => DrawHelpers.FootprintGeometry(g, Cell, inset);
 
     // ---- pieces -----------------------------------------------------------------------------------------------
 
@@ -207,7 +207,7 @@ public partial class Lab2View : UserControl
         _ => Color.FromRgb(0xFB, 0x92, 0x3C),
     };
 
-    private (ulong other, EquivalenceGroup<ulong> g, int anchor) Context(int pieceId)
+    private (Bitboard64 other, EquivalenceGroup<Bitboard64> g, int anchor) Context(int pieceId)
     {
         var g = _t.Groups[_t.Pieces[pieceId].GroupId];
         int a = _state.AnchorOf(pieceId);
@@ -251,11 +251,11 @@ public partial class Lab2View : UserControl
             Canvas.SetTop(cap, origin.Y + 8);
             MarkerLayer.Children.Add(cap);
         }
-        ulong reach = _d.ReachableFor(_state, _selected);
-        for (ulong r = reach; r != 0; r &= r - 1)
+        Bitboard64 reach = _d.ReachableFor(_state, _selected);
+        for (Bitboard64 r = reach; !r.IsEmpty; r = r.ClearLowest())
         {
-            int target = BitOperations.TrailingZeroCount(r);
-            var path = PolyominoState<ulong>.ReconstructHookPath(a, target, g.BaseMask, g.ValidAnchorsMask, other, N, g.Directions);
+            int target = r.TrailingZeroCount();
+            var path = PolyominoState<Bitboard64>.ReconstructHookPath(a, target, g.BaseMask, g.ValidAnchorsMask, other, N, g.Directions);
             if (path.Count < 2) continue;
             string kind = Classify(path);
             var color = KindColor(kind);
@@ -327,7 +327,7 @@ public partial class Lab2View : UserControl
         _hoverPath = null;
     }
 
-    private string AnchorReason(EquivalenceGroup<ulong> g, int anchor)
+    private string AnchorReason(EquivalenceGroup<Bitboard64> g, int anchor)
     {
         int ar = anchor / N, ac = anchor % N;
         var sb = new StringBuilder();
@@ -418,7 +418,7 @@ public partial class Lab2View : UserControl
         return sb.ToString();
     }
 
-    private ulong RecomputedHash(in PolyominoState<ulong> state) => state.ComputeZobrist(_t);
+    private ulong RecomputedHash(in PolyominoState<Bitboard64> state) => state.ComputeZobrist(_t);
 
     private void MoveSelected(int target, IReadOnlyList<int> path)
     {
@@ -468,7 +468,7 @@ public partial class Lab2View : UserControl
         var m = buf[Random.Shared.Next(n)];
         _selected = m.PieceId;
         var (other, g, a) = Context(m.PieceId);
-        MoveSelected(m.TargetAnchor, PolyominoState<ulong>.ReconstructHookPath(a, m.TargetAnchor, g.BaseMask, g.ValidAnchorsMask, other, N, g.Directions));
+        MoveSelected(m.TargetAnchor, PolyominoState<Bitboard64>.ReconstructHookPath(a, m.TargetAnchor, g.BaseMask, g.ValidAnchorsMask, other, N, g.Directions));
     }
 
     /// <summary>Moves the 1x1 block A above the wall and clears the right-hand side, so reaching anchor 17 needs a 4-step hook around the wall.</summary>
@@ -609,29 +609,29 @@ public partial class Lab2View : UserControl
         {
             var (other, g, a) = Context(_selected);
             var piece = _t.Pieces[_selected];
-            ulong shifted = g.BaseMask << a, valid = g.ValidAnchorsMask;
+            Bitboard64 shifted = g.BaseMask << a, valid = g.ValidAnchorsMask;
             var parent = new sbyte[N * N];
-            ulong reach = PolyominoState<ulong>.FindReachableAnchors(a, g.BaseMask, valid, other, N, parent, out ulong straight, out ulong hook, g.Directions);
+            Bitboard64 reach = PolyominoState<Bitboard64>.FindReachableAnchors(a, g.BaseMask, valid, other, N, parent, out Bitboard64 straight, out Bitboard64 hook, g.Directions);
             string offsets = string.Join("  ", g.RelativeCells.Select(c => $"({c.dRow},{c.dCol})->{N * c.dRow + c.dCol}"));
             sb.AppendLine(CultureInfo.InvariantCulture, $"Piece                 {piece.Label}  (PieceId {piece.PieceId})  {g.Name}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"EquivalenceGroupId    {g.GroupId}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"(dRow,dCol)->{N}*dRow+dCol  {offsets}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"BaseMask[g]           0x{g.BaseMask:X7}   {g.BaseMask.ToBinary(bits)}   (bit 0 is always set)");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"CurrentAnchor         tzcnt(pieceMask) = {BitOperations.TrailingZeroCount(shifted)}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"CurrentAnchor         tzcnt(pieceMask) = {shifted.TrailingZeroCount()}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"PieceMask             0x{shifted:X7}   {shifted.ToBinary(bits)}   = BaseMask << {a}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"ValidAnchorsMask[g]   0x{valid:X7}   {valid.ToBinary(bits)}");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"OtherOccupancy        0x{other:X7}   {other.ToBinary(bits)}   = BoardOccupancy ^ PieceMask");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"ReachableAnchors      0x{reach:X7}   {reach.ToBinary(bits)}   {BitOperations.PopCount(reach)} destination(s)");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"  StraightMovesMask   0x{straight:X7}   {BitOperations.PopCount(straight)} anchor(s): {Indices(straight)}");
-            sb.Append(CultureInfo.InvariantCulture, $"  HookMovesMask       0x{hook:X7}   {BitOperations.PopCount(hook)} anchor(s): {Indices(hook)}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"OtherOccupancy        0x{other.Value:X7}   {other.ToBinary(bits)}   = BoardOccupancy ^ PieceMask");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"ReachableAnchors      0x{reach.Value:X7}   {reach.ToBinary(bits)}   {reach.PopCount()} destination(s)");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"  StraightMovesMask   0x{straight.Value:X7}   {straight.PopCount()} anchor(s): {Indices(straight.Value)}");
+            sb.Append(CultureInfo.InvariantCulture, $"  HookMovesMask       0x{hook.Value:X7}   {hook.PopCount()} anchor(s): {Indices(hook.Value)}");
             PieceText.Text = sb.ToString();
-            BaseGrid.SetMask(g.BaseMask);
-            ShiftedGrid.SetMask(shifted);
-            ValidGrid.SetMask(valid);
-            OtherGrid.SetMask(other);
-            ReachGrid.SetMask(reach, 1UL << a);
-            StraightGrid.SetMask(straight);
-            HookGrid.SetMask(hook);
+            BaseGrid.SetMask(g.BaseMask.Value);
+            ShiftedGrid.SetMask(shifted.Value);
+            ValidGrid.SetMask(valid.Value);
+            OtherGrid.SetMask(other.Value);
+            ReachGrid.SetMask(reach.Value, 1UL << a);
+            StraightGrid.SetMask(straight.Value);
+            HookGrid.SetMask(hook.Value);
             GridsRow.Visibility = Visibility.Visible;
             int left = -g.RelativeCells.Min(c => c.dCol), right = g.RelativeCells.Max(c => c.dCol), down = g.RelativeCells.Max(c => c.dRow);
             WhyText.Text = $"Extent from the anchor: {left} cell(s) left, {right} right, {down} down. Anchors in the first {left} column(s) are invalid because the cell at " +
@@ -643,9 +643,9 @@ public partial class Lab2View : UserControl
         sb.Clear();
         for (int g = 0; g < _t.Groups.Count; g++)
         {
-            ulong ga = _state.GroupAnchorsOf(g);
+            Bitboard64 ga = _state.GroupAnchorsOf(g);
             sb.AppendLine(CultureInfo.InvariantCulture, $"Group {g}: {_t.Groups[g].Name}");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"  GroupAnchors[{g}] = {ga.ToBinary(bits)} = 0x{ga:X7}   PopCount {BitOperations.PopCount(ga)}   anchors {{{Indices(ga)}}}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"  GroupAnchors[{g}] = {ga.ToBinary(bits)} = 0x{ga.Value:X7}   PopCount {ga.PopCount()}   anchors {{{Indices(ga.Value)}}}");
         }
         sb.AppendLine(CultureInfo.InvariantCulture, $"OccupancyMask   = {_state.OccupancyMask.ToBinary(bits)} = 0x{_state.OccupancyMask:X7}   (+ static wall 0x{_t.StaticWallsMask:X7})");
         CanonText.Text = sb.ToString().TrimEnd();

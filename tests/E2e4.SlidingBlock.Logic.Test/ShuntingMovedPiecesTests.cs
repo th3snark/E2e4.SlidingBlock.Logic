@@ -13,7 +13,7 @@ public class ShuntingMovedPiecesTests
     public void ListsTheEnginePushedAndPulledPieces()
     {
         // wagon 0 | engine 1 | wagon 2: driving to end 1 pushes the wagon ahead and pulls the one behind.
-        var domain = new ShuntingDomain<ulong>(Line(5),
+        var domain = new ShuntingDomain<Bitboard64>(Line(5),
             [new("E", true, [1]) { StartFronts = [1] }, new("W", false, [0, 2])], new([]));
         var buffer = new ShuntingMove[domain.MaxMoves];
         int n = domain.GenerateMoves(domain.InitialState, buffer);
@@ -29,7 +29,7 @@ public class ShuntingMovedPiecesTests
         var b = new ShuntingTrackBuilder(2);
         int t = b.AddTurntable([0, 1], [false, true, true]);
         var track = b.Connect(0, 1, 1, 0).Build();
-        var domain = new ShuntingDomain<ulong>(track, [new("W", false, [0])], new([]));
+        var domain = new ShuntingDomain<Bitboard64>(track, [new("W", false, [0])], new([]));
         var buffer = new ShuntingMove[domain.MaxMoves];
         int n = domain.GenerateMoves(domain.InitialState, buffer);
         var moves = buffer.Take(n).Where(m => m.IsTurn).ToList();

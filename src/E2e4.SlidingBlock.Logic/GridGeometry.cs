@@ -80,12 +80,12 @@ public readonly record struct Partition(int Cell, int Direction)
 /// </summary>
 public readonly record struct PressurePlateRule<TBitboard>(TBitboard TriggerCellsMask, TBitboard GateCellsMask,
     byte TriggerElevationMask = 0b01, bool NormallyClosed = true)
-    where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>;
+    where TBitboard : unmanaged, IBitboard<TBitboard>;
 
 /// <summary>Diagnostic record of one glide, for UI visualization.</summary>
 public readonly record struct RaycastTrace<TBitboard>(int Direction, int StartAnchor, int TerminalAnchor, int StepCount,
     TBitboard SweptCellsMask, TBitboard BlockingBitsMask)
-    where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>;
+    where TBitboard : unmanaged, IBitboard<TBitboard>;
 
 /// <summary>Direction tables shared by the move generators. Directions 0..3 are W, E, N, S; 4 and 5 (hex only) are NE and SW.</summary>
 internal static class Grid
@@ -126,32 +126,32 @@ internal static class Grid
         return (uint)col < (uint)width;
     }
 
-    public static T Shift<T>(T mask, int delta) where T : unmanaged, IBinaryInteger<T> => delta >= 0 ? mask << delta : mask >> -delta;
+    public static T Shift<T>(T mask, int delta) where T : unmanaged, IBitboard<T> => delta >= 0 ? mask.ShiftLeft(delta) : mask.ShiftRight(-delta);
 
-    public static int BitWidth<T>() where T : unmanaged, IBinaryInteger<T> => Unsafe.SizeOf<T>() * 8;
+    public static int BitWidth<T>() where T : unmanaged, IBitboard<T> => Bit<T>.Width;
 
-    public static int Lsb<T>(T mask) where T : unmanaged, IBinaryInteger<T> => int.CreateTruncating(T.TrailingZeroCount(mask));
+    public static int Lsb<T>(T mask) where T : unmanaged, IBitboard<T> => mask.TrailingZeroCount();
 
     /// <summary>True when bit <paramref name="index"/> of <paramref name="mask"/> is set.</summary>
-    public static bool Has<T>(T mask, int index) where T : unmanaged, IBinaryInteger<T> => ((mask >> index) & T.One) != T.Zero;
+    public static bool Has<T>(T mask, int index) where T : unmanaged, IBitboard<T> => mask.HasBit(index);
 
     /// <summary>The indices of the set bits of <paramref name="mask"/>, lowest first, without allocating.</summary>
-    public static SetBits<T> Bits<T>(T mask) where T : unmanaged, IBinaryInteger<T> => new(mask);
+    public static SetBits<T> Bits<T>(T mask) where T : unmanaged, IBitboard<T> => new(mask);
 
     /// <summary>Mask of the cells that may be entered by a step in <paramref name="dir"/> without wrapping a row.</summary>
-    public static T EntryMask<T>(int dir, int width) where T : unmanaged, IBinaryInteger<T>
+    public static T EntryMask<T>(int dir, int width) where T : unmanaged, IBitboard<T>
     {
         int col = ColStep(dir);
-        if (col == 0) return T.AllBitsSet;
-        T col0 = T.Zero;
+        if (col == 0) return Bit<T>.All;
+        T col0 = Bit<T>.Zero;
         int bits = BitWidth<T>();
-        for (int i = 0; i < bits; i += width) col0 |= T.One << i;
-        return col > 0 ? ~col0 : ~(col0 << (width - 1));
+        for (int i = 0; i < bits; i += width) col0 = col0.Or(Bit<T>.One.ShiftLeft(i));
+        return col > 0 ? col0.Not() : col0.ShiftLeft(width - 1).Not();
     }
 }
 
 /// <summary>Allocation-free <c>foreach (int index in Grid.Bits(mask))</c> over the set bits of a bitboard.</summary>
-internal struct SetBits<T> where T : unmanaged, IBinaryInteger<T>
+internal struct SetBits<T> where T : unmanaged, IBitboard<T>
 {
     private T _rest;
 
@@ -162,9 +162,9 @@ internal struct SetBits<T> where T : unmanaged, IBinaryInteger<T>
     public bool MoveNext()
     {
         // The first call only reports whether there is a bit; later calls clear the one just returned.
-        if (_started) _rest &= _rest - T.One;
+        if (_started) _rest = _rest.ClearLowest();
         _started = true;
-        return _rest != T.Zero;
+        return !_rest.IsEmpty;
     }
 
     private bool _started;

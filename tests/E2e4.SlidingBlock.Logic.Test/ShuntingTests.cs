@@ -15,10 +15,10 @@ public class ShuntingTests
 
     private static ShuntingGoal WagonAt(int slot) => new([new ShuntingGroupGoal(1, [slot])]);
 
-    private static ShuntingDomain<ulong> LineDomain(int slots, int engineAt, int wagonAt, int goal, ShuntingMetric metric = ShuntingMetric.EngineReversals) =>
+    private static ShuntingDomain<Bitboard64> LineDomain(int slots, int engineAt, int wagonAt, int goal, ShuntingMetric metric = ShuntingMetric.EngineReversals) =>
         new(Line(slots), [Engine(engineAt), new("W", false, [wagonAt])], WagonAt(goal), metric);
 
-    private static List<ShuntingMove> Moves(ShuntingDomain<ulong> domain, ShuntingState<ulong> state)
+    private static List<ShuntingMove> Moves(ShuntingDomain<Bitboard64> domain, ShuntingState<Bitboard64> state)
     {
         var buffer = new ShuntingMove[domain.MaxMoves];
         int n = domain.GenerateMoves(state, buffer);
@@ -59,7 +59,7 @@ public class ShuntingTests
     [Fact]
     public void AClearanceMaskKeepsAPieceOutOfASlot()
     {
-        var domain = new ShuntingDomain<ulong>(Line(5), [Engine(2), new("W", false, [3]) { Allowed = [0, 1, 2, 3] }], WagonAt(0));
+        var domain = new ShuntingDomain<Bitboard64>(Line(5), [Engine(2), new("W", false, [3]) { Allowed = [0, 1, 2, 3] }], WagonAt(0));
 
         Assert.DoesNotContain(Moves(domain, domain.InitialState), m => m.Lead == 1);
     }
@@ -69,7 +69,7 @@ public class ShuntingTests
     {
         // 0 - 1, and the end of 1 forks to the main line (2) and a siding (3).
         var track = new ShuntingTrackBuilder(4).Connect(0, 1, 1, 0).Connect(1, 1, 2, 0).Connect(1, 1, 3, 0).Build();
-        var domain = new ShuntingDomain<ulong>(track, [Engine(0), new("W", false, [1])], WagonAt(3));
+        var domain = new ShuntingDomain<Bitboard64>(track, [Engine(0), new("W", false, [1])], WagonAt(3));
 
         var moves = Moves(domain, domain.InitialState);
 
@@ -79,7 +79,7 @@ public class ShuntingTests
         Assert.Contains(states, s => s.GroupSlots(1) == 1UL << 3);
 
         var solution = new PuzzleSolver().SolveDijkstra(domain, domain.InitialState);
-        Assert.Equal(1, ShuntingCost.Primary(solution!.Cost));
+        Assert.Equal(1, ShuntingCost.Primary(solution.Cost));
         Assert.Equal(1, ShuntingCost.Steps(solution.Cost));
     }
 
@@ -90,7 +90,7 @@ public class ShuntingTests
 
         var solution = new PuzzleSolver().SolveDijkstra(domain, domain.InitialState);
 
-        Assert.Equal(1, ShuntingCost.Primary(solution!.Cost));
+        Assert.Equal(1, ShuntingCost.Primary(solution.Cost));
         Assert.Equal(4, ShuntingCost.Steps(solution.Cost));
 
         var first = Moves(domain, domain.InitialState).Single();
@@ -125,11 +125,11 @@ public class ShuntingTests
         Assert.Equal(ShuntingCost.Pack(0, 1, 1), domain.MoveCost(domain.InitialState, first));
         Assert.Equal(ShuntingCost.Pack(0, 0, 1), domain.MoveCost(moved, Moves(domain, moved).Single(m => m.Lead == 1)));
         Assert.Equal(ShuntingCost.Pack(1, 1, 1), domain.MoveCost(moved, Moves(domain, moved).First(m => m.Lead == 0)));
-        Assert.Equal(0, ShuntingCost.Primary(new PuzzleSolver().SolveDijkstra(domain, domain.InitialState)!.Cost));
+        Assert.Equal(0, ShuntingCost.Primary(new PuzzleSolver().SolveDijkstra(domain, domain.InitialState).Cost));
     }
 
     /// <summary>Plays the single-slot step of engine <paramref name="mover"/> through <paramref name="lead"/> that pushes and pulls the given counts, and returns its primary cost.</summary>
-    private static int Step(ShuntingDomain<ulong> domain, ref ShuntingState<ulong> state, int mover, int lead, int front = 1, int rear = 0)
+    private static int Step(ShuntingDomain<Bitboard64> domain, ref ShuntingState<Bitboard64> state, int mover, int lead, int front = 1, int rear = 0)
     {
         var at = state;
         var move = Moves(domain, at).Single(m => m.Mover == mover && m.Lead == lead && m.FrontLength == front && m.RearLength == rear);
@@ -141,7 +141,7 @@ public class ShuntingTests
     [Fact]
     public void UnderDirectionChangesEachEngineKeepsItsOwnDirection()
     {
-        var domain = new ShuntingDomain<ulong>(Line(10), [Engine(1), new("F", true, [6]) { StartFronts = [1] }], new([]), ShuntingMetric.DirectionChanges);
+        var domain = new ShuntingDomain<Bitboard64>(Line(10), [Engine(1), new("F", true, [6]) { StartFronts = [1] }], new([]), ShuntingMetric.DirectionChanges);
         var state = domain.InitialState;
 
         Assert.Equal(0, Step(domain, ref state, 0, 1));   // E sets off
@@ -154,7 +154,7 @@ public class ShuntingTests
     [Fact]
     public void UnderDirectionChangesAnEnginePushedOrPulledBackChangesDirectionToo()
     {
-        var domain = new ShuntingDomain<ulong>(Line(10), [Engine(2), new("F", true, [4]) { StartFronts = [1] }], new([]), ShuntingMetric.DirectionChanges);
+        var domain = new ShuntingDomain<Bitboard64>(Line(10), [Engine(2), new("F", true, [4]) { StartFronts = [1] }], new([]), ShuntingMetric.DirectionChanges);
         var state = domain.InitialState;
 
         Assert.Equal(0, Step(domain, ref state, 1, 1));               // F sets off to the right
@@ -178,11 +178,11 @@ public class ShuntingTests
     public void APieceJustPastASwitchFoulsTheOtherLeg(bool fouling, int[] engineSlots)
     {
         // The wagon stands on the first slot of one leg; the engine at the switch may push it on, but may enter the other leg only without fouling.
-        var domain = new ShuntingDomain<ulong>(FouledSwitch(fouling), [Engine(1), new("W", false, [2])], new([]));
+        var domain = new ShuntingDomain<Bitboard64>(FouledSwitch(fouling), [Engine(1), new("W", false, [2])], new([]));
 
         var forward = Moves(domain, domain.InitialState).Where(m => m.Lead == 1);
 
-        Assert.Equal(engineSlots, forward.Select(m => BitOperations.TrailingZeroCount(domain.ApplyMove(domain.InitialState, m).GroupSlots(0))).Order());
+        Assert.Equal(engineSlots, forward.Select(m => domain.ApplyMove(domain.InitialState, m).GroupSlots(0).TrailingZeroCount()).Order());
     }
 
     [Theory]
@@ -191,7 +191,7 @@ public class ShuntingTests
     public void ATrainCannotLeaveAPieceJustPastASwitchAndDivertTheRest(bool fouling, bool diverts)
     {
         // A train has pushed wagon V just past the switch with W behind it at the switch: W may not go on into the other leg and leave V there.
-        var domain = new ShuntingDomain<ulong>(FouledSwitch(fouling), [Engine(0), new("W", false, [1]), new("V", false, [2])], new([]));
+        var domain = new ShuntingDomain<Bitboard64>(FouledSwitch(fouling), [Engine(0), new("W", false, [1]), new("V", false, [2])], new([]));
         var start = domain.InitialState;
 
         Assert.Equal(diverts, Moves(domain, start).Any(m => domain.ApplyMove(start, m).GroupSlots(1) == 1UL << 4));
@@ -199,14 +199,14 @@ public class ShuntingTests
 
     [Fact]
     public void AStartThatFoulsIsRejected() =>
-        Assert.Throws<ArgumentException>(() => new ShuntingDomain<ulong>(FouledSwitch(true), [Engine(2), new("W", false, [4])], new([])));
+        Assert.Throws<ArgumentException>(() => new ShuntingDomain<Bitboard64>(FouledSwitch(true), [Engine(2), new("W", false, [4])], new([])));
 
     [Fact]
     public void GoalAndEqualityIgnoreWhichIdenticalWagonIsWhich()
     {
         var track = Line(4);
-        var a = new ShuntingDomain<ulong>(track, [new("W", false, [0, 1])], new([new ShuntingGroupGoal(0, [0, 1])]));
-        var b = new ShuntingDomain<ulong>(track, [new("W", false, [1, 0])], new([new ShuntingGroupGoal(0, [0, 1])]));
+        var a = new ShuntingDomain<Bitboard64>(track, [new("W", false, [0, 1])], new([new ShuntingGroupGoal(0, [0, 1])]));
+        var b = new ShuntingDomain<Bitboard64>(track, [new("W", false, [1, 0])], new([new ShuntingGroupGoal(0, [0, 1])]));
 
         Assert.Equal(a.InitialState, b.InitialState);
         Assert.Equal(a.GetHashCode64(a.InitialState), b.GetHashCode64(b.InitialState));
@@ -221,7 +221,7 @@ public class ShuntingTests
 
         foreach (var (track, expectedBit) in new[] { (wye, 0UL), (straight, 1UL << 1) })
         {
-            var domain = new ShuntingDomain<ulong>(track, [Engine(0)], new([]));
+            var domain = new ShuntingDomain<Bitboard64>(track, [Engine(0)], new([]));
             var move = Moves(domain, domain.InitialState).Single(m => m.Lead == 1);
             var after = domain.ApplyMove(domain.InitialState, move);
             Assert.Equal(expectedBit, after.Heading);
@@ -233,11 +233,11 @@ public class ShuntingTests
     {
         var wye = new ShuntingTrackBuilder(2).Connect(0, 1, 1, 1).Build();
         var goal = new ShuntingGoal([]) { Fronts = [new ShuntingFrontGoal(1, 0)] };
-        var domain = new ShuntingDomain<ulong>(wye, [Engine(0)], goal);
+        var domain = new ShuntingDomain<Bitboard64>(wye, [Engine(0)], goal);
 
         var solution = new PuzzleSolver().SolveDijkstra(domain, domain.InitialState);
 
-        Assert.Single(solution!.Moves);
+        Assert.Single(solution.Moves);
     }
 
     [Fact]
@@ -250,7 +250,7 @@ public class ShuntingTests
             .ConnectWhen(t, 0, 0, 1, 1, 0).ConnectWhen(t, 0, 2, 1, 3, 0)
             .ConnectWhen(t, 1, 0, 1, 2, 1).ConnectWhen(t, 1, 1, 0, 3, 0)
             .Build();
-        var domain = new ShuntingDomain<ulong>(track, [Engine(1, front: 1), new("W", false, [2])], new([]));
+        var domain = new ShuntingDomain<Bitboard64>(track, [Engine(1, front: 1), new("W", false, [2])], new([]));
         var start = domain.InitialState;
 
         var turn = Moves(domain, start).Single(m => m.IsTurn);
@@ -271,13 +271,13 @@ public class ShuntingTests
         var track = Line(3);
         var goal = new ShuntingGoal([]);
 
-        Assert.Throws<ArgumentNullException>(() => new ShuntingDomain<ulong>(null!, [Engine(0)], goal));
-        Assert.Throws<ArgumentException>(() => new ShuntingDomain<ulong>(track, [], goal));
-        Assert.Throws<ArgumentException>(() => new ShuntingDomain<ulong>(track, [new("E", true, [0, 1])], goal));
-        Assert.Throws<ArgumentException>(() => new ShuntingDomain<ulong>(track, [Engine(0), new("W", false, [0])], goal));
-        Assert.Throws<ArgumentException>(() => new ShuntingDomain<ulong>(track, [Engine(7)], goal));
-        Assert.Throws<ArgumentException>(() => new ShuntingDomain<ulong>(track, [Engine(0, front: 2)], goal));
-        Assert.Throws<ArgumentException>(() => new ShuntingDomain<ulong>(track, [Engine(0)], new([new ShuntingGroupGoal(3, [0])])));
-        Assert.Throws<ArgumentException>(() => new ShuntingDomain<ulong>(Line(70), [Engine(0)], goal));
+        Assert.Throws<ArgumentNullException>(() => new ShuntingDomain<Bitboard64>(null!, [Engine(0)], goal));
+        Assert.Throws<ArgumentException>(() => new ShuntingDomain<Bitboard64>(track, [], goal));
+        Assert.Throws<ArgumentException>(() => new ShuntingDomain<Bitboard64>(track, [new("E", true, [0, 1])], goal));
+        Assert.Throws<ArgumentException>(() => new ShuntingDomain<Bitboard64>(track, [Engine(0), new("W", false, [0])], goal));
+        Assert.Throws<ArgumentException>(() => new ShuntingDomain<Bitboard64>(track, [Engine(7)], goal));
+        Assert.Throws<ArgumentException>(() => new ShuntingDomain<Bitboard64>(track, [Engine(0, front: 2)], goal));
+        Assert.Throws<ArgumentException>(() => new ShuntingDomain<Bitboard64>(track, [Engine(0)], new([new ShuntingGroupGoal(3, [0])])));
+        Assert.Throws<ArgumentException>(() => new ShuntingDomain<Bitboard64>(Line(70), [Engine(0)], goal));
     }
 }

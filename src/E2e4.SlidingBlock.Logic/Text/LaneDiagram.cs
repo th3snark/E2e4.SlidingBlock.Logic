@@ -12,7 +12,7 @@ public static class LaneDiagram
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(leadingLabels);
         return string.Concat(rows.SelectMany(r => r).Where(c => c != empty).Distinct()
-            .OrderBy(c => { int i = leadingLabels.IndexOf(c, StringComparison.Ordinal); return i < 0 ? int.MaxValue : i; }).ThenBy(c => c));
+            .OrderBy(c => { int i = leadingLabels.IndexOf(c); return i < 0 ? int.MaxValue : i; }).ThenBy(c => c));
     }
 
     /// <summary>

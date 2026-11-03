@@ -19,11 +19,11 @@ public class ShuntingMapTests
     [Fact]
     public void ReadsAForkAndTheDomainSolvesIt()
     {
-        var domain = ShuntingMap.CreateDomain<ulong>(Fork, "EW", engines: "E");
+        var domain = ShuntingMap.CreateDomain<Bitboard64>(Fork, "EW", engines: "E");
 
         var solution = new PuzzleSolver().SolveDijkstra(domain, domain.InitialState);
 
-        Assert.Equal(1, ShuntingCost.Primary(solution!.Cost));
+        Assert.Equal(1, ShuntingCost.Primary(solution.Cost));
         Assert.Equal(1, ShuntingCost.Steps(solution.Cost));
         Assert.Equal(1UL << 3, domain.ApplyMove(domain.InitialState, solution.Moves[0]).GroupSlots(1));
     }
@@ -63,7 +63,7 @@ public class ShuntingMapTests
         Assert.Equal([0, 1, 2], layout.Groups[1].Allowed);
         Assert.True(layout.Groups[1].TrackHeading);
         Assert.Equal([new ShuntingFrontGoal(1, 0)], layout.Goal.Fronts);
-        Assert.Equal(1, layout.CreateDomain<ulong>().InitialState.Alignment(0));
+        Assert.Equal(1, layout.CreateDomain<Bitboard64>().InitialState.Alignment(0));
     }
 
     [Theory]
@@ -104,7 +104,7 @@ public class ShuntingMapTests
 
         Assert.Equal([[2, 3]], layout.Track.FoulingSets);
         Assert.Throws<ArgumentException>(() => ShuntingMap.Parse([.. Fork, "foul 2"], "EW", "E"));
-        Assert.Throws<ArgumentException>(() => ShuntingMap.CreateDomain<ulong>([.. Fork, "foul 1,2", "start .WE."], "EW", "E"));
+        Assert.Throws<ArgumentException>(() => ShuntingMap.CreateDomain<Bitboard64>([.. Fork, "foul 1,2", "start .WE."], "EW", "E"));
     }
 
     [Fact]
@@ -119,10 +119,10 @@ public class ShuntingMapTests
             "goal .EE",
             "goal .WW",
         ];
-        var domain = ShuntingMap.CreateDomain<ulong>(map, "EW", engines: "E");
+        var domain = ShuntingMap.CreateDomain<Bitboard64>(map, "EW", engines: "E");
 
         var solution = new PuzzleSolver().SolveDijkstra(domain, domain.InitialState);
 
-        Assert.Equal(1, ShuntingCost.Primary(solution!.Cost));
+        Assert.Equal(1, ShuntingCost.Primary(solution.Cost));
     }
 }

@@ -7,31 +7,24 @@ namespace E2e4.SlidingBlock.Logic;
 /// <summary>One piece changing group and/or anchor as part of a <see cref="CompositeMove"/>.</summary>
 public readonly record struct PieceDelta(byte PieceId, byte OldGroupId, byte NewGroupId, byte OldAnchor, byte NewAnchor);
 
-/// <summary>Inline storage for the changes of a <see cref="CompositeMove"/>; it holds <see cref="CompositeMove.MaxPieces"/> of them without allocating.</summary>
-[InlineArray(CompositeMove.MaxPieces)]
-public struct MoveDeltaBuffer
-{
-    private PieceDelta _element0;
-}
-
 /// <summary>Several pieces changing at once: a slide, a rotation, a push, a carry or a magnetic cluster.</summary>
 public struct CompositeMove : IEquatable<CompositeMove>
 {
     /// <summary>The most pieces one move can change.</summary>
     public const int MaxPieces = 4;
 
-    /// <summary>Number of valid entries in <see cref="Deltas"/> (1..4).</summary>
-    public byte Count;
+    /// <summary>Number of changes in this move (1..4); read them through <see cref="AsSpan"/>.</summary>
+    public byte Count { get; internal set; }
 
     /// <summary>-1 for a rotation, 0..5 for a one-step slide in that direction, -2 for a multi-step slide or glide.</summary>
-    public sbyte DirectionIndex;
+    public sbyte DirectionIndex { get; internal set; }
 
-    /// <summary>The changes; only the first <see cref="Count"/> are meaningful. Read them through <see cref="AsSpan"/>.</summary>
-    public MoveDeltaBuffer Deltas;
+    /// <summary>The changes; only the first <see cref="Count"/> are meaningful.</summary>
+    internal MoveDeltaBuffer Deltas;
 
     /// <summary>The changes of this move.</summary>
     [UnscopedRef]
-    public ReadOnlySpan<PieceDelta> AsSpan() => ((ReadOnlySpan<PieceDelta>)Deltas)[..Count];
+    public ReadOnlySpan<PieceDelta> AsSpan() => Deltas.Slice(Count);
 
     /// <inheritdoc/>
     public readonly bool Equals(CompositeMove other)
@@ -48,11 +41,9 @@ public struct CompositeMove : IEquatable<CompositeMove>
     /// <inheritdoc/>
     public override readonly int GetHashCode()
     {
-        var h = new HashCode();
-        h.Add(Count);
-        h.Add(DirectionIndex);
-        for (int i = 0; i < Count; i++) h.Add(Deltas[i]);
-        return h.ToHashCode();
+        int h = Count * 31 + DirectionIndex;
+        for (int i = 0; i < Count; i++) h = h * 31 + Deltas[i].GetHashCode();
+        return h;
     }
 
     /// <summary>True if both moves change the same pieces in the same way.</summary>
@@ -76,7 +67,7 @@ public struct CompositeMove : IEquatable<CompositeMove>
 /// magnetic clusters. Built on a <see cref="PolyominoDomain{TBitboard}"/> that supplies the goal and initial position.
 /// </summary>
 public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoState<TBitboard>, CompositeMove>
-    where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>
+    where TBitboard : unmanaged, IBitboard<TBitboard>
 {
     private const RoleFlags ClusterRoles = RoleFlags.Pusher | RoleFlags.HollowCarrier | RoleFlags.Magnetic;
 
@@ -158,7 +149,7 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
             else
             {
                 var deltas = topo.GetDirectionDeltas();
-                for (TBitboard r = MoveGen<TBitboard>.Reachable(topo, state, id, walls); r != TBitboard.Zero; r &= r - TBitboard.One)
+                for (TBitboard r = MoveGen<TBitboard>.Reachable(topo, state, id, walls); !r.IsEmpty; r = r.ClearLowest())
                 {
                     int target = Grid.Lsb(r), dir = -2;
                     for (int d = 0; d < deltas.Length; d++)
@@ -184,12 +175,12 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
         if (next < 0) return false;
         int a = state.AnchorOf(pieceId);
         int nextAnchor = a + (clockwise ? g.AnchorDeltaCw : g.AnchorDeltaCcw);
-        if ((uint)nextAnchor >= (uint)topo.CellCount || ((topo.GroupTable[next].ValidAnchorsMask >> nextAnchor) & TBitboard.One) == TBitboard.Zero) return false;
+        if ((uint)nextAnchor >= (uint)topo.CellCount || !topo.GroupTable[next].ValidAnchorsMask.HasBit(nextAnchor)) return false;
 
         int boxOrigin = a + g.BoxOriginDelta, size = g.RotationBoxSize;
         if (boxOrigin < 0 || boxOrigin % topo.Width + size > topo.Width || boxOrigin / topo.Width + size > topo.Height) return false;
-        TBitboard blocked = MoveGen<TBitboard>.OtherOccupancy(topo, state, g, a, walls) | topo.StaticWallsMask;
-        if ((blocked & (g.SweptClearanceMask << boxOrigin)) != TBitboard.Zero) return false;
+        TBitboard blocked = MoveGen<TBitboard>.OtherOccupancy(topo, state, g, a, walls).Or(topo.StaticWallsMask);
+        if (blocked.Intersects(g.SweptClearanceMask.ShiftLeft(boxOrigin))) return false;
         if (topo.PartitionTable.Length > 0 && topo.HasPartitionWithin(boxOrigin, size)) return false;
 
         move = CompositeMove.Rotated(pieceId, g.GroupId, next, a, nextAnchor, -1);
@@ -219,15 +210,15 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
                 if (!Grid.IsAllowed(gm.Directions, dir) || !Grid.StepStaysOnBoard(am, dir, topo.Width, topo.CellCount)) return false;
                 int nxt = am + delta;
                 if (!Grid.Has(topo.ValidAnchorsFor(gm.GroupId, dir), nxt)) return false;
-                TBitboard foot = gm.BaseMask << nxt;
-                if ((walls & foot) != TBitboard.Zero) return false;
+                TBitboard foot = gm.BaseMask.ShiftLeft(nxt);
+                if (walls.Intersects(foot)) return false;
 
                 foreach (var q in topo.PieceTable)
                 {
-                    if (members[..count].Contains(q.PieceId)) continue;
+                    if (Contains(members, count, q.PieceId)) continue;
                     var gq = topo.GroupTable[state.GroupOf(q.PieceId)];
                     if ((gq.ElevationMask & gm.ElevationMask) == 0) continue;
-                    if (((gq.BaseMask << state.AnchorOf(q.PieceId)) & foot) == TBitboard.Zero) continue;
+                    if (!gq.BaseMask.ShiftLeft(state.AnchorOf(q.PieceId)).Intersects(foot)) continue;
 
                     bool canPush = (gm.Roles & (RoleFlags.Pusher | RoleFlags.HollowCarrier)) != 0 || depth[i] > 0;
                     if (!canPush || (gq.Roles & RoleFlags.Pushable) == 0 || depth[i] + 1 > MaxPushDepth || count == CompositeMove.MaxPieces) return false;
@@ -248,6 +239,13 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
         return true;
     }
 
+    private static bool Contains(Span<int> members, int count, int value)
+    {
+        for (int i = 0; i < count; i++)
+            if (members[i] == value) return true;
+        return false;
+    }
+
     /// <summary>Adds every magnetic piece orthogonally touching the cluster; false when the cluster outgrows a move.</summary>
     private bool GatherMagnetic(in PolyominoState<TBitboard> state, Span<int> members, Span<int> depth, ref int count)
     {
@@ -260,17 +258,17 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
             changed = false;
             foreach (var q in topo.PieceTable)
             {
-                if (members[..count].Contains(q.PieceId)) continue;
+                if (Contains(members, count, q.PieceId)) continue;
                 var gq = topo.GroupTable[state.GroupOf(q.PieceId)];
                 if ((gq.Roles & RoleFlags.Magnetic) == 0) continue;
-                TBitboard qFoot = gq.BaseMask << state.AnchorOf(q.PieceId);
+                TBitboard qFoot = gq.BaseMask.ShiftLeft(state.AnchorOf(q.PieceId));
                 for (int i = 0; i < count; i++)
                 {
                     var gm = topo.GroupTable[state.GroupOf(members[i])];
                     if ((gm.ElevationMask & gq.ElevationMask) == 0) continue;
-                    TBitboard f = gm.BaseMask << state.AnchorOf(members[i]);
-                    TBitboard touch = ((f << 1) & notCol0) | ((f >> 1) & notLast) | (f << w) | (f >> w);
-                    if ((touch & qFoot) == TBitboard.Zero) continue;
+                    TBitboard f = gm.BaseMask.ShiftLeft(state.AnchorOf(members[i]));
+                    TBitboard touch = f.ShiftLeft(1).And(notCol0).Or(f.ShiftRight(1).And(notLast)).Or(f.ShiftLeft(w)).Or(f.ShiftRight(w));
+                    if (!touch.Intersects(qFoot)) continue;
                     if (count == CompositeMove.MaxPieces) return false;
                     members[count] = q.PieceId;
                     depth[count] = 0;
