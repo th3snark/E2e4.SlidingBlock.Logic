@@ -23,6 +23,8 @@ follows [Semantic Versioning](https://semver.org/). While the version is below 1
 - **Breaking:** a position's hash is a `Hash` property on every state: `PolyominoState.ZobristHash` is `Hash`, and `ILaneState<TState>.Hash()` is a property.
 - **Breaking:** `PuzzleTopology.Width` and `Height` are `Columns` and `Rows`, like `LaneSlideDomain` and `PushDomain`; the builder, `CreateBuilder`, `PuzzleTopologyBuilder.Normalize` and the flood fill name their parameters `columns`, `rows` and `boardColumns`.
 - **Breaking:** removed the duplicates `PolyominoState.TotalOccupancy` (use `OccupancyMask`) and `PolyominoDomain.GoalGroupId`, `GoalAnchor` and `GoalPosition` (use `Goal.GroupId`, `Goal.Anchor` and `Goal.Position`).
+- **Breaking:** `GridDirection` is an enum instead of a class of `int` constants, and the new flags enum `GridDirections` is a set of them. `Partition.Direction`, `RaycastTrace.Direction`, `PuzzleTopologyBuilder.AddPartition`, `PuzzleTopology.ForbiddenEntryCells` and `ValidAnchorsFor` take a `GridDirection`; `AddDiode` and `DirectionalDiode.AllowedEntryDirections` (was `AllowedEntryDirectionsMask`) take `GridDirections`. `ForbiddenEntryCells` and `ValidAnchorsFor` throw `ArgumentOutOfRangeException` for a direction the board's geometry does not have or a group that does not exist.
+- **Breaking:** `CompositeMove.DirectionIndex` (-1 for a rotation, -2 for a longer slide) is replaced by `Kind` (`CompositeMoveKind.Step`, `Rotation` or `MultiStep`) and `Direction` (a `GridDirection` for a step, otherwise null).
 
 - Shunting fouling sets: `ShuntingTrackBuilder.AddFoulingSet`, `ShuntingTrack.FoulingSets` and the `foul` keyword in `ShuntingMap`. At most one slot
   of a set may hold a piece, so a wagon left just past a switch blocks the other leg.

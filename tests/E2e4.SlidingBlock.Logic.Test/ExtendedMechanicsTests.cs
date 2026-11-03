@@ -121,7 +121,7 @@ public class RotationTests
         for (int i = 1; i <= 4; i++)
         {
             int n = domain.GenerateMoves(s, buffer);
-            var cw = buffer.Take(n).Single(m => m.DirectionIndex == -1 && m.AsSpan()[0].NewGroupId == topo.Groups[s.GroupOf(0)].NextCwGroupId);
+            var cw = buffer.Take(n).Single(m => m.Kind == CompositeMoveKind.Rotation && m.AsSpan()[0].NewGroupId == topo.Groups[s.GroupOf(0)].NextCwGroupId);
             s = domain.ApplyMove(s, cw);
             Assert.Equal(ring[i % 4], s.GroupOf(0));
             Assert.Equal(Cells.HashOf(topo, s), s.Hash);
@@ -138,7 +138,23 @@ public class RotationTests
         var domain = new CompositeDomain<Bitboard64>(new PolyominoDomain<Bitboard64>(topo, 0, 0));
         var buffer = new CompositeMove[domain.MaxMoves];
         int n = domain.GenerateMoves(domain.InitialState, buffer);
-        Assert.DoesNotContain(buffer.Take(n), m => m.DirectionIndex == -1);
+        Assert.DoesNotContain(buffer.Take(n), m => m.Kind == CompositeMoveKind.Rotation);
+    }
+
+    [Fact]
+    public void MovesSayWhetherTheyStepTurnOrGoFurther()
+    {
+        var (topo, _) = Board(false);
+        var domain = new CompositeDomain<Bitboard64>(new PolyominoDomain<Bitboard64>(topo, 0, 0));
+        var buffer = new CompositeMove[domain.MaxMoves];
+        var moves = buffer.Take(domain.GenerateMoves(domain.InitialState, buffer)).ToArray();
+
+        Assert.Contains(moves, m => m.Kind == CompositeMoveKind.Rotation);
+        Assert.Contains(moves, m => m.Kind == CompositeMoveKind.MultiStep);   // a flood-fill slide round the corner to anchor 0
+        Assert.All(moves.Where(m => m.Kind != CompositeMoveKind.Step), m => Assert.Null(m.Direction));
+        var right = moves.Single(m => m.Direction == GridDirection.Right);
+        Assert.Equal(CompositeMoveKind.Step, right.Kind);
+        Assert.Equal(6, right.AsSpan()[0].NewAnchor);
     }
 }
 
@@ -170,7 +186,7 @@ public class CoupledKinematicsTests
     public void CarrierMovesThePocketBlockOnlyWhenItPushesIt(int dir, int expectedCount)
     {
         var (_, domain) = UCarrier();
-        var move = MovesOf(domain, domain.InitialState, 0).Single(m => m.DirectionIndex == dir);
+        var move = MovesOf(domain, domain.InitialState, 0).Single(m => m.Direction == (GridDirection)dir);
         Assert.Equal(expectedCount, move.Count);
     }
 
@@ -181,7 +197,7 @@ public class CoupledKinematicsTests
         var s = domain.InitialState;
         foreach (int dir in new[] { 1, 2, 0, 3 })
         {
-            var move = MovesOf(domain, s, 0).Single(m => m.DirectionIndex == dir);
+            var move = MovesOf(domain, s, 0).Single(m => m.Direction == (GridDirection)dir);
             s = domain.ApplyMove(s, move);
             Assert.Equal(Cells.HashOf(topo, s), s.Hash);
         }
@@ -198,12 +214,12 @@ public class CoupledKinematicsTests
         var topo = b.Build();
         var domain = new CompositeDomain<Bitboard64>(new PolyominoDomain<Bitboard64>(topo, 0, 0));
 
-        var east = MovesOf(domain, domain.InitialState, 0).Single(m => m.DirectionIndex == 1);
+        var east = MovesOf(domain, domain.InitialState, 0).Single(m => m.Direction == GridDirection.Right);
         Assert.Equal(2, east.Count);
         var s = domain.ApplyMove(domain.InitialState, east);
-        s = domain.ApplyMove(s, MovesOf(domain, s, 0).Single(m => m.DirectionIndex == 1));   // crate now on the last cell
+        s = domain.ApplyMove(s, MovesOf(domain, s, 0).Single(m => m.Direction == GridDirection.Right));   // crate now on the last cell
         Assert.Equal(3, s.AnchorOf(1));
-        Assert.DoesNotContain(MovesOf(domain, s, 0), m => m.DirectionIndex == 1);
+        Assert.DoesNotContain(MovesOf(domain, s, 0), m => m.Direction == GridDirection.Right);
     }
 }
 
@@ -224,7 +240,7 @@ public class RaycastTests
 
         Span<RaycastTrace<Bitboard64>> traces = stackalloc RaycastTrace<Bitboard64>[6];
         int n = domain.TraceRaycast(domain.InitialState, 0, traces);
-        var east = traces[..n].ToArray().Single(t => t.Direction == 1);
+        var east = traces[..n].ToArray().Single(t => t.Direction == GridDirection.Right);
         Assert.Equal(9, east.TerminalAnchor);
         Assert.Equal(2, east.StepCount);
         Assert.Equal(Cells.Bits(7, 8, 9), east.SweptCellsMask);
@@ -296,7 +312,7 @@ public class StatefulCellTests
         {
             var b = PuzzleTopology<Bitboard64>.CreateBuilder(5, 1);
             b.AddPiece(b.AddGroup("one", Cells.One), "a", anchor);
-            b.AddDiode(0, 2, allowedEntryDirectionsMask: 1 << 1);   // entry only while travelling east
+            b.AddDiode(0, 2, allowedEntryDirections: GridDirections.Right);   // entry only while travelling east
             return new PolyominoDomain<Bitboard64>(b.Build(), 0, 0);
         }
 

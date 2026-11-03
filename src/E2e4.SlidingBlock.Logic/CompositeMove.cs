@@ -7,6 +7,17 @@ namespace E2e4.SlidingBlock.Logic;
 /// <summary>One piece changing group and/or anchor as part of a <see cref="CompositeMove"/>.</summary>
 public readonly record struct PieceDelta(byte PieceId, byte OldGroupId, byte NewGroupId, byte OldAnchor, byte NewAnchor);
 
+/// <summary>What a <see cref="CompositeMove"/> does.</summary>
+public enum CompositeMoveKind : byte
+{
+    /// <summary>Every piece of the move steps one cell in <see cref="CompositeMove.Direction"/>: a slide, a push, a carry or a magnetic cluster.</summary>
+    Step,
+    /// <summary>One piece turns into the next group of its rotation ring.</summary>
+    Rotation,
+    /// <summary>One piece slides more than one cell: a flood-fill move (perhaps round a corner) or a glide.</summary>
+    MultiStep,
+}
+
 /// <summary>Several pieces changing at once: a slide, a rotation, a push, a carry or a magnetic cluster.</summary>
 public struct CompositeMove : IEquatable<CompositeMove>
 {
@@ -17,7 +28,18 @@ public struct CompositeMove : IEquatable<CompositeMove>
     public byte Count { get; internal set; }
 
     /// <summary>-1 for a rotation, 0..5 for a one-step slide in that direction, -2 for a multi-step slide or glide.</summary>
-    public sbyte DirectionIndex { get; internal set; }
+    internal sbyte DirectionIndex { get; set; }
+
+    /// <summary>Whether the move is a step, a rotation or a multi-step slide.</summary>
+    public readonly CompositeMoveKind Kind => DirectionIndex switch
+    {
+        -1 => CompositeMoveKind.Rotation,
+        < 0 => CompositeMoveKind.MultiStep,
+        _ => CompositeMoveKind.Step,
+    };
+
+    /// <summary>The direction every piece steps in when <see cref="Kind"/> is <see cref="CompositeMoveKind.Step"/>; null otherwise.</summary>
+    public readonly GridDirection? Direction => DirectionIndex >= 0 ? (GridDirection)DirectionIndex : null;
 
     /// <summary>The changes; only the first <see cref="Count"/> are meaningful.</summary>
     internal MoveDeltaBuffer Deltas;
@@ -209,7 +231,7 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
                 var gm = topo.GroupTable[state.GroupOf(m)];
                 if (!Grid.IsAllowed(gm.Directions, dir) || !Grid.StepStaysOnBoard(am, dir, topo.Columns, topo.CellCount)) return false;
                 int nxt = am + delta;
-                if (!Grid.Has(topo.ValidAnchorsFor(gm.GroupId, dir), nxt)) return false;
+                if (!Grid.Has(topo.ValidAnchors(gm.GroupId, dir), nxt)) return false;
                 TBitboard foot = gm.BaseMask.ShiftLeft(nxt);
                 if (walls.Intersects(foot)) return false;
 

@@ -182,10 +182,25 @@ public class HardeningTests
         var b = PuzzleTopology<Bitboard64>.CreateBuilder(3, 3);
         Assert.Throws<ArgumentOutOfRangeException>(() => b.AddWall(3, 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => b.AddWall(0, -1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => b.AddDiode(0, 3, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => b.AddDiode(0, 3, GridDirections.Left));
         Assert.Throws<ArgumentOutOfRangeException>(() => b.AddPiece(0, "a", 0));   // no group yet
         Assert.Throws<ArgumentException>(() => b.AddRotatableGroup("r", []));
         Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<Bitboard64>.CreateBuilder(100000, 100000));
+    }
+
+    [Fact]
+    public void TopologyQueriesCheckTheirGroupAndDirection()
+    {
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(3, 3);
+        b.AddPiece(b.AddGroup("one", [(0, 0)]), "a", 0);
+        var topo = b.Build();
+        Assert.Equal(topo.Groups[0].ValidAnchorsMask, topo.ValidAnchorsFor(0, GridDirection.Down));
+        Assert.True(topo.ForbiddenEntryCells(GridDirection.Left).IsEmpty);
+        Assert.Throws<ArgumentOutOfRangeException>(() => topo.ValidAnchorsFor(1, GridDirection.Down));
+        Assert.Throws<ArgumentOutOfRangeException>(() => topo.ValidAnchorsFor(-1, GridDirection.Down));
+        Assert.Throws<ArgumentOutOfRangeException>(() => topo.ValidAnchorsFor(0, GridDirection.UpRight));   // orthogonal board
+        Assert.Throws<ArgumentOutOfRangeException>(() => topo.ForbiddenEntryCells(GridDirection.DownLeft));
+        Assert.Throws<ArgumentOutOfRangeException>(() => topo.ForbiddenEntryCells((GridDirection)200));
     }
 
     [Fact]

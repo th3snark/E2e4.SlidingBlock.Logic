@@ -240,12 +240,12 @@ internal static class MoveGen<TBitboard> where TBitboard : unmanaged, IBitboard<
         {
             if (!Grid.StepStaysOnBoard(curr, dir, topology.Columns, cells)) break;
             int next = curr + delta;
-            if (!Grid.Has(topology.ValidAnchorsFor(g.GroupId, dir), next))
+            if (!Grid.Has(topology.ValidAnchors(g.GroupId, dir), next))
             {
                 // A wall under the footprint, or else the cells it would enter across a partition or against a diode.
                 blocking = WallCells(topology, g, next);
                 if (blocking.IsEmpty)
-                    blocking = g.BaseMask.ShiftLeft(next).AndNot(g.BaseMask.ShiftLeft(curr)).And(topology.ForbiddenEntryCells(dir));
+                    blocking = g.BaseMask.ShiftLeft(next).AndNot(g.BaseMask.ShiftLeft(curr)).And(topology.ForbiddenEntry(dir));
                 break;
             }
             TBitboard footprint = g.BaseMask.ShiftLeft(next);
@@ -337,7 +337,7 @@ public sealed class PolyominoDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
         {
             if (!Grid.IsAllowed(g.Directions, d)) continue;
             int end = MoveGen<TBitboard>.Glide(Topology, g, d, a, other, int.MaxValue, out int steps, out var swept, out var blocking);
-            results[n++] = new RaycastTrace<TBitboard>(d, a, end, steps, swept, blocking);
+            results[n++] = new RaycastTrace<TBitboard>((GridDirection)d, a, end, steps, swept, blocking);
         }
         return n;
     }

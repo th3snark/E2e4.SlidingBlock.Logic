@@ -38,7 +38,7 @@ public class GoldenTests
     {
         var b = PuzzleTopology<Bitboard64>.CreateBuilder(5, 5);
         b.AddWall(2, 2);
-        b.AddDiode(1, 3, 0b0010);
+        b.AddDiode(1, 3, GridDirections.Right);
         b.AddPressurePlate(1UL << 20, 1UL << 7);
         int dom = b.AddGroup("domino", [(0, 0), (0, 1)]);
         int horiz = b.AddGroup("horizontal", [(0, 0)], AllowedDirections.Horizontal);

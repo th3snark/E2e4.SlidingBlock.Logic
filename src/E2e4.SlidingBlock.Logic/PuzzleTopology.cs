@@ -95,7 +95,11 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBitb
     /// Bit s is set iff a step in <paramref name="direction"/> may never enter cell s: it is a diode that refuses that direction, or the step
     /// would cross a partition. Which cell a step comes from is fixed by the cell and the direction, so this is exact for partitions.
     /// </summary>
-    public TBitboard ForbiddenEntryCells(int direction) => _forbiddenEntry[direction];
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="direction"/> is not a direction of the board's geometry.</exception>
+    public TBitboard ForbiddenEntryCells(GridDirection direction) => _forbiddenEntry[CheckDirection(direction)];
+
+    /// <summary>As <see cref="ForbiddenEntryCells"/> for a direction index the caller has already checked.</summary>
+    internal TBitboard ForbiddenEntry(int direction) => _forbiddenEntry[direction];
 
     // Indexed [group, cell]; the hot paths read it directly.
     internal ulong[,] ZobristTable { get; }
@@ -108,7 +112,22 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBitb
     /// cell from a forbidden side or cross a partition. Equal to the group's <see cref="EquivalenceGroup{TBitboard}.ValidAnchorsMask"/> on
     /// boards with neither.
     /// </summary>
-    public TBitboard ValidAnchorsFor(int groupId, int direction) => _validByDir[groupId * _deltas.Length + direction];
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="groupId"/> names no group, or <paramref name="direction"/> is not a direction of the board's geometry.</exception>
+    public TBitboard ValidAnchorsFor(int groupId, GridDirection direction)
+    {
+        if ((uint)groupId >= (uint)GroupTable.Length) throw new ArgumentOutOfRangeException(nameof(groupId), groupId, "No such group.");
+        return ValidAnchors(groupId, CheckDirection(direction));
+    }
+
+    /// <summary>As <see cref="ValidAnchorsFor"/> for a group and direction index the caller has already checked.</summary>
+    internal TBitboard ValidAnchors(int groupId, int direction) => _validByDir[groupId * _deltas.Length + direction];
+
+    private int CheckDirection(GridDirection direction)
+    {
+        if ((uint)direction >= (uint)_deltas.Length)
+            throw new ArgumentOutOfRangeException(nameof(direction), direction, $"A {Geometry} board has {_deltas.Length} directions.");
+        return (int)direction;
+    }
 
     /// <summary>One mask per direction for <paramref name="groupId"/> (see <see cref="ValidAnchorsFor"/>).</summary>
     internal ReadOnlySpan<TBitboard> ValidByDirRow(int groupId) => _validByDir.AsSpan(groupId * _deltas.Length, _deltas.Length);
@@ -145,11 +164,12 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBitb
         var forbidden = new TBitboard[_deltas.Length];
         foreach (var diode in DiodeTable)
             for (int d = 0; d < forbidden.Length; d++)
-                if ((diode.AllowedEntryDirectionsMask >> d & 1) == 0) forbidden[d] = forbidden[d].Or(Bit<TBitboard>.One.ShiftLeft(diode.CellIndex));
+                if (((int)diode.AllowedEntryDirections >> d & 1) == 0) forbidden[d] = forbidden[d].Or(Bit<TBitboard>.One.ShiftLeft(diode.CellIndex));
         foreach (var partition in PartitionTable)
         {
-            forbidden[partition.Direction] = forbidden[partition.Direction].Or(Bit<TBitboard>.One.ShiftLeft(partition.Cell + _deltas[partition.Direction]));
-            forbidden[partition.Direction ^ 1] = forbidden[partition.Direction ^ 1].Or(Bit<TBitboard>.One.ShiftLeft(partition.Cell));
+            int d = (int)partition.Direction;
+            forbidden[d] = forbidden[d].Or(Bit<TBitboard>.One.ShiftLeft(partition.Cell + _deltas[d]));
+            forbidden[d ^ 1] = forbidden[d ^ 1].Or(Bit<TBitboard>.One.ShiftLeft(partition.Cell));
         }
         return forbidden;
     }
@@ -160,7 +180,7 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBitb
         int row0 = origin / Columns, col0 = origin % Columns;
         foreach (var partition in PartitionTable)
         {
-            int other = partition.Cell + _deltas[partition.Direction];
+            int other = partition.Cell + _deltas[(int)partition.Direction];
             if (Inside(partition.Cell) && Inside(other)) return true;
         }
         return false;
@@ -244,30 +264,35 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
         return this;
     }
 
-    /// <summary>Makes cell (<paramref name="row"/>, <paramref name="col"/>) one-way: a piece may enter it only by the directions set in <paramref name="allowedEntryDirectionsMask"/> (bit d is direction d).</summary>
+    /// <summary>
+    /// Makes cell (<paramref name="row"/>, <paramref name="col"/>) one-way: a piece may enter it only by a step in one of
+    /// <paramref name="allowedEntryDirections"/>. Directions the board's geometry does not have are ignored.
+    /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">The cell is not on the board.</exception>
-    public PuzzleTopologyBuilder<TBitboard> AddDiode(int row, int col, byte allowedEntryDirectionsMask)
+    public PuzzleTopologyBuilder<TBitboard> AddDiode(int row, int col, GridDirections allowedEntryDirections)
     {
         CheckCell(row, col);
-        _diodes.Add(new DirectionalDiode(row * _columns + col, allowedEntryDirectionsMask));
+        _diodes.Add(new DirectionalDiode(row * _columns + col, allowedEntryDirections));
         return this;
     }
 
     /// <summary>
-    /// Puts an immovable partition on the edge of cell (<paramref name="row"/>, <paramref name="col"/>) in <paramref name="direction"/>
-    /// (a <see cref="GridDirection"/>): no piece crosses it either way. Declaring the same edge from either side adds it once.
+    /// Puts an immovable partition on the edge of cell (<paramref name="row"/>, <paramref name="col"/>) in <paramref name="direction"/>:
+    /// no piece crosses it either way. Declaring the same edge from either side adds it once.
     /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">The cell is not on the board, or <paramref name="direction"/> is not a direction of the geometry.</exception>
     /// <exception cref="ArgumentException">The edge lies on the border of the board.</exception>
-    public PuzzleTopologyBuilder<TBitboard> AddPartition(int row, int col, int direction)
+    public PuzzleTopologyBuilder<TBitboard> AddPartition(int row, int col, GridDirection direction)
     {
         CheckCell(row, col);
-        if ((uint)direction >= (uint)Grid.DirectionCount(_geometry)) throw new ArgumentOutOfRangeException(nameof(direction));
+        int d = (int)direction;
+        if ((uint)d >= (uint)Grid.DirectionCount(_geometry))
+            throw new ArgumentOutOfRangeException(nameof(direction), direction, $"A {_geometry} board has {Grid.DirectionCount(_geometry)} directions.");
         int cell = row * _columns + col;
-        if (!Grid.StepStaysOnBoard(cell, direction, _columns, _columns * _rows))
+        if (!Grid.StepStaysOnBoard(cell, d, _columns, _columns * _rows))
             throw new ArgumentException("A partition lies between two cells of the board.", nameof(direction));
-        int delta = Grid.Delta(_columns, direction);
-        var partition = delta > 0 ? new Partition(cell, direction) : new Partition(cell + delta, direction ^ 1);
+        int delta = Grid.Delta(_columns, d);
+        var partition = delta > 0 ? new Partition(cell, direction) : new Partition(cell + delta, (GridDirection)(d ^ 1));
         if (!_partitions.Contains(partition)) _partitions.Add(partition);
         return this;
     }

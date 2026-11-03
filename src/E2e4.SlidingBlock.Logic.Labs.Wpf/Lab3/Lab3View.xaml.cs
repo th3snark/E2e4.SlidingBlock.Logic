@@ -222,7 +222,7 @@ public partial class Lab3View : UserControl
         if (!g.CanRotate) return null;
         int next = clockwise ? g.NextCwGroupId : g.NextCcwGroupId;
         foreach (var m in MovesFor(pieceId))
-            if (m.DirectionIndex == -1 && m.AsSpan()[0].NewGroupId == next) return m;
+            if (m.Kind == CompositeMoveKind.Rotation && m.AsSpan()[0].NewGroupId == next) return m;
         return null;
     }
 
@@ -316,7 +316,7 @@ public partial class Lab3View : UserControl
         var teal = Palette.Teal;
         foreach (var m in moves)
         {
-            if (m.DirectionIndex == -1) continue;
+            if (m.Kind == CompositeMoveKind.Rotation) continue;
             var d = m.AsSpan()[0];
             var move = m;
             AddRing(Center(d.NewAnchor), teal, $"slide to anchor {d.NewAnchor}", () => Hover(move, teal, $"Slide {d.OldAnchor} -> {d.NewAnchor}"), () => PlayAsync(move));
@@ -335,12 +335,12 @@ public partial class Lab3View : UserControl
         Point[] at = [new(left, midY), new(right, midY), new(midX, top), new(midX, bottom)];
         foreach (var m in moves)
         {
-            if (m.DirectionIndex is < 0 or > 3) continue;
+            if (m.Direction is not { } direction || (int)direction > 3) continue;
             bool coupled = m.Count > 1;
             var color = coupled ? Palette.Orange : Palette.Teal;
             string text = coupled ? $"Coupled {m.Count}-piece CompositeMove" : "Single-piece slide";
             var move = m;
-            AddRing(at[m.DirectionIndex], color, text, () => Hover(move, color, text), () => PlayAsync(move), glyphs[m.DirectionIndex], 38);
+            AddRing(at[(int)direction], color, text, () => Hover(move, color, text), () => PlayAsync(move), glyphs[(int)direction], 38);
         }
     }
 
@@ -696,8 +696,8 @@ public partial class Lab3View : UserControl
             case 1:
                 sb.AppendLine(_lastTable[1].Length > 0 ? _lastTable[1] : "No CompositeMove executed yet.");
                 sb.Append("Legal 1-step moves of this piece: ");
-                sb.Append(string.Join(", ", MovesFor(_selected).Where(m => m.DirectionIndex >= 0).Select(m =>
-                    $"{new[] { "Left", "Right", "Up", "Down" }[m.DirectionIndex]} ({(m.Count > 1 ? $"coupled x{m.Count}" : "single")})")));
+                sb.Append(string.Join(", ", MovesFor(_selected).Where(m => m.Kind == CompositeMoveKind.Step).Select(m =>
+                    $"{m.Direction} ({(m.Count > 1 ? $"coupled x{m.Count}" : "single")})")));
                 break;
             default:
                 sb.AppendLine("Direction  Steps  Terminal  StopReason            BlockingBitsMask");

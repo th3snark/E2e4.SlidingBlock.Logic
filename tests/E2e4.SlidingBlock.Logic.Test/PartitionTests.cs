@@ -69,7 +69,7 @@ public class PartitionTests
     {
         var domain = Line(1, SlidePhysics.ContinuousFloodFill, b =>
         {
-            b.AddDiode(0, 2, allowedEntryDirectionsMask: 1 << GridDirection.Right);
+            b.AddDiode(0, 2, allowedEntryDirections: GridDirections.Right);
             b.AddPartition(0, 2, GridDirection.Right);
         });
         Assert.Equal(Cells.Bits(0, 2), domain.ReachableFor(domain.InitialState, 0));
@@ -131,7 +131,7 @@ public class PartitionTests
             var domain = new CompositeDomain<Bitboard64>(new PolyominoDomain<Bitboard64>(b.Build(), 0, 0));
             var buffer = new CompositeMove[domain.MaxMoves];
             int n = domain.GenerateMoves(domain.InitialState, buffer);
-            return buffer.Take(n).Where(m => m.AsSpan()[0].PieceId == 0 && m.DirectionIndex == GridDirection.Right).ToArray();
+            return buffer.Take(n).Where(m => m.AsSpan()[0].PieceId == 0 && m.Direction == GridDirection.Right).ToArray();
         }
 
         Assert.Single(EastMoves(_ => { }));
@@ -151,6 +151,6 @@ public class PartitionTests
         var domain = new CompositeDomain<Bitboard64>(new PolyominoDomain<Bitboard64>(b.Build(), 0, 0));
         var buffer = new CompositeMove[domain.MaxMoves];
         int n = domain.GenerateMoves(domain.InitialState, buffer);
-        Assert.Equal(blocked, buffer.Take(n).All(m => m.DirectionIndex != -1));
+        Assert.Equal(blocked, buffer.Take(n).All(m => m.Kind != CompositeMoveKind.Rotation));
     }
 }
