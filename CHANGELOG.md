@@ -4,7 +4,7 @@ All notable changes are listed here, newest first. The format follows [Keep a Ch
 follows [Semantic Versioning](https://semver.org/). From 1.0.0 a breaking change to the public API comes only with a new major version; the
 [roadmap](docs/roadmap.md#6-compatibility-from-10) says how new features stay compatible.
 
-## [1.0.0] - Unreleased
+## [1.0.0] - 2026-11-03
 
 The first version on nuget.org. 0.1.0 was tagged but never published there, so this lists everything that changed since it.
 

@@ -39,8 +39,8 @@ Console.WriteLine(new PuzzleSolver().SolveBfs(rushHour, rushHour.InitialState).M
   valid-anchor masks.
 - `E2e4.SlidingBlock.Logic.Text`: `TopologyMap`, `LaneDiagram` and `PushMap` read boards, vehicles and warehouses from diagrams (one string
   per row, with the symbols you choose). The domains themselves take plain data, so a layout can come from anywhere.
-- `PuzzleSolver`: generic BFS, A* and IDA*, with a node limit and cancellation; `SolveResult.Status` says whether a search found nothing because
-  the puzzle is unsolvable or because it hit the limit.
+- `PuzzleSolver`: generic BFS, A*, IDA*, Dijkstra and weighted A*, with a node limit, a stored-state limit and cancellation; `SolveResult.Status`
+  says whether a search found nothing because the puzzle is unsolvable or because it hit a limit.
 - `PuzzleWalk` and `PlaySession<TState, TMove>`: a generic random walk (for solvable shuffles) and the undo, redo and reset bookkeeping
   every interactive puzzle needs.
 
