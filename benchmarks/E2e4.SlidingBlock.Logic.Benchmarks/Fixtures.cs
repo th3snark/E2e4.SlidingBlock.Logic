@@ -11,9 +11,9 @@ internal static class Fixtures
     // ---- 15-puzzle ------------------------------------------------------------------------------------------
 
     /// <summary>Tile t on square t, blank on square 0 (nibble i holds the tile on square i).</summary>
-    public static readonly NPuzzleState Puzzle15Solved = new(0xFEDCBA9876543210UL);
+    public static readonly NPuzzle4x4State Puzzle15Solved = new(0xFEDCBA9876543210UL);
 
-    public static NPuzzleDomain CreatePuzzle15() => new(Puzzle15Solved, Puzzle15Solved);
+    public static NPuzzle4x4Domain CreatePuzzle15() => new(Puzzle15Solved, Puzzle15Solved);
 
     // ---- Klotski --------------------------------------------------------------------------------------------
 

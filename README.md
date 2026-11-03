@@ -11,11 +11,11 @@ and `PuzzleSolver` solves any of them with BFS, A* or IDA*.
 
 ```csharp
 // The engine does not know where the blank belongs: the puzzle supplies its goal position.
-var goal = new NPuzzleState(0xFEDCBA9876543210UL);
-var domain = new NPuzzleDomain(goal, goal);
+var goal = new NPuzzle4x4State(0xFEDCBA9876543210UL);
+var domain = new NPuzzle4x4Domain(goal, goal);
 var start = PuzzleWalk.RandomWalk(domain, goal, 25, new Random(3));
 
-SolveResult<NPuzzleMove> result = new PuzzleSolver().SolveIdaStar(domain, start, domain.ManhattanDistance);
+SolveResult<NPuzzle4x4Move> result = new PuzzleSolver().SolveIdaStar(domain, start, domain.ManhattanDistance);
 Console.WriteLine(result.IsSolved ? result.Moves.Count : -1);
 
 // Rush Hour: the vehicles are read off a diagram (using E2e4.SlidingBlock.Logic.Text), the red car X is vehicle 0 and has to reach
@@ -28,7 +28,7 @@ Console.WriteLine(new PuzzleSolver().SolveBfs(rushHour, rushHour.InitialState).M
 
 ## What is in it
 
-- `NPuzzleState`: the 4x4 sliding tile puzzle packed into 16 nibbles of a `ulong`, with a branchless XOR tile swap. The goal position is a constructor argument, and the Manhattan distance is measured against it.
+- `NPuzzle4x4State`: the 4x4 sliding tile puzzle packed into 16 nibbles of a `ulong`, with a branchless XOR tile swap. The goal position is a constructor argument, and the Manhattan distance is measured against it.
 - `KlotskiState` and `KlotskiDomain`: Klotski with a canonical shape key, so interchangeable pieces are the same position.
 - `LaneState16`, `LaneState64` and `LaneSlideDomain<TState, TBitboard>`: vehicles as lane offsets packed 4 bits each (up to 64 vehicles on 128 cells); Rush Hour moves one cell, garage puzzles slide any distance.
 - `PushState` and `PushDomain`: Soko warehouse pushing, where the storeman's walking is free, with dead squares and a heuristic.

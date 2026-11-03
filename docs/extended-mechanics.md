@@ -7,7 +7,7 @@ with `TBitboard` = `Bitboard64` (up to 64 cells) or `Bitboard128` (up to 128 cel
 | Feature | Where | Idea |
 |---------|-------|------|
 | Hex axial grids | `GridGeometry`, `PuzzleTopology.GetDirectionDeltas()` | Six deltas `-1, +1, -W, +W, -W+1, +W-1`; each direction has an entry mask so a shift never wraps a row |
-| Elevation layers | `EquivalenceGroup.ElevationMask`, `PolyominoState.TotalOccupancy` | Bit 0 ground, bit 1 upper; a piece only collides with the layers it occupies |
+| Elevation layers | `EquivalenceGroup.ElevationMask`, `PolyominoState.OccupancyMask` | Bit 0 ground, bit 1 upper; a piece only collides with the layers it occupies |
 | Diodes | `DirectionalDiode`, `PuzzleTopology.ValidAnchorsFor(group, direction)` | Per-direction valid-anchor masks; the flood fill ANDs the mask of the direction it steps in |
 | Partitions | `PuzzleTopologyBuilder.AddPartition`, `Partition`, `PuzzleTopology.Partitions` | An immovable edge between two cells (Hordern's B41, B42); folded into the same per-direction masks as diodes, so a move generator pays one extra AND per step |
 | Pressure plates | `PressurePlateRule`, `PolyominoDomain.ActiveDynamicWalls` | Closed gates join the blockers; a move that closes a gate on a piece is rejected |

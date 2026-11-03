@@ -130,29 +130,29 @@ public class HardeningTests
     [Fact]
     public void NPuzzleChecksItsPositions()
     {
-        var goal = new NPuzzleState(0xFEDCBA9876543210UL);
+        var goal = new NPuzzle4x4State(0xFEDCBA9876543210UL);
         Assert.True(goal.IsPermutation);
-        Assert.False(new NPuzzleState(0).IsPermutation);
-        Assert.Throws<ArgumentException>(() => new NPuzzleDomain(new NPuzzleState(0), goal));
-        Assert.Throws<ArgumentException>(() => new NPuzzleDomain(goal, new NPuzzleState(0)));
+        Assert.False(new NPuzzle4x4State(0).IsPermutation);
+        Assert.Throws<ArgumentException>(() => new NPuzzle4x4Domain(new NPuzzle4x4State(0), goal));
+        Assert.Throws<ArgumentException>(() => new NPuzzle4x4Domain(goal, new NPuzzle4x4State(0)));
         Assert.Equal(5, goal.SquareOf(5));
-        Assert.Equal(-1, new NPuzzleState(0).SquareOf(5));
+        Assert.Equal(-1, new NPuzzle4x4State(0).SquareOf(5));
     }
 
     [Fact]
     public void NPuzzleSolvabilityMatchesTheMoves()
     {
-        var goal = new NPuzzleState(0xFEDCBA9876543210UL);
-        var domain = new NPuzzleDomain(goal, goal);
+        var goal = new NPuzzle4x4State(0xFEDCBA9876543210UL);
+        var domain = new NPuzzle4x4Domain(goal, goal);
         Assert.True(domain.IsSolvable(goal));
         for (int seed = 0; seed < 20; seed++)
             Assert.True(domain.IsSolvable(PuzzleWalk.RandomWalk(domain, goal, 40, new Random(seed))));
 
         // Swapping two tiles is an odd permutation with the blank in place: no sequence of moves undoes it.
         ulong swapped = goal.PackedNibbles & ~(0xFFUL << 4) | (0x12UL << 4);
-        Assert.True(new NPuzzleState(swapped).IsPermutation);
-        Assert.False(domain.IsSolvable(new NPuzzleState(swapped)));
-        Assert.False(domain.IsSolvable(new NPuzzleState(0)));
+        Assert.True(new NPuzzle4x4State(swapped).IsPermutation);
+        Assert.False(domain.IsSolvable(new NPuzzle4x4State(swapped)));
+        Assert.False(domain.IsSolvable(new NPuzzle4x4State(0)));
     }
 
     [Fact]
@@ -191,9 +191,9 @@ public class HardeningTests
     [Fact]
     public void TopologyBuilderNamesTheBadBoardDimensionAndChecksLabelsNamesAndPlateMasks()
     {
-        Assert.Equal("width", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<Bitboard64>.CreateBuilder(0, 3)).ParamName);
-        Assert.Equal("height", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<Bitboard64>.CreateBuilder(3, -1)).ParamName);
-        Assert.Equal("height", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<Bitboard64>.CreateBuilder(9, 8)).ParamName);   // 72 cells, 64 bits
+        Assert.Equal("columns", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<Bitboard64>.CreateBuilder(0, 3)).ParamName);
+        Assert.Equal("rows", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<Bitboard64>.CreateBuilder(3, -1)).ParamName);
+        Assert.Equal("rows", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<Bitboard64>.CreateBuilder(9, 8)).ParamName);   // 72 cells, 64 bits
 
         var b = PuzzleTopology<Bitboard64>.CreateBuilder(3, 3);
         var one = b.AddGroup("one", [(0, 0)]);

@@ -108,9 +108,9 @@ public partial class Lab3View : UserControl
         }
 
         var dash = (Brush)FindResource("Gold");
-        if (M.Goal.GoalGroupId >= 0)
-            AddGoalOutline(FootprintGeometry(T.Groups[M.Goal.GoalGroupId], 0), M.Goal.GoalAnchor, dash);
-        else if (M.Goal.GoalPosition is { } goal)
+        if (M.Domain.Goal.GroupId >= 0)
+            AddGoalOutline(FootprintGeometry(T.Groups[M.Domain.Goal.GroupId], 0), M.Domain.Goal.Anchor, dash);
+        else if (M.Domain.Goal.Position is { } goal)
             for (int g = 0; g < T.Groups.Count; g++)
                 if (T.Groups[g].Name == "Crate")
                     for (Bitboard64 m = goal.GroupAnchorsOf(g); !m.IsEmpty; m = m.ClearLowest())
@@ -253,7 +253,7 @@ public partial class Lab3View : UserControl
         await AnimateAsync(jobs);
 
         S.Apply(move);
-        _xor[_mode] = Derivation(move, before.ZobristHash, State.ZobristHash);
+        _xor[_mode] = Derivation(move, before.Hash, State.Hash);
         _lastTable[_mode] = DeltaTable(move);
         _lastCluster[_mode] = deltas.Aggregate(default(Bitboard64), (acc, d) => acc | FootprintOf(T, d));
         Banner.Visibility = Visibility.Collapsed;
@@ -523,9 +523,9 @@ public partial class Lab3View : UserControl
     private void OnUndo(object sender, RoutedEventArgs e)
     {
         if (_busy) return;
-        var before = State.ZobristHash;
+        var before = State.Hash;
         if (!S.Undo()) return;
-        _xor[_mode] = $"Undo: previous state restored\n  PreviousHash:  0x{before:X16}\n  RestoredHash:  0x{State.ZobristHash:X16}";
+        _xor[_mode] = $"Undo: previous state restored\n  PreviousHash:  0x{before:X16}\n  RestoredHash:  0x{State.Hash:X16}";
         _lastTable[_mode] = "";
         _lastCluster[_mode] = 0;
         Banner.Visibility = Visibility.Collapsed;
@@ -579,7 +579,7 @@ public partial class Lab3View : UserControl
             sb.AppendLine(CultureInfo.InvariantCulture, $"^ {$"ZobristTable[{d.NewGroupId}, {d.NewAnchor}]:",-32}  0x{T.ZobristKey(d.NewGroupId, d.NewAnchor):X16}  (add new)");
         }
         sb.AppendLine(new string('-', 64));
-        sb.Append(CultureInfo.InvariantCulture, $"= {"New ZobristHash:",-32}  0x{result:X16}");
+        sb.Append(CultureInfo.InvariantCulture, $"= {"New Hash:",-32}  0x{result:X16}");
         foreach (var d in deltas)
             sb.Append(CultureInfo.InvariantCulture, $"\nGroupAnchors[{d.OldGroupId}] ^= 1<<{d.OldAnchor};  GroupAnchors[{d.NewGroupId}] ^= 1<<{d.NewAnchor}");
         return sb.ToString();
@@ -647,8 +647,8 @@ public partial class Lab3View : UserControl
         CanonText.Text = sb.ToString();
 
         ulong recomputed = RecomputedHash(State);
-        bool match = recomputed == State.ZobristHash;
-        HashText.Text = $"0x{State.ZobristHash:X16}";
+        bool match = recomputed == State.Hash;
+        HashText.Text = $"0x{State.Hash:X16}";
         HashBadgeText.Text = match ? $"IncrementalHash == FullRecomputedHash  ✓   (0x{recomputed:X16})" : $"MISMATCH  ✗  recomputed 0x{recomputed:X16}";
         HashBadge.Background = Palette.Frozen(match ? Palette.GoodDeep : Palette.BadDeep);
         XorText.Text = _xor[_mode];
@@ -669,9 +669,9 @@ public partial class Lab3View : UserControl
 
     private string GoalText() => _mode switch
     {
-        0 => $"L-tromino in group {M.Goal.GoalGroupId} on anchor {M.Goal.GoalAnchor}",
+        0 => $"L-tromino in group {M.Domain.Goal.GroupId} on anchor {M.Domain.Goal.Anchor}",
         1 => "crates on anchors 8 and 32",
-        _ => $"glider on anchor {M.Goal.GoalAnchor}",
+        _ => $"glider on anchor {M.Domain.Goal.Anchor}",
     };
 
     private string ExtraReadout(EquivalenceGroup<Bitboard64> g, int anchor, Bitboard64 pieceMask)

@@ -19,6 +19,10 @@ follows [Semantic Versioning](https://semver.org/). While the version is below 1
 - On the netstandard targets the Zobrist keys of `PushDomain` and `ShuntingDomain` come from the same seeded `Random` sequence as on .NET 6 and later, so hashes match across targets.
 - **Breaking:** `KlotskiState.CanonicalShapeKey` and `SpreadCells`, `NPuzzleState.SlideMask` and `PolyominoState.ComputeZobrist` are internal: they expose a packing that a 1.x may change. Compare Klotski positions with `==`.
 - **Breaking:** `FindReachableAnchors` and `ReconstructHookPath` moved from `PolyominoState<TBitboard>` to the static class `PolyominoFloodFill`, with the bitboard type as a method type argument: `PolyominoFloodFill.FindReachableAnchors<Bitboard64>(...)`, or inferred when a mask argument is a bitboard.
+- **Breaking:** `NPuzzleState`, `NPuzzleDomain` and `NPuzzleMove` are `NPuzzle4x4State`, `NPuzzle4x4Domain` and `NPuzzle4x4Move`: they are the 4x4 board only, and the general names stay free for a size-generic N-puzzle.
+- **Breaking:** a position's hash is a `Hash` property on every state: `PolyominoState.ZobristHash` is `Hash`, and `ILaneState<TState>.Hash()` is a property.
+- **Breaking:** `PuzzleTopology.Width` and `Height` are `Columns` and `Rows`, like `LaneSlideDomain` and `PushDomain`; the builder, `CreateBuilder`, `PuzzleTopologyBuilder.Normalize` and the flood fill name their parameters `columns`, `rows` and `boardColumns`.
+- **Breaking:** removed the duplicates `PolyominoState.TotalOccupancy` (use `OccupancyMask`) and `PolyominoDomain.GoalGroupId`, `GoalAnchor` and `GoalPosition` (use `Goal.GroupId`, `Goal.Anchor` and `Goal.Position`).
 
 - Shunting fouling sets: `ShuntingTrackBuilder.AddFoulingSet`, `ShuntingTrack.FoulingSets` and the `foul` keyword in `ShuntingMap`. At most one slot
   of a set may hold a piece, so a wagon left just past a switch blocks the other leg.

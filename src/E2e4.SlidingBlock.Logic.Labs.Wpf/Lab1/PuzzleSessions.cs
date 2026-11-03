@@ -166,12 +166,12 @@ public abstract class PuzzleSession<TState, TMove> : PuzzleSession
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-public sealed class NPuzzleSession : PuzzleSession<NPuzzleState, NPuzzleMove>
+public sealed class NPuzzleSession : PuzzleSession<NPuzzle4x4State, NPuzzle4x4Move>
 {
-    private readonly NPuzzleDomain _n;
-    private NPuzzleState _scrambled;
+    private readonly NPuzzle4x4Domain _n;
+    private NPuzzle4x4State _scrambled;
 
-    private NPuzzleSession(NPuzzleDomain d) : base(d)
+    private NPuzzleSession(NPuzzle4x4Domain d) : base(d)
     {
         _n = d;
         _scrambled = PuzzleWalk.RandomWalk(d, d.Goal, 30, new Random(15));
@@ -218,7 +218,7 @@ public sealed class NPuzzleSession : PuzzleSession<NPuzzleState, NPuzzleMove>
         return new GroupInfo(tile == 0 ? Palette.Slate : DrawHelpers.Hue(tile * 24), tile == 0 ? "blank" : $"tile {tile}", $"cell {cell}");
     }
 
-    protected override IReadOnlyList<PieceView> BuildPieces(NPuzzleState s)
+    protected override IReadOnlyList<PieceView> BuildPieces(NPuzzle4x4State s)
     {
         var list = new List<PieceView>();
         for (int sq = 0; sq < 16; sq++)
@@ -230,19 +230,19 @@ public sealed class NPuzzleSession : PuzzleSession<NPuzzleState, NPuzzleMove>
         return list;
     }
 
-    protected override MoveView Describe(NPuzzleState s, NPuzzleMove m, int index) =>
+    protected override MoveView Describe(NPuzzle4x4State s, NPuzzle4x4Move m, int index) =>
         new(index, s.TileAt(m.From), (m.To >> 2) - (m.From >> 2), (m.To & 3) - (m.From & 3));
 
-    protected override ulong RegisterOf(NPuzzleState s) => s.PackedNibbles;
+    protected override ulong RegisterOf(NPuzzle4x4State s) => s.PackedNibbles;
 
-    protected override ulong OccupancyOf(NPuzzleState s)
+    protected override ulong OccupancyOf(NPuzzle4x4State s)
     {
         ulong occ = 0;
         for (int sq = 0; sq < 16; sq++) if (s.TileAt(sq) != 0) occ |= 1UL << sq;
         return occ;
     }
 
-    protected override string BuildTrace(NPuzzleState before, NPuzzleMove m, NPuzzleState after)
+    protected override string BuildTrace(NPuzzle4x4State before, NPuzzle4x4Move m, NPuzzle4x4State after)
     {
         ulong tile = (before.PackedNibbles >> (m.From << 2)) & 0xF;
         ulong mask = before.SlideMask(m.From);
@@ -309,7 +309,7 @@ public sealed class KlotskiSession : PuzzleSession<KlotskiState, KlotskiMove>
         {
             var g = t.Groups[p.GroupId];
             int a = s.AnchorOf(p.PieceId);
-            var cells = g.RelativeCells.Select(x => (a / t.Width + x.dRow, a % t.Width + x.dCol)).ToArray();
+            var cells = g.RelativeCells.Select(x => (a / t.Columns + x.dRow, a % t.Columns + x.dCol)).ToArray();
             list.Add(new PieceView(p.PieceId, p.PieceId == _k.MasterPieceId ? "2x2" : "", DrawHelpers.Hex(LabPuzzles.KlotskiColors[g.Name]), cells));
         }
         return list;
@@ -317,7 +317,7 @@ public sealed class KlotskiSession : PuzzleSession<KlotskiState, KlotskiMove>
 
     protected override MoveView Describe(KlotskiState s, KlotskiMove m, int index)
     {
-        int w = _k.Topology.Width;
+        int w = _k.Topology.Columns;
         return new MoveView(index, m.Piece, m.To / w - m.From / w, m.To % w - m.From % w);
     }
 
@@ -333,8 +333,8 @@ public sealed class KlotskiSession : PuzzleSession<KlotskiState, KlotskiMove>
         ulong delta = (KlotskiState.SpreadCells(pieceMask.Value) ^ KlotskiState.SpreadCells(target.Value)) * (ulong)(g.GroupId + 1);
         var sb = new StringBuilder();
         sb.Append(CultureInfo.InvariantCulture, $"piece '{piece.Label}' ({g.Name}, shape class {g.GroupId + 1}) anchor {m.From} -> {m.To}\n\n");
-        int dr = m.To / t.Width - m.From / t.Width, dc = m.To % t.Width - m.From % t.Width;
-        int width = t.Width, column = m.From % width;
+        int dr = m.To / t.Columns - m.From / t.Columns, dc = m.To % t.Columns - m.From % t.Columns;
+        int width = t.Columns, column = m.From % width;
         (string dir, string edgeTest) = (dr, dc) switch
         {
             (0, -1) => ("left", $"anchor column > 0  ({column} > 0)"),

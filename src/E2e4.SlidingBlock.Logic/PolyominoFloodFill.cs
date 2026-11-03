@@ -7,10 +7,10 @@ namespace E2e4.SlidingBlock.Logic;
 /// </summary>
 public static class PolyominoFloodFill
 {
-    private static void CheckStart<TBitboard>(int startAnchor, int boardWidth)
+    private static void CheckStart<TBitboard>(int startAnchor, int boardColumns)
         where TBitboard : unmanaged, IBitboard<TBitboard>
     {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(boardWidth);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(boardColumns);
         if ((uint)startAnchor >= (uint)Math.Min(Grid.BitWidth<TBitboard>(), 128))
             throw new ArgumentOutOfRangeException(nameof(startAnchor), startAnchor, "The start anchor must be a cell of the board.");
     }
@@ -80,18 +80,18 @@ public static class PolyominoFloodFill
     /// sliding one square at a time, including multi-step corner "hook" paths. Entry masks stop shifts
     /// from wrapping across rows. <paramref name="validByDir"/> (one mask per direction) restricts which anchors a step may enter, e.g. for diodes and partitions.
     /// </summary>
-    public static TBitboard FindReachableAnchors<TBitboard>(int startAnchor, TBitboard baseMask, TBitboard validAnchorsMask, TBitboard otherOccupancy, int boardWidth,
+    public static TBitboard FindReachableAnchors<TBitboard>(int startAnchor, TBitboard baseMask, TBitboard validAnchorsMask, TBitboard otherOccupancy, int boardColumns,
         AllowedDirections directions = AllowedDirections.Both, GridGeometry geometry = GridGeometry.Orthogonal4Way, ReadOnlySpan<TBitboard> validByDir = default)
         where TBitboard : unmanaged, IBitboard<TBitboard>
     {
-        CheckStart<TBitboard>(startAnchor, boardWidth);
+        CheckStart<TBitboard>(startAnchor, boardColumns);
         int count = Grid.DirectionCount(geometry);
         Span<int> deltas = stackalloc int[Grid.MaxDirections];
         Span<TBitboard> entry = stackalloc TBitboard[Grid.MaxDirections];
         for (int d = 0; d < count; d++)
         {
-            deltas[d] = Grid.Delta(boardWidth, d);
-            entry[d] = Grid.EntryMask<TBitboard>(d, boardWidth);
+            deltas[d] = Grid.Delta(boardColumns, d);
+            entry[d] = Grid.EntryMask<TBitboard>(d, boardColumns);
         }
         return Flood(startAnchor, baseMask, validAnchorsMask, otherOccupancy, directions, deltas.Slice(0, count), entry.Slice(0, count), validByDir);
     }
@@ -101,17 +101,17 @@ public static class PolyominoFloodFill
     /// Destinations whose shortest path keeps one axis are returned in <paramref name="straightMovesMask"/>, those that turn a corner in
     /// <paramref name="hookMovesMask"/>. The result is the union of the two.
     /// </summary>
-    public static TBitboard FindReachableAnchors<TBitboard>(int startAnchor, TBitboard baseMask, TBitboard validAnchorsMask, TBitboard otherOccupancy, int boardWidth,
+    public static TBitboard FindReachableAnchors<TBitboard>(int startAnchor, TBitboard baseMask, TBitboard validAnchorsMask, TBitboard otherOccupancy, int boardColumns,
         Span<sbyte> parentMap, out TBitboard straightMovesMask, out TBitboard hookMovesMask, AllowedDirections directions = AllowedDirections.Both,
         GridGeometry geometry = GridGeometry.Orthogonal4Way, ReadOnlySpan<TBitboard> validByDir = default)
         where TBitboard : unmanaged, IBitboard<TBitboard>
     {
-        CheckStart<TBitboard>(startAnchor, boardWidth);
+        CheckStart<TBitboard>(startAnchor, boardColumns);
         if (parentMap.Length <= startAnchor) throw new ArgumentException("The parent map must hold every cell of the board.", nameof(parentMap));
         TBitboard free = FreeAnchors(startAnchor, baseMask, validAnchorsMask, otherOccupancy);
         Span<int> dirs = stackalloc int[Grid.MaxDirections], deltas = stackalloc int[Grid.MaxDirections];
         Span<TBitboard> entry = stackalloc TBitboard[Grid.MaxDirections];
-        int n = Prepare(boardWidth, directions, geometry, dirs, deltas, entry);
+        int n = Prepare(boardColumns, directions, geometry, dirs, deltas, entry);
         int bits = Grid.BitWidth<TBitboard>();
 
         parentMap.Fill(-1);
@@ -152,7 +152,7 @@ public static class PolyominoFloodFill
             bool hook = false;
             for (int a = dest; a != startAnchor; a = parentMap[a])
             {
-                int axis = AxisOfStep(a - parentMap[a], boardWidth, geometry);
+                int axis = AxisOfStep(a - parentMap[a], boardColumns, geometry);
                 if (firstAxis < 0) firstAxis = axis;
                 else if (axis != firstAxis) hook = true;
             }
@@ -170,11 +170,11 @@ public static class PolyominoFloodFill
 
     /// <summary>Shortest step-by-step anchor trajectory (start..target inclusive) or empty if unreachable.</summary>
     public static IReadOnlyList<int> ReconstructHookPath<TBitboard>(int startAnchor, int targetAnchor, TBitboard baseMask, TBitboard validAnchorsMask,
-        TBitboard otherOccupancy, int boardWidth, AllowedDirections directions = AllowedDirections.Both,
+        TBitboard otherOccupancy, int boardColumns, AllowedDirections directions = AllowedDirections.Both,
         GridGeometry geometry = GridGeometry.Orthogonal4Way, ReadOnlySpan<TBitboard> validByDir = default)
         where TBitboard : unmanaged, IBitboard<TBitboard>
     {
-        CheckStart<TBitboard>(startAnchor, boardWidth);
+        CheckStart<TBitboard>(startAnchor, boardColumns);
         if (startAnchor == targetAnchor) return [startAnchor];
         TBitboard free = FreeAnchors(startAnchor, baseMask, validAnchorsMask, otherOccupancy);
         int bits = Grid.BitWidth<TBitboard>();
@@ -191,8 +191,8 @@ public static class PolyominoFloodFill
             int a = queue[head++];
             for (int d = 0; d < Grid.DirectionCount(geometry); d++)
             {
-                if (!Grid.IsAllowed(directions, d) || !Grid.StepStaysOnBoard(a, d, boardWidth, cells)) continue;
-                int n = a + Grid.Delta(boardWidth, d);
+                if (!Grid.IsAllowed(directions, d) || !Grid.StepStaysOnBoard(a, d, boardColumns, cells)) continue;
+                int n = a + Grid.Delta(boardColumns, d);
                 if (parent[n] != -1 || !free.HasBit(n)) continue;
                 if (!validByDir.IsEmpty && !validByDir[d].HasBit(n)) continue;
                 parent[n] = a;

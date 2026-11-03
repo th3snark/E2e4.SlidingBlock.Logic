@@ -6,7 +6,7 @@ Many bitboard engines pad the board with sentinel wall columns so that shifts ca
 help with overhanging shapes. This engine precomputes, per equivalence group, a mask `ValidAnchorsMask[g]` when the topology is built:
 
 > Bit `s` is set iff, in 2D `(row, col)` coordinates, placing every cell of the shape relative to anchor `s` stays inside
-> `[0..Height-1, 0..Width-1]` and avoids static wall squares.
+> `[0..Rows-1, 0..Columns-1]` and avoids static wall squares.
 
 At run time a single bit test proves a placement is safe:
 

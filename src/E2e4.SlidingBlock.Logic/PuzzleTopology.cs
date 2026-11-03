@@ -10,11 +10,11 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBitb
     /// <summary>Columns of <see cref="ZobristTable"/>: enough for a <c>UInt128</c> board.</summary>
     internal const int ZobristColumns = 128;
 
-    internal PuzzleTopology(int width, int height, GridGeometry geometry, TBitboard walls, EquivalenceGroup<TBitboard>[] groups,
+    internal PuzzleTopology(int columns, int rows, GridGeometry geometry, TBitboard walls, EquivalenceGroup<TBitboard>[] groups,
         PieceTemplate[] pieces, DirectionalDiode[] diodes, PressurePlateRule<TBitboard>[] plates, Partition[] partitions)
     {
-        Width = width;
-        Height = height;
+        Columns = columns;
+        Rows = rows;
         Geometry = geometry;
         StaticWallsMask = walls;
         GroupTable = groups;
@@ -26,8 +26,8 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBitb
         EntryTable = new TBitboard[_deltas.Length];
         for (int d = 0; d < _deltas.Length; d++)
         {
-            _deltas[d] = Grid.Delta(width, d);
-            EntryTable[d] = Grid.EntryMask<TBitboard>(d, width);
+            _deltas[d] = Grid.Delta(columns, d);
+            EntryTable[d] = Grid.EntryMask<TBitboard>(d, columns);
         }
         ZobristTable = BuildZobrist(groups.Length);
         Groups = Array.AsReadOnly(groups);
@@ -59,16 +59,16 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBitb
     internal ReadOnlySpan<int> DeltaTable => _deltas;
 
     /// <summary>Columns of the board.</summary>
-    public int Width { get; }
+    public int Columns { get; }
 
     /// <summary>Rows of the board.</summary>
-    public int Height { get; }
+    public int Rows { get; }
 
     /// <summary>How the cells touch: four neighbours or six.</summary>
     public GridGeometry Geometry { get; }
 
-    /// <summary>Cells on the board: <see cref="Width"/> times <see cref="Height"/>.</summary>
-    public int CellCount => Width * Height;
+    /// <summary>Cells on the board: <see cref="Columns"/> times <see cref="Rows"/>.</summary>
+    public int CellCount => Columns * Rows;
 
     /// <summary>The number of directions a step can take: 4 on an orthogonal board, 6 on a hex one.</summary>
     public int DirectionCount => _deltas.Length;
@@ -119,9 +119,9 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBitb
     /// <summary>The cells piece <paramref name="pieceId"/> covers if its <em>starting</em> shape is anchored on <paramref name="anchor"/> (a rotated piece has another shape).</summary>
     public TBitboard PieceMask(int pieceId, int anchor) => Groups[Pieces[pieceId].GroupId].BaseMask.ShiftLeft(anchor);
 
-    /// <summary>Starts describing a board of <paramref name="width"/> x <paramref name="height"/> cells.</summary>
-    public static PuzzleTopologyBuilder<TBitboard> CreateBuilder(int width, int height, GridGeometry geometry = GridGeometry.Orthogonal4Way) =>
-        new(width, height, geometry);
+    /// <summary>Starts describing a board of <paramref name="columns"/> x <paramref name="rows"/> cells.</summary>
+    public static PuzzleTopologyBuilder<TBitboard> CreateBuilder(int columns, int rows, GridGeometry geometry = GridGeometry.Orthogonal4Way) =>
+        new(columns, rows, geometry);
 
     private static ulong[,] BuildZobrist(int groups)
     {
@@ -157,7 +157,7 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBitb
     /// <summary>True when a partition lies between two cells of the square box of <paramref name="size"/> cells whose top-left cell is <paramref name="origin"/>.</summary>
     internal bool HasPartitionWithin(int origin, int size)
     {
-        int row0 = origin / Width, col0 = origin % Width;
+        int row0 = origin / Columns, col0 = origin % Columns;
         foreach (var partition in PartitionTable)
         {
             int other = partition.Cell + _deltas[partition.Direction];
@@ -165,7 +165,7 @@ public sealed class PuzzleTopology<TBitboard> where TBitboard : unmanaged, IBitb
         }
         return false;
 
-        bool Inside(int cell) => (uint)(cell / Width - row0) < (uint)size && (uint)(cell % Width - col0) < (uint)size;
+        bool Inside(int cell) => (uint)(cell / Columns - row0) < (uint)size && (uint)(cell % Columns - col0) < (uint)size;
     }
 
     private TBitboard[] BuildValidAnchorsByDir()
@@ -208,7 +208,7 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
         public int[] RingOffsets { get; init; } = [];
     }
 
-    private readonly int _width, _height;
+    private readonly int _columns, _rows;
     private readonly GridGeometry _geometry;
     private TBitboard _walls;
     private readonly List<GroupDef> _groups = [];
@@ -218,20 +218,20 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     private readonly List<Partition> _partitions = [];
 
     /// <summary>
-    /// Starts describing a board of <paramref name="width"/> x <paramref name="height"/> cells.
+    /// Starts describing a board of <paramref name="columns"/> x <paramref name="rows"/> cells.
     /// </summary>
-    /// <param name="width">Columns.</param>
-    /// <param name="height">Rows.</param>
+    /// <param name="columns">The number of columns.</param>
+    /// <param name="rows">The number of rows.</param>
     /// <param name="geometry">How the cells touch.</param>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="width"/> or <paramref name="height"/> is below 1, or the board has more cells than the bitboard has bits.</exception>
-    public PuzzleTopologyBuilder(int width, int height, GridGeometry geometry = GridGeometry.Orthogonal4Way)
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="columns"/> or <paramref name="rows"/> is below 1, or the board has more cells than the bitboard has bits.</exception>
+    public PuzzleTopologyBuilder(int columns, int rows, GridGeometry geometry = GridGeometry.Orthogonal4Way)
     {
-        ArgumentOutOfRangeException.ThrowIfLessThan(width, 1);
-        ArgumentOutOfRangeException.ThrowIfLessThan(height, 1);
-        if ((long)width * height > Grid.BitWidth<TBitboard>())
-            throw new ArgumentOutOfRangeException(nameof(height), $"A board of {width} x {height} cells does not fit in {Grid.BitWidth<TBitboard>()} bits.");
-        _width = width;
-        _height = height;
+        ArgumentOutOfRangeException.ThrowIfLessThan(columns, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(rows, 1);
+        if ((long)columns * rows > Grid.BitWidth<TBitboard>())
+            throw new ArgumentOutOfRangeException(nameof(rows), $"A board of {columns} x {rows} cells does not fit in {Grid.BitWidth<TBitboard>()} bits.");
+        _columns = columns;
+        _rows = rows;
         _geometry = geometry;
     }
 
@@ -240,7 +240,7 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     public PuzzleTopologyBuilder<TBitboard> AddWall(int row, int col)
     {
         CheckCell(row, col);
-        _walls = _walls.Or(Bit<TBitboard>.One.ShiftLeft(row * _width + col));
+        _walls = _walls.Or(Bit<TBitboard>.One.ShiftLeft(row * _columns + col));
         return this;
     }
 
@@ -249,7 +249,7 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     public PuzzleTopologyBuilder<TBitboard> AddDiode(int row, int col, byte allowedEntryDirectionsMask)
     {
         CheckCell(row, col);
-        _diodes.Add(new DirectionalDiode(row * _width + col, allowedEntryDirectionsMask));
+        _diodes.Add(new DirectionalDiode(row * _columns + col, allowedEntryDirectionsMask));
         return this;
     }
 
@@ -263,10 +263,10 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     {
         CheckCell(row, col);
         if ((uint)direction >= (uint)Grid.DirectionCount(_geometry)) throw new ArgumentOutOfRangeException(nameof(direction));
-        int cell = row * _width + col;
-        if (!Grid.StepStaysOnBoard(cell, direction, _width, _width * _height))
+        int cell = row * _columns + col;
+        if (!Grid.StepStaysOnBoard(cell, direction, _columns, _columns * _rows))
             throw new ArgumentException("A partition lies between two cells of the board.", nameof(direction));
-        int delta = Grid.Delta(_width, direction);
+        int delta = Grid.Delta(_columns, direction);
         var partition = delta > 0 ? new Partition(cell, direction) : new Partition(cell + delta, direction ^ 1);
         if (!_partitions.Contains(partition)) _partitions.Add(partition);
         return this;
@@ -274,8 +274,8 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
 
     private void CheckCell(int row, int col)
     {
-        if ((uint)row >= (uint)_height) throw new ArgumentOutOfRangeException(nameof(row), "The cell is not on the board.");
-        if ((uint)col >= (uint)_width) throw new ArgumentOutOfRangeException(nameof(col), "The cell is not on the board.");
+        if ((uint)row >= (uint)_rows) throw new ArgumentOutOfRangeException(nameof(row), "The cell is not on the board.");
+        if ((uint)col >= (uint)_columns) throw new ArgumentOutOfRangeException(nameof(col), "The cell is not on the board.");
     }
 
     /// <summary>Adds a plate: while a piece on an elevation in <paramref name="triggerElevationMask"/> covers a trigger cell, the gate cells open (or, if not <paramref name="normallyClosed"/>, close).</summary>
@@ -283,7 +283,7 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     public PuzzleTopologyBuilder<TBitboard> AddPressurePlate(TBitboard triggerCellsMask, TBitboard gateCellsMask, byte triggerElevationMask = 0b01,
         bool normallyClosed = true)
     {
-        TBitboard board = Bit<TBitboard>.All.ShiftRight(Grid.BitWidth<TBitboard>() - _width * _height);
+        TBitboard board = Bit<TBitboard>.All.ShiftRight(Grid.BitWidth<TBitboard>() - _columns * _rows);
         if (!triggerCellsMask.AndNot(board).IsEmpty) throw new ArgumentException("The trigger cells are not all on the board.", nameof(triggerCellsMask));
         if (!gateCellsMask.AndNot(board).IsEmpty) throw new ArgumentException("The gate cells are not all on the board.", nameof(gateCellsMask));
         _plates.Add(new PressurePlateRule<TBitboard>(triggerCellsMask, gateCellsMask, triggerElevationMask, normallyClosed));
@@ -297,7 +297,7 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
         byte elevationMask = 0b01, SlidePhysics physics = SlidePhysics.ContinuousFloodFill, RoleFlags roles = RoleFlags.None)
     {
         ArgumentNullException.ThrowIfNull(name);
-        var (baseMask, rel) = Normalize(cells, _width);
+        var (baseMask, rel) = Normalize(cells, _columns);
         _groups.Add(new GroupDef(name, rel, baseMask, directions, elevationMask, physics, roles));
         return _groups.Count - 1;
     }
@@ -317,7 +317,7 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
         int minR = start.Min(c => c.dRow), minC = start.Min(c => c.dCol);
         start = start.Select(c => (c.dRow - minR, c.dCol - minC)).ToList();
         int n = Math.Max(start.Max(c => c.dRow), start.Max(c => c.dCol)) + 1;
-        if (n > _width || n > _height) throw new ArgumentException("The rotation box does not fit on the board.", nameof(cells));
+        if (n > _columns || n > _rows) throw new ArgumentException("The rotation box does not fit on the board.", nameof(cells));
 
         var orientations = new List<List<(int dRow, int dCol)>>();
         var current = start;
@@ -330,11 +330,11 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
         }
 
         int first = _groups.Count, len = orientations.Count;
-        var offsets = orientations.Select(o => o[0].dRow * _width + o[0].dCol).ToArray();
+        var offsets = orientations.Select(o => o[0].dRow * _columns + o[0].dCol).ToArray();
         var ids = new List<int>();
         for (int i = 0; i < len; i++)
         {
-            var (baseMask, rel) = Normalize(orientations[i], _width);
+            var (baseMask, rel) = Normalize(orientations[i], _columns);
             _groups.Add(new GroupDef(name, rel, baseMask, directions, elevationMask, physics, roles)
             {
                 RingStart = first,
@@ -379,7 +379,7 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
                 int next = d.RingStart + (i + 1) % len, prev = d.RingStart + (i + len - 1) % len;
                 TBitboard box = Bit<TBitboard>.Zero;
                 for (int r = 0; r < d.BoxSize; r++)
-                    for (int c = 0; c < d.BoxSize; c++) box = box.Or(Bit<TBitboard>.One.ShiftLeft(r * _width + c));
+                    for (int c = 0; c < d.BoxSize; c++) box = box.Or(Bit<TBitboard>.One.ShiftLeft(r * _columns + c));
                 group = group with
                 {
                     CanRotate = true,
@@ -410,20 +410,20 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
                 layers[layer] = layers[layer].Or(m);
             }
         }
-        return new PuzzleTopology<TBitboard>(_width, _height, _geometry, _walls, groups.ToArray(), _pieces.ToArray(), _diodes.ToArray(), _plates.ToArray(), _partitions.ToArray());
+        return new PuzzleTopology<TBitboard>(_columns, _rows, _geometry, _walls, groups.ToArray(), _pieces.ToArray(), _diodes.ToArray(), _plates.ToArray(), _partitions.ToArray());
     }
 
     private TBitboard ComputeValidAnchors(IReadOnlyList<(int dRow, int dCol)> rel)
     {
         TBitboard valid = Bit<TBitboard>.Zero;
-        for (int s = 0; s < _width * _height; s++)
+        for (int s = 0; s < _columns * _rows; s++)
         {
-            int r = s / _width, c = s % _width;
+            int r = s / _columns, c = s % _columns;
             bool ok = true;
             foreach (var (dr, dc) in rel)
             {
                 int rr = r + dr, cc = c + dc;
-                if (rr < 0 || rr >= _height || cc < 0 || cc >= _width || _walls.HasBit(rr * _width + cc)) { ok = false; break; }
+                if (rr < 0 || rr >= _rows || cc < 0 || cc >= _columns || _walls.HasBit(rr * _columns + cc)) { ok = false; break; }
             }
             if (ok) valid = valid.Or(Bit<TBitboard>.One.ShiftLeft(s));
         }
@@ -443,16 +443,16 @@ public sealed class PuzzleTopologyBuilder<TBitboard> where TBitboard : unmanaged
     /// LSB normalization: lay the cells in their bounding box, then shift right by tzcnt so the first
     /// occupied cell in row-major order sits on bit 0. Also returns cells relative to that first cell.
     /// </summary>
-    public static (TBitboard BaseMask, IReadOnlyList<(int dRow, int dCol)> RelativeCells) Normalize(IEnumerable<(int dRow, int dCol)> cells, int boardWidth)
+    public static (TBitboard BaseMask, IReadOnlyList<(int dRow, int dCol)> RelativeCells) Normalize(IEnumerable<(int dRow, int dCol)> cells, int boardColumns)
     {
         ArgumentNullException.ThrowIfNull(cells);
         var list = Canonical(cells);
         int minR = list.Min(c => c.dRow), minC = list.Min(c => c.dCol), maxC = list.Max(c => c.dCol);
-        if (maxC - minC + 1 > boardWidth) throw new ArgumentException("Piece is wider than the board.", nameof(cells));
+        if (maxC - minC + 1 > boardColumns) throw new ArgumentException("Piece is wider than the board.", nameof(cells));
         TBitboard raw = Bit<TBitboard>.Zero;
         foreach (var (r, c) in list)
         {
-            int bit = (r - minR) * boardWidth + (c - minC);
+            int bit = (r - minR) * boardColumns + (c - minC);
             if (bit >= Grid.BitWidth<TBitboard>()) throw new ArgumentException("Piece does not fit in the bitboard.", nameof(cells));
             raw = raw.Or(Bit<TBitboard>.One.ShiftLeft(bit));
         }

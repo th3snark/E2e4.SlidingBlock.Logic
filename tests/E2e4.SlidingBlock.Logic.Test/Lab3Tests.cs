@@ -61,10 +61,10 @@ public class Lab3RotationTests
             s = mode.Domain.ApplyMove(s, Rotation(mode, s, true)!.Value);
             Assert.Equal(groups[i], s.GroupOf(Master));
             Assert.Equal(anchors[i], s.AnchorOf(Master));
-            Assert.Equal(Cells.HashOf(topo, s), s.ZobristHash);
+            Assert.Equal(Cells.HashOf(topo, s), s.Hash);
         }
         Assert.Equal(start, s);
-        Assert.Equal(start.ZobristHash, s.ZobristHash);
+        Assert.Equal(start.Hash, s.Hash);
         for (int g = 0; g < topo.Groups.Count; g++) Assert.Equal(start.GroupAnchorsOf(g), s.GroupAnchorsOf(g));
     }
 
@@ -134,11 +134,11 @@ public class Lab3CarrierTests
         var topo = mode.Domain.Topology;
         var s = mode.Domain.InitialState;
         var move = Lab3Helpers.MovesOf(mode, s, Carrier).Single(m => m.DirectionIndex == 1);
-        ulong expected = s.ZobristHash;
+        ulong expected = s.Hash;
         foreach (var d in move.AsSpan()) expected ^= topo.ZobristKey(d.OldGroupId, d.OldAnchor) ^ topo.ZobristKey(d.NewGroupId, d.NewAnchor);
         s = mode.Domain.ApplyMove(s, move);
-        Assert.Equal(expected, s.ZobristHash);
-        Assert.Equal(Cells.HashOf(topo, s), s.ZobristHash);
+        Assert.Equal(expected, s.Hash);
+        Assert.Equal(Cells.HashOf(topo, s), s.Hash);
     }
 
     [Fact]

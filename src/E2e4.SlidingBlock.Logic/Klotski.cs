@@ -26,7 +26,7 @@ public readonly struct KlotskiState : IEquatable<KlotskiState>
     public KlotskiState(PuzzleTopology<Bitboard64> topology)
     {
         ArgumentNullException.ThrowIfNull(topology);
-        if (topology.Width * topology.Height > MaxCells) throw new ArgumentException($"At most {MaxCells} cells fit the 64-bit shape key.");
+        if (topology.Columns * topology.Rows > MaxCells) throw new ArgumentException($"At most {MaxCells} cells fit the 64-bit shape key.");
         if (topology.Pieces.Count > MaxPieces) throw new ArgumentException($"At most {MaxPieces} pieces.");
         if (topology.Groups.Count > MaxShapes) throw new ArgumentException($"At most {MaxShapes} shape classes fit in 3 bits.");
         var anchors = new KlotskiAnchorBuffer();
@@ -162,7 +162,7 @@ public sealed class KlotskiDomain : ISlidingBlockDomain<KlotskiState, KlotskiMov
     /// <inheritdoc/>
     public int GenerateMoves(in KlotskiState state, Span<KlotskiMove> moveBuffer)
     {
-        int w = Topology.Width, n = 0;
+        int w = Topology.Columns, n = 0;
         foreach (var p in Topology.PieceTable)
         {
             var g = Topology.GroupTable[p.GroupId];

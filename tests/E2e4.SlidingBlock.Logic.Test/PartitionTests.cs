@@ -82,8 +82,8 @@ public class PartitionTests
         b.AddPartition(1, 2, GridDirection.Right).AddPartition(1, 3, GridDirection.Left).AddPartition(2, 4, GridDirection.Up);
         var topo = b.Build();
         Assert.Equal([new Partition(7, GridDirection.Right), new Partition(9, GridDirection.Down)], topo.Partitions);
-        Assert.Equal(8, topo.Partitions[0].Neighbour(topo.Width));
-        Assert.Equal(14, topo.Partitions[1].Neighbour(topo.Width));
+        Assert.Equal(8, topo.Partitions[0].Neighbour(topo.Columns));
+        Assert.Equal(14, topo.Partitions[1].Neighbour(topo.Columns));
         Assert.Equal(Cells.Bits(8, 14), topo.ForbiddenEntryCells(GridDirection.Right) | topo.ForbiddenEntryCells(GridDirection.Down));
         Assert.Equal(Cells.Bits(7), topo.ForbiddenEntryCells(GridDirection.Left));
         Assert.Equal(Cells.Bits(9), topo.ForbiddenEntryCells(GridDirection.Up));

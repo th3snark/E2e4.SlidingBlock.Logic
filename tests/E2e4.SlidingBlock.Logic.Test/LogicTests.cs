@@ -185,7 +185,7 @@ public class SymmetryTests
         Assert.Equal(b, swapped.AnchorOf(3));
         Assert.Equal(a, swapped.AnchorOf(4));
         Assert.Equal(s.GroupAnchorsOf(3), swapped.GroupAnchorsOf(3));
-        Assert.Equal(s.ZobristHash, swapped.ZobristHash);
+        Assert.Equal(s.Hash, swapped.Hash);
         Assert.Equal(s.OccupancyMask, swapped.OccupancyMask);
         Assert.True(s.Equals(swapped));
         Assert.Equal(s.GetHashCode(), swapped.GetHashCode());
@@ -208,7 +208,7 @@ public class SymmetryTests
                 h ^= d.Topology.ZobristKey(p.GroupId, s.AnchorOf(p.PieceId));
                 occ |= d.Topology.PieceMask(p.PieceId, s.AnchorOf(p.PieceId)).Value;
             }
-            Assert.Equal(h, s.ZobristHash);
+            Assert.Equal(h, s.Hash);
             Assert.Equal(occ, s.OccupancyMask);
         }
     }
@@ -244,8 +244,8 @@ public class DomainTests
     public void NPuzzleGoalIsSuppliedByTheCaller()
     {
         // Same board, goal with the blank in the bottom-right corner: the engine has no opinion on where the blank belongs.
-        var goal = new NPuzzleState(0x0FEDCBA987654321UL);
-        var domain = new NPuzzleDomain(goal, goal);
+        var goal = new NPuzzle4x4State(0x0FEDCBA987654321UL);
+        var domain = new NPuzzle4x4Domain(goal, goal);
         Assert.Equal(15, goal.BlankIndex);
         Assert.True(domain.IsGoal(goal));
         Assert.False(domain.IsGoal(Fixtures.Puzzle15Solved));
@@ -270,7 +270,7 @@ public class DomainTests
     {
         var solved = Fixtures.CreatePuzzle15();
         var start = PuzzleWalk.RandomWalk(solved, solved.Goal, 25, new Random(3));
-        var domain = new NPuzzleDomain(start, solved.Goal);
+        var domain = new NPuzzle4x4Domain(start, solved.Goal);
         var result = new PuzzleSolver().SolveIdaStar(domain, start, domain.ManhattanDistance);
         Assert.True(result.IsSolved);
         var s = start;
@@ -413,10 +413,10 @@ public class LabSpecTests
 
 public class PlaySessionTests
 {
-    private static PlaySession<NPuzzleState, NPuzzleMove> NewSession(out NPuzzleDomain domain)
+    private static PlaySession<NPuzzle4x4State, NPuzzle4x4Move> NewSession(out NPuzzle4x4Domain domain)
     {
         domain = Fixtures.CreatePuzzle15();
-        return new PlaySession<NPuzzleState, NPuzzleMove>(domain, PuzzleWalk.RandomWalk(domain, domain.Goal, 12, new Random(5)));
+        return new PlaySession<NPuzzle4x4State, NPuzzle4x4Move>(domain, PuzzleWalk.RandomWalk(domain, domain.Goal, 12, new Random(5)));
     }
 
     [Fact]
@@ -424,7 +424,7 @@ public class PlaySessionTests
     {
         var play = NewSession(out var domain);
         var start = play.State;
-        Span<NPuzzleMove> buf = stackalloc NPuzzleMove[domain.MaxMoves];
+        Span<NPuzzle4x4Move> buf = stackalloc NPuzzle4x4Move[domain.MaxMoves];
         domain.GenerateMoves(play.State, buf);
         play.Apply(buf[0]);
         Assert.Equal(1, play.MoveCount);
@@ -442,7 +442,7 @@ public class PlaySessionTests
     public void RedoReplaysUndoneMovesUntilANewMoveIsPlayed()
     {
         var play = NewSession(out var domain);
-        Span<NPuzzleMove> buf = stackalloc NPuzzleMove[domain.MaxMoves];
+        Span<NPuzzle4x4Move> buf = stackalloc NPuzzle4x4Move[domain.MaxMoves];
         domain.GenerateMoves(play.State, buf);
         play.Apply(buf[0]);
         var afterFirst = play.State;
@@ -474,8 +474,8 @@ public class PolyominoGoalPositionTests
         var lab = Fixtures.CreateLab2();
         var topo = lab.Topology;
         var domain = new PolyominoDomain<Bitboard64>(topo, lab.InitialState);
-        Assert.NotNull(domain.GoalPosition);
-        Assert.Equal(-1, domain.GoalGroupId);
+        Assert.NotNull(domain.Goal.Position);
+        Assert.Equal(-1, domain.Goal.GroupId);
         Assert.True(domain.IsGoal(domain.InitialState));
 
         // Swapping the two identical 1x1 blocks (pieces 3 and 4) is still the goal; moving a different piece is not.
@@ -483,7 +483,7 @@ public class PolyominoGoalPositionTests
         var swapped = lab.InitialState.WithPieceMoved(topo, 3, 24).WithPieceMoved(topo, 4, a).WithPieceMoved(topo, 3, b);
         Assert.True(domain.IsGoal(swapped));
         Assert.False(domain.IsGoal(lab.InitialState.WithPieceMoved(topo, 3, 24)));
-        Assert.Null(lab.GoalPosition);
+        Assert.Null(lab.Goal.Position);
     }
 
     [Fact]

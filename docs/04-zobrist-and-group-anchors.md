@@ -25,7 +25,7 @@ anchor on square `s`. A move updates it with one XOR:
 GroupAnchors[g] ^= (1UL << oldAnchor) | (1UL << newAnchor);
 ```
 
-`PolyominoState.Equals` and `GetHashCode` use only `GroupAnchors` and `ZobristHash`. The per-piece anchor buffer exists purely so a UI
+`PolyominoState.Equals` and `GetHashCode` use only `GroupAnchors` and `Hash` (the Zobrist hash). The per-piece anchor buffer exists purely so a UI
 can remember which piece is which.
 
 ## 4.4 Why swapping identical pieces changes nothing
@@ -44,7 +44,7 @@ sorting. The `Swap Identical 1x1 Pieces` button in Lab 2 demonstrates this live,
 ```mermaid
 flowchart LR
     S0["State<br/>A@2, B@14"] -- swap --> S1["State<br/>A@14, B@2"]
-    S0 --- G["GroupAnchors[3] = bits {2, 14}<br/>ZobristHash = rest ^ Z[3,2] ^ Z[3,14]"]
+    S0 --- G["GroupAnchors[3] = bits {2, 14}<br/>Hash = rest ^ Z[3,2] ^ Z[3,14]"]
     S1 --- G
 ```
 

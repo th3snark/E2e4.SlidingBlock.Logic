@@ -114,7 +114,7 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
     /// <inheritdoc/>
     public bool IsGoal(in PolyominoState<TBitboard> state) => Goal.IsReached(state);
     /// <inheritdoc/>
-    public ulong GetHashCode64(in PolyominoState<TBitboard> state) => state.ZobristHash;
+    public ulong GetHashCode64(in PolyominoState<TBitboard> state) => state.Hash;
 
     /// <inheritdoc/>
     public PolyominoState<TBitboard> ApplyMove(in PolyominoState<TBitboard> state, in CompositeMove move)
@@ -153,7 +153,7 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
                 {
                     int target = Grid.Lsb(r), dir = -2;
                     for (int d = 0; d < deltas.Length; d++)
-                        if (target - a == deltas[d] && Grid.StepStaysOnBoard(a, d, topo.Width, topo.CellCount)) dir = d;
+                        if (target - a == deltas[d] && Grid.StepStaysOnBoard(a, d, topo.Columns, topo.CellCount)) dir = d;
                     Add(state, walls, CompositeMove.Single(id, g.GroupId, a, target, dir), moveBuffer, ref n);
                 }
             }
@@ -178,7 +178,7 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
         if ((uint)nextAnchor >= (uint)topo.CellCount || !topo.GroupTable[next].ValidAnchorsMask.HasBit(nextAnchor)) return false;
 
         int boxOrigin = a + g.BoxOriginDelta, size = g.RotationBoxSize;
-        if (boxOrigin < 0 || boxOrigin % topo.Width + size > topo.Width || boxOrigin / topo.Width + size > topo.Height) return false;
+        if (boxOrigin < 0 || boxOrigin % topo.Columns + size > topo.Columns || boxOrigin / topo.Columns + size > topo.Rows) return false;
         TBitboard blocked = MoveGen<TBitboard>.OtherOccupancy(topo, state, g, a, walls).Or(topo.StaticWallsMask);
         if (blocked.Intersects(g.SweptClearanceMask.ShiftLeft(boxOrigin))) return false;
         if (topo.PartitionTable.Length > 0 && topo.HasPartitionWithin(boxOrigin, size)) return false;
@@ -191,7 +191,7 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
     {
         move = default;
         var topo = Topology;
-        int delta = Grid.Delta(topo.Width, dir);
+        int delta = Grid.Delta(topo.Columns, dir);
         Span<int> members = stackalloc int[CompositeMove.MaxPieces], depth = stackalloc int[CompositeMove.MaxPieces];
         int count = 1;
         members[0] = pieceId;
@@ -207,7 +207,7 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
             {
                 int m = members[i], am = state.AnchorOf(m);
                 var gm = topo.GroupTable[state.GroupOf(m)];
-                if (!Grid.IsAllowed(gm.Directions, dir) || !Grid.StepStaysOnBoard(am, dir, topo.Width, topo.CellCount)) return false;
+                if (!Grid.IsAllowed(gm.Directions, dir) || !Grid.StepStaysOnBoard(am, dir, topo.Columns, topo.CellCount)) return false;
                 int nxt = am + delta;
                 if (!Grid.Has(topo.ValidAnchorsFor(gm.GroupId, dir), nxt)) return false;
                 TBitboard foot = gm.BaseMask.ShiftLeft(nxt);
@@ -250,7 +250,7 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
     private bool GatherMagnetic(in PolyominoState<TBitboard> state, Span<int> members, Span<int> depth, ref int count)
     {
         var topo = Topology;
-        int w = topo.Width;
+        int w = topo.Columns;
         TBitboard notCol0 = Grid.EntryMask<TBitboard>(1, w), notLast = Grid.EntryMask<TBitboard>(0, w);
         bool changed;
         do

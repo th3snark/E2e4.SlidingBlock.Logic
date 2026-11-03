@@ -36,7 +36,7 @@ public interface ILaneState<TState> : IEquatable<TState> where TState : struct, 
     ulong Word(int index);
 
     /// <summary>A 64-bit hash of the position.</summary>
-    ulong Hash();
+    ulong Hash { get; }
 }
 
 /// <summary>A position of up to 16 vehicles, in one 64-bit word.</summary>
@@ -56,7 +56,7 @@ public readonly struct LaneState16 : ILaneState<LaneState16>
     /// <inheritdoc/>
     public LaneState16 WithOffset(int vehicle, int offset) => new((_word & ~(0xFUL << (4 * vehicle))) | ((ulong)(offset & 0xF) << (4 * vehicle)));
     /// <inheritdoc/>
-    public ulong Hash() => Hashing.Mix(_word);
+    public ulong Hash => Hashing.Mix(_word);
 
     /// <inheritdoc/>
     public bool Equals(LaneState16 other) => _word == other._word;
@@ -106,14 +106,14 @@ public readonly struct LaneState64 : ILaneState<LaneState64>
     }
 
     /// <inheritdoc/>
-    public ulong Hash() => Hashing.Mix(_w0, _w1, _w2, _w3);
+    public ulong Hash => Hashing.Mix(_w0, _w1, _w2, _w3);
 
     /// <inheritdoc/>
     public bool Equals(LaneState64 other) => _w0 == other._w0 && _w1 == other._w1 && _w2 == other._w2 && _w3 == other._w3;
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is LaneState64 s && Equals(s);
     /// <inheritdoc/>
-    public override int GetHashCode() => Hash().GetHashCode();
+    public override int GetHashCode() => Hash.GetHashCode();
     /// <summary>True if both positions have every vehicle at the same offset.</summary>
     public static bool operator ==(LaneState64 left, LaneState64 right) => left.Equals(right);
     /// <summary>True if the positions differ.</summary>
@@ -293,7 +293,7 @@ public sealed class LaneSlideDomain<TState, TBitboard> : ISlidingBlockDomain<TSt
     public TState ApplyMove(in TState state, in LaneMove move) => state.WithOffset(move.Vehicle, move.Offset);
 
     /// <inheritdoc/>
-    public ulong GetHashCode64(in TState state) => state.Hash();
+    public ulong GetHashCode64(in TState state) => state.Hash;
 
     private TBitboard MaskOf(LaneVehicle v, int offset)
     {

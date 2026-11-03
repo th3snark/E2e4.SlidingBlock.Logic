@@ -25,7 +25,7 @@ nibble:    F  E  D  C ... 3  2  1  0      0xFEDCBA9876543210  (solved: tile k on
   `v' = v ^ (tile << 4b) ^ (tile << 4t)`, because the blank nibble is `0`.
 - The blank is found with the has-zero-nibble trick and `tzcnt`: `tzcnt((v - 0x1111...) & ~v & 0x8888...) >> 2`.
 - IDA* solvers also keep an *inverse* `ulong` (nibble `tile` holds its square) for O(1) pattern-database lookups
-  (Korf & Felner, 2002). `NPuzzleState.InverseMap` provides it.
+  (Korf & Felner, 2002). `NPuzzle4x4State.InverseMap` provides it.
 
 ## 1.2 Axis-constrained puzzles: 1D offset packing (Rush Hour)
 
@@ -59,7 +59,7 @@ Pieces move in two dimensions and several are identical. A naive "piece id per c
 
 | Puzzle | State | Bits | Identity of a position | Hash |
 |--------|-------|------|------------------------|------|
-| 15-puzzle | `NPuzzleState` | 64 (16 x 4) | the `ulong` | multiplicative mix of the `ulong` |
+| 15-puzzle | `NPuzzle4x4State` | 64 (16 x 4) | the `ulong` | multiplicative mix of the `ulong` |
 | Rush Hour | `LaneState16` | 64 (16 x 4) | the packed offsets | multiplicative mix |
 | Garages | `LaneState64` | up to 256 (64 x 4) | the packed offsets | fold of four words (`Hashing.Mix`) |
 | Klotski | `KlotskiState` | 60 (20 x 3) | `CanonicalShapeKey` | multiplicative mix of the key |

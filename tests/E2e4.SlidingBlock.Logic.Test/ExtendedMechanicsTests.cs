@@ -41,7 +41,7 @@ public class WideBoardAndHexTests
         var domain = new PolyominoDomain<Bitboard128>(topo, 0, 70);
         var s = domain.InitialState;
         Assert.Equal(topo.Groups[0].BaseMask << 95, s.OccupancyMask);
-        Assert.Equal(topo.ZobristKey(0, 95), s.ZobristHash);
+        Assert.Equal(topo.ZobristKey(0, 95), s.Hash);
 
         Span<PolyominoMove> moves = stackalloc PolyominoMove[domain.MaxMoves];
         int n = domain.GenerateMoves(s, moves);
@@ -49,10 +49,10 @@ public class WideBoardAndHexTests
         Assert.Contains(new PolyominoMove(0, 70), moves[..n].ToArray());
 
         var moved = domain.ApplyMove(s, new PolyominoMove(0, 70));
-        Assert.Equal(topo.ZobristKey(0, 70), moved.ZobristHash);
+        Assert.Equal(topo.ZobristKey(0, 70), moved.Hash);
         Assert.Equal(topo.Groups[0].BaseMask << 70, moved.OccupancyMask);
         Assert.True(domain.IsGoal(moved));
-        Assert.Equal(Cells.HashOf(topo, moved), moved.ZobristHash);
+        Assert.Equal(Cells.HashOf(topo, moved), moved.Hash);
         Assert.Equal(70, (moved.OccupancyMask).Lsb);
         Assert.Equal(2, moved.OccupancyMask.PopCount());
     }
@@ -124,10 +124,10 @@ public class RotationTests
             var cw = buffer.Take(n).Single(m => m.DirectionIndex == -1 && m.AsSpan()[0].NewGroupId == topo.Groups[s.GroupOf(0)].NextCwGroupId);
             s = domain.ApplyMove(s, cw);
             Assert.Equal(ring[i % 4], s.GroupOf(0));
-            Assert.Equal(Cells.HashOf(topo, s), s.ZobristHash);
+            Assert.Equal(Cells.HashOf(topo, s), s.Hash);
         }
         Assert.Equal(start, s);
-        Assert.Equal(start.ZobristHash, s.ZobristHash);
+        Assert.Equal(start.Hash, s.Hash);
         Assert.Equal(5, s.AnchorOf(0));
     }
 
@@ -183,7 +183,7 @@ public class CoupledKinematicsTests
         {
             var move = MovesOf(domain, s, 0).Single(m => m.DirectionIndex == dir);
             s = domain.ApplyMove(s, move);
-            Assert.Equal(Cells.HashOf(topo, s), s.ZobristHash);
+            Assert.Equal(Cells.HashOf(topo, s), s.Hash);
         }
     }
 
