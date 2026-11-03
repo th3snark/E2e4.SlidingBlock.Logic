@@ -21,11 +21,16 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: 10.0.x
-      - name: Check the tag is a version
+      - name: Check the tag is the version of the build
         if: github.event_name == 'push'
         run: |
           if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "Tag $GITHUB_REF_NAME is not of the form vX.Y.Z"
+            exit 1
+          fi
+          prefix=$(sed -n 's:.*<VersionPrefix>\(.*\)</VersionPrefix>.*:\1:p' Directory.Build.props | tr -d '\r')
+          if [ "${GITHUB_REF_NAME#v}" != "$prefix" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match VersionPrefix $prefix in Directory.Build.props"
             exit 1
           fi
       - name: Test
