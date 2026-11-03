@@ -50,6 +50,7 @@
       <PackedReadmeText>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../../README.md'))</PackedReadmeText>
       <PackedReadmeText>$([System.Text.RegularExpressions.Regex]::Replace('$(PackedReadmeText)', '(?m)^&lt;img src="([^"]+)" alt="([^"]*)"[^\r\n]*', '![$2]($(RepoRaw)$1)'))</PackedReadmeText>
       <PackedReadmeText>$([System.Text.RegularExpressions.Regex]::Replace('$(PackedReadmeText)', '\]\((?!https?:|#)([^)]+)\)', ']($(RepoBlob)$1)'))</PackedReadmeText>
+      <PackedReadmeText>$(PackedReadmeText.Replace('github.com/th3snark/E2e4.SlidingBlock.Logic/blob/master/', 'github.com/th3snark/E2e4.SlidingBlock.Logic/blob/v$(Version)/'))</PackedReadmeText>
     </PropertyGroup>
     <WriteLinesToFile File="$(PackedReadme)" Lines="$([MSBuild]::Escape('$(PackedReadmeText)'))" Overwrite="true" />
     <ItemGroup>

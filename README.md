@@ -65,4 +65,4 @@ See [CONTRIBUTING.md](https://github.com/th3snark/E2e4.SlidingBlock.Logic/blob/m
 
 ## Licence
 
-MIT, see [LICENSE](https://github.com/th3snark/E2e4.SlidingBlock.Logic/blob/master/LICENSE). No dependencies.
+MIT, see [LICENSE](https://github.com/th3snark/E2e4.SlidingBlock.Logic/blob/master/LICENSE). No dependencies on `net10.0` and `net8.0`; `netstandard2.0` needs only `System.Memory`.
