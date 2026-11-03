@@ -12,9 +12,9 @@ public class ShuntingRuleTests
         return b.Build();
     }
 
-    private static ShuntingDomain<ulong> Domain(int slots, params ShuntingGroup[] groups) => new(Line(slots), groups, new([]));
+    private static ShuntingDomain<Bitboard64> Domain(int slots, params ShuntingGroup[] groups) => new(Line(slots), groups, new([]));
 
-    private static List<ShuntingMove> Moves(ShuntingDomain<ulong> domain)
+    private static List<ShuntingMove> Moves(ShuntingDomain<Bitboard64> domain)
     {
         var buffer = new ShuntingMove[domain.MaxMoves];
         int n = domain.GenerateMoves(domain.InitialState, buffer);

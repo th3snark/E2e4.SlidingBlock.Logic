@@ -30,7 +30,7 @@ public static class TopologyMap
     /// <exception cref="ArgumentException">The diagram is empty or ragged, or a symbol on it is missing from the legend.</exception>
     public static PuzzleTopology<TBitboard> Parse<TBitboard>(IReadOnlyList<string> rows, IReadOnlyList<(char Symbol, PieceKind Kind)> legend,
         GridGeometry geometry = GridGeometry.Orthogonal4Way, char wall = '#', char empty = '.')
-        where TBitboard : unmanaged, System.Numerics.IBinaryInteger<TBitboard>, System.Numerics.IUnsignedNumber<TBitboard>
+        where TBitboard : unmanaged, IBitboard<TBitboard>
     {
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(legend);

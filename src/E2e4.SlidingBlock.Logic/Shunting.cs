@@ -22,7 +22,7 @@ namespace E2e4.SlidingBlock.Logic;
 /// </para>
 /// </remarks>
 public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TBitboard>, ShuntingMove>
-    where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>
+    where TBitboard : unmanaged, IBitboard<TBitboard>
 {
     private const int MaxTrain = 32;
     private const int MaxActiveEdges = 4;
@@ -156,7 +156,7 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
     {
         for (int g = 0; g < _groups.Length; g++)
         {
-            if (_hasGoal[g] && (state.Anchors[g] & ~_goalSlots[g]) != TBitboard.Zero) return false;
+            if (_hasGoal[g] && !state.Anchors[g].AndNot(_goalSlots[g]).IsEmpty) return false;
         }
         foreach (var fg in Goal.Fronts)
         {
@@ -176,7 +176,7 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
             D = this,
             S = state,
             Out = moveBuffer,
-            FSlot = scratch[..w],
+            FSlot = scratch.Slice(0, w),
             FExit = scratch.Slice(w, w),
             FEnter = scratch.Slice(2 * w, w),
             BSlot = scratch.Slice(3 * w, w),
@@ -229,15 +229,15 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
         for (int i = 0; i < count; i++)
         {
             int g = group[i] = GroupAt(state, from[i]);
-            TBitboard both = Bit(from[i]) | Bit(to[i]);
-            next.Anchors[g] ^= both;
-            next.OccupancyBits ^= both;
+            TBitboard both = Bit(from[i]).Or(Bit(to[i]));
+            next.Anchors[g] = next.Anchors[g].Xor(both);
+            next.OccupancyBits = next.OccupancyBits.Xor(both);
             next.Hash ^= _zSlot[g * _track.SlotCount + from[i]] ^ _zSlot[g * _track.SlotCount + to[i]];
         }
         for (int i = 0; i < count; i++)
         {
             if (!Grid.Has(state.HeadingBits, from[i])) continue;
-            next.HeadingBits &= ~Bit(from[i]);
+            next.HeadingBits = next.HeadingBits.AndNot(Bit(from[i]));
             next.Hash ^= _zHead[from[i]];
         }
         for (int i = 0; i < count; i++)
@@ -246,7 +246,7 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
             int front = Grid.Has(state.HeadingBits, from[i]) ? 1 : 0;
             if (exit[i] == enter[i]) front ^= 1;
             if (front == 0) continue;
-            next.HeadingBits |= Bit(to[i]);
+            next.HeadingBits = next.HeadingBits.Or(Bit(to[i]));
             next.Hash ^= _zHead[to[i]];
         }
 
@@ -311,7 +311,7 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
         };
     }
 
-    private static TBitboard Bit(int slot) => TBitboard.One << slot;
+    private static TBitboard Bit(int slot) => Bit<TBitboard>.One.ShiftLeft(slot);
 
     /// <summary>
     /// How many engines <paramref name="move"/> sends the other way from their last movement since they were at rest: the engine that drives, and
@@ -353,21 +353,21 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
     {
         foreach (var mask in _fouling)
         {
-            var held = occupancy & mask;
-            if ((held & (held - TBitboard.One)) != TBitboard.Zero) return false;
+            var held = occupancy.And(mask);
+            if (!held.ClearLowest().IsEmpty) return false;
         }
         return true;
     }
 
-    private static TBitboard AllSlots(int slots) => (TBitboard.One << (slots - 1)) | ((TBitboard.One << (slots - 1)) - TBitboard.One);
+    private static TBitboard AllSlots(int slots) => Bit<TBitboard>.All.ShiftRight(Bit<TBitboard>.Width - slots);
 
     private static TBitboard MaskOf(IReadOnlyList<int> slotList, int slots, string what, string paramName)
     {
-        var mask = TBitboard.Zero;
+        var mask = Bit<TBitboard>.Zero;
         foreach (int s in slotList)
         {
             if ((uint)s >= (uint)slots) throw new ArgumentException($"{what} slot {s}, which is outside the track of {slots} slots.", paramName);
-            mask |= Bit(s);
+            mask = mask.Or(Bit(s));
         }
         return mask;
     }
@@ -423,14 +423,14 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
                 if ((uint)slot >= (uint)slots) throw new ArgumentException($"Group {g} starts on slot {slot}, which is outside the track.");
                 if (Grid.Has(state.OccupancyBits, slot)) throw new ArgumentException($"Two pieces start on slot {slot}.");
                 if (!Grid.Has(_allowed[g], slot)) throw new ArgumentException($"Group {g} starts on slot {slot}, which it may not enter.");
-                state.Anchors[g] |= Bit(slot);
-                state.OccupancyBits |= Bit(slot);
+                state.Anchors[g] = state.Anchors[g].Or(Bit(slot));
+                state.OccupancyBits = state.OccupancyBits.Or(Bit(slot));
                 state.Hash ^= _zSlot[g * slots + slot];
                 int front = group.StartFronts?[i] ?? 0;
                 if (front is not (0 or 1)) throw new ArgumentException($"A front is end 0 or 1, not {front}.");
                 if (front == 1 && _tracked[g])
                 {
-                    state.HeadingBits |= Bit(slot);
+                    state.HeadingBits = state.HeadingBits.Or(Bit(slot));
                     state.Hash ^= _zHead[slot];
                 }
             }
@@ -507,12 +507,12 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
             {
                 int g = GroupAt(state, s);
                 if (g < 0) continue;
-                next.Anchors[g] ^= Bit(s);
-                next.OccupancyBits ^= Bit(s);
+                next.Anchors[g] = next.Anchors[g].Xor(Bit(s));
+                next.OccupancyBits = next.OccupancyBits.Xor(Bit(s));
                 next.Hash ^= _zSlot[g * slots + s];
                 if (Grid.Has(state.HeadingBits, s))
                 {
-                    next.HeadingBits &= ~Bit(s);
+                    next.HeadingBits = next.HeadingBits.AndNot(Bit(s));
                     next.Hash ^= _zHead[s];
                 }
             }
@@ -521,12 +521,12 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
                 int s = bridge[i], m = bridge[bridge.Count - 1 - i];
                 int g = GroupAt(state, s);
                 if (g < 0) continue;
-                next.Anchors[g] ^= Bit(m);
-                next.OccupancyBits ^= Bit(m);
+                next.Anchors[g] = next.Anchors[g].Xor(Bit(m));
+                next.OccupancyBits = next.OccupancyBits.Xor(Bit(m));
                 next.Hash ^= _zSlot[g * slots + m];
                 if (_tracked[g] && !Grid.Has(state.HeadingBits, s))
                 {
-                    next.HeadingBits |= Bit(m);
+                    next.HeadingBits = next.HeadingBits.Or(Bit(m));
                     next.Hash ^= _zHead[m];
                 }
             }
@@ -567,7 +567,7 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
                 FSlot[depth + 1] = e.To;
                 FEnter[depth + 1] = e.ToEnd;
                 FChoices = (FChoices & ~(3UL << (2 * depth))) | ((ulong)c << (2 * depth));
-                Visited |= Bit(e.To);
+                Visited = Visited.Or(Bit(e.To));
                 if (Grid.Has(S.OccupancyBits, e.To))
                 {
                     FExit[depth + 1] = 1 - e.ToEnd;
@@ -585,13 +585,13 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
                         if (CanPull()) Rear(0);
                     }
                 }
-                Visited &= ~Bit(e.To);
+                Visited = Visited.AndNot(Bit(e.To));
             }
         }
 
         /// <summary>True if no fouling set holds two pieces once the train has moved into FSlot[FLen] and left <paramref name="vacated"/> empty.</summary>
         private readonly bool FoulingClear(int vacated) =>
-            D._fouling.Length == 0 || D.FoulingClear((S.OccupancyBits | Bit(FSlot[FLen])) & ~Bit(vacated));
+            D._fouling.Length == 0 || D.FoulingClear(S.OccupancyBits.Or(Bit(FSlot[FLen])).AndNot(Bit(vacated)));
 
         private readonly bool FrontIsLegal()
         {
@@ -634,9 +634,9 @@ public sealed class ShuntingDomain<TBitboard> : IWeightedDomain<ShuntingState<TB
                 BTrail[depth + 1] = 1 - e.ToEnd;
                 RChoices = (RChoices & ~(3UL << (2 * depth))) | ((ulong)c << (2 * depth));
                 if (CutAllowed(e.To, 1 - e.ToEnd) && FoulingClear(e.To)) Add(new ShuntingMove((byte)Engine, (byte)Lead, (byte)FLen, (byte)(depth + 1), FChoices, RChoices));
-                Visited |= Bit(e.To);
+                Visited = Visited.Or(Bit(e.To));
                 Rear(depth + 1);
-                Visited &= ~Bit(e.To);
+                Visited = Visited.AndNot(Bit(e.To));
             }
         }
     }

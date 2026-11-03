@@ -16,7 +16,7 @@ internal static class Cells
         return m;
     }
 
-    public static ulong HashOf<T>(PuzzleTopology<T> topology, PolyominoState<T> state) where T : unmanaged, IBinaryInteger<T>, IUnsignedNumber<T>
+    public static ulong HashOf<T>(PuzzleTopology<T> topology, PolyominoState<T> state) where T : unmanaged, IBitboard<T>
     {
         ulong h = 0;
         foreach (var p in topology.Pieces) h ^= topology.ZobristKey(state.GroupOf(p.PieceId), state.AnchorOf(p.PieceId));
@@ -29,16 +29,16 @@ public class WideBoardAndHexTests
     [Fact]
     public void UInt128BoardUsesBitsBeyond63()
     {
-        var b = PuzzleTopology<UInt128>.CreateBuilder(10, 10);
+        var b = PuzzleTopology<Bitboard128>.CreateBuilder(10, 10);
         int domino = b.AddGroup("domino", Cells.Domino);
         b.AddPiece(domino, "d", 95);
         var topo = b.Build();
 
-        Assert.Equal(UInt128.One | (UInt128.One << 1), topo.Groups[0].BaseMask);
-        Assert.Equal(UInt128.One, (topo.Groups[0].ValidAnchorsMask >> 98) & UInt128.One);
-        Assert.Equal(UInt128.Zero, (topo.Groups[0].ValidAnchorsMask >> 99) & UInt128.One);   // would wrap onto the next row
+        Assert.Equal(new Bitboard128(0b11, 0), topo.Groups[0].BaseMask);
+        Assert.Equal(new Bitboard128(1, 0), (topo.Groups[0].ValidAnchorsMask >> 98) & new Bitboard128(1, 0));
+        Assert.Equal(default, (topo.Groups[0].ValidAnchorsMask >> 99) & new Bitboard128(1, 0));   // would wrap onto the next row
 
-        var domain = new PolyominoDomain<UInt128>(topo, 0, 70);
+        var domain = new PolyominoDomain<Bitboard128>(topo, 0, 70);
         var s = domain.InitialState;
         Assert.Equal(topo.Groups[0].BaseMask << 95, s.OccupancyMask);
         Assert.Equal(topo.ZobristKey(0, 95), s.ZobristHash);
@@ -54,13 +54,13 @@ public class WideBoardAndHexTests
         Assert.True(domain.IsGoal(moved));
         Assert.Equal(Cells.HashOf(topo, moved), moved.ZobristHash);
         Assert.Equal(70, (moved.OccupancyMask).Lsb);
-        Assert.Equal(2, moved.OccupancyMask.BitCount);
+        Assert.Equal(2, moved.OccupancyMask.PopCount());
     }
 
     [Fact]
     public void HexBoardMovesInSixDirectionsWithoutWrapping()
     {
-        var b = PuzzleTopology<ulong>.CreateBuilder(5, 5, GridGeometry.HexagonalAxial);
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(5, 5, GridGeometry.HexagonalAxial);
         int g = b.AddGroup("hex", Cells.One, AllowedDirections.Both, physics: SlidePhysics.SingleStep);
         b.AddPiece(g, "a", 12);
         b.AddPiece(g, "b", 14);
@@ -68,7 +68,7 @@ public class WideBoardAndHexTests
 
         Assert.Equal([-1, 1, -5, 5, -4, 4], topo.GetDirectionDeltas().ToArray());
 
-        var domain = new PolyominoDomain<ulong>(topo, 0, 0);
+        var domain = new PolyominoDomain<Bitboard64>(topo, 0, 0);
         var s = domain.InitialState;
         Assert.Equal(Cells.Bits(11, 13, 7, 17, 8, 16), domain.ReachableFor(s, 0));
         // Column 4: no east step, and the north-east step would wrap onto row 2's column 0.
@@ -78,18 +78,18 @@ public class WideBoardAndHexTests
     [Fact]
     public void HexFloodFillReachesEveryCell()
     {
-        var b = PuzzleTopology<ulong>.CreateBuilder(5, 5, GridGeometry.HexagonalAxial);
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(5, 5, GridGeometry.HexagonalAxial);
         b.AddPiece(b.AddGroup("hex", Cells.One), "a", 12);
-        var domain = new PolyominoDomain<ulong>(b.Build(), 0, 0);
+        var domain = new PolyominoDomain<Bitboard64>(b.Build(), 0, 0);
         Assert.Equal((1UL << 25) - 1 - (1UL << 12), domain.ReachableFor(domain.InitialState, 0));
     }
 }
 
 public class RotationTests
 {
-    private static (PuzzleTopology<ulong> Topo, IReadOnlyList<int> Ring) Board(bool withObstacle)
+    private static (PuzzleTopology<Bitboard64> Topo, IReadOnlyList<int> Ring) Board(bool withObstacle)
     {
-        var b = PuzzleTopology<ulong>.CreateBuilder(4, 4);
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(4, 4);
         var ring = b.AddRotatableGroup("L", Cells.L);
         int one = b.AddGroup("one", Cells.One);
         b.AddPiece(ring[0], "L", 5);
@@ -114,7 +114,7 @@ public class RotationTests
     public void FullTurnRestoresPositionAndHash()
     {
         var (topo, ring) = Board(false);
-        var domain = new CompositeDomain<ulong>(new PolyominoDomain<ulong>(topo, 0, 0));
+        var domain = new CompositeDomain<Bitboard64>(new PolyominoDomain<Bitboard64>(topo, 0, 0));
         var start = domain.InitialState;
         var s = start;
         var buffer = new CompositeMove[domain.MaxMoves];
@@ -135,7 +135,7 @@ public class RotationTests
     public void ObstacleInTheEmptyCornerOfTheBoxBlocksRotation()
     {
         var (topo, _) = Board(true);
-        var domain = new CompositeDomain<ulong>(new PolyominoDomain<ulong>(topo, 0, 0));
+        var domain = new CompositeDomain<Bitboard64>(new PolyominoDomain<Bitboard64>(topo, 0, 0));
         var buffer = new CompositeMove[domain.MaxMoves];
         int n = domain.GenerateMoves(domain.InitialState, buffer);
         Assert.DoesNotContain(buffer.Take(n), m => m.DirectionIndex == -1);
@@ -144,18 +144,18 @@ public class RotationTests
 
 public class CoupledKinematicsTests
 {
-    private static (PuzzleTopology<ulong> Topo, CompositeDomain<ulong> Domain) UCarrier()
+    private static (PuzzleTopology<Bitboard64> Topo, CompositeDomain<Bitboard64> Domain) UCarrier()
     {
-        var b = PuzzleTopology<ulong>.CreateBuilder(6, 6);
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(6, 6);
         int u = b.AddGroup("U", Cells.U, physics: SlidePhysics.SingleStep, roles: RoleFlags.HollowCarrier);
         int block = b.AddGroup("block", Cells.One, roles: RoleFlags.Pushable);
         b.AddPiece(u, "U", 14);
         b.AddPiece(block, "b", 15);   // in the pocket
         var topo = b.Build();
-        return (topo, new CompositeDomain<ulong>(new PolyominoDomain<ulong>(topo, 0, 0)));
+        return (topo, new CompositeDomain<Bitboard64>(new PolyominoDomain<Bitboard64>(topo, 0, 0)));
     }
 
-    private static CompositeMove[] MovesOf(CompositeDomain<ulong> domain, PolyominoState<ulong> s, int pieceId)
+    private static CompositeMove[] MovesOf(CompositeDomain<Bitboard64> domain, PolyominoState<Bitboard64> s, int pieceId)
     {
         var buffer = new CompositeMove[domain.MaxMoves];
         int n = domain.GenerateMoves(s, buffer);
@@ -190,13 +190,13 @@ public class CoupledKinematicsTests
     [Fact]
     public void PusherShovesPushableAndStopsAtAWall()
     {
-        var b = PuzzleTopology<ulong>.CreateBuilder(4, 1);
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(4, 1);
         int pusher = b.AddGroup("pusher", Cells.One, roles: RoleFlags.Pusher);
         int crate = b.AddGroup("crate", Cells.One, roles: RoleFlags.Pushable);
         b.AddPiece(pusher, "p", 0);
         b.AddPiece(crate, "c", 1);
         var topo = b.Build();
-        var domain = new CompositeDomain<ulong>(new PolyominoDomain<ulong>(topo, 0, 0));
+        var domain = new CompositeDomain<Bitboard64>(new PolyominoDomain<Bitboard64>(topo, 0, 0));
 
         var east = MovesOf(domain, domain.InitialState, 0).Single(m => m.DirectionIndex == 1);
         Assert.Equal(2, east.Count);
@@ -212,17 +212,17 @@ public class RaycastTests
     [Fact]
     public void IceGlideEmitsOnlyTerminalAnchors()
     {
-        var b = PuzzleTopology<ulong>.CreateBuilder(6, 3);
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(6, 3);
         int ice = b.AddGroup("ice", Cells.One, physics: SlidePhysics.FrictionlessRaycast);
         int rock = b.AddGroup("rock", Cells.One, physics: SlidePhysics.SingleStep);
         b.AddPiece(ice, "i", 7);
         b.AddPiece(rock, "r", 10);
         var topo = b.Build();
-        var domain = new PolyominoDomain<ulong>(topo, 0, 0);
+        var domain = new PolyominoDomain<Bitboard64>(topo, 0, 0);
 
         Assert.Equal(Cells.Bits(6, 9, 1, 13), domain.ReachableFor(domain.InitialState, 0));
 
-        Span<RaycastTrace<ulong>> traces = stackalloc RaycastTrace<ulong>[6];
+        Span<RaycastTrace<Bitboard64>> traces = stackalloc RaycastTrace<Bitboard64>[6];
         int n = domain.TraceRaycast(domain.InitialState, 0, traces);
         var east = traces[..n].ToArray().Single(t => t.Direction == 1);
         Assert.Equal(9, east.TerminalAnchor);
@@ -236,13 +236,13 @@ public class ElevationTests
 {
     private static ulong ReachOfGround(byte groundElevation)
     {
-        var b = PuzzleTopology<ulong>.CreateBuilder(5, 1);
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(5, 1);
         int bridge = b.AddGroup("bridge", [(0, 0), (0, 1), (0, 2)], elevationMask: 0b10);
         int mover = b.AddGroup("mover", Cells.One, elevationMask: groundElevation);
         b.AddPiece(bridge, "B", 1);
         b.AddPiece(mover, "m", 0);
-        var domain = new PolyominoDomain<ulong>(b.Build(), 0, 0);
-        return domain.ReachableFor(domain.InitialState, 1);
+        var domain = new PolyominoDomain<Bitboard64>(b.Build(), 0, 0);
+        return domain.ReachableFor(domain.InitialState, 1).Value;
     }
 
     [Fact]
@@ -254,9 +254,9 @@ public class ElevationTests
 
 public class StatefulCellTests
 {
-    private static PuzzleTopology<ulong> Gated(int pieceA, int pieceB)
+    private static PuzzleTopology<Bitboard64> Gated(int pieceA, int pieceB)
     {
-        var b = PuzzleTopology<ulong>.CreateBuilder(6, 1);
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(6, 1);
         int one = b.AddGroup("one", Cells.One);
         b.AddPiece(one, "A", pieceA);
         b.AddPiece(one, "B", pieceB);
@@ -268,7 +268,7 @@ public class StatefulCellTests
     public void ClosedGateBlocksUntilTheTriggerIsOccupied()
     {
         var topo = Gated(1, 5);
-        var domain = new PolyominoDomain<ulong>(topo, 0, 0);
+        var domain = new PolyominoDomain<Bitboard64>(topo, 0, 0);
         var s = domain.InitialState;
         Assert.Equal(Cells.Bits(0, 2), domain.ReachableFor(s, 0));       // cannot get past the gate at 3
         Assert.Equal(Cells.Bits(4), domain.ReachableFor(s, 1));
@@ -282,7 +282,7 @@ public class StatefulCellTests
     public void SteppingOffTheTriggerIsIllegalWhileAPieceSitsInTheGate()
     {
         var topo = Gated(0, 3);
-        var domain = new PolyominoDomain<ulong>(topo, 0, 0);
+        var domain = new PolyominoDomain<Bitboard64>(topo, 0, 0);
         var buffer = new PolyominoMove[domain.MaxMoves];
         int n = domain.GenerateMoves(domain.InitialState, buffer);
         Assert.DoesNotContain(buffer.Take(n), m => m.PieceId == 0);
@@ -292,12 +292,12 @@ public class StatefulCellTests
     [Fact]
     public void DiodePermitsEastButBlocksWest()
     {
-        PolyominoDomain<ulong> Domain(int anchor)
+        PolyominoDomain<Bitboard64> Domain(int anchor)
         {
-            var b = PuzzleTopology<ulong>.CreateBuilder(5, 1);
+            var b = PuzzleTopology<Bitboard64>.CreateBuilder(5, 1);
             b.AddPiece(b.AddGroup("one", Cells.One), "a", anchor);
             b.AddDiode(0, 2, allowedEntryDirectionsMask: 1 << 1);   // entry only while travelling east
-            return new PolyominoDomain<ulong>(b.Build(), 0, 0);
+            return new PolyominoDomain<Bitboard64>(b.Build(), 0, 0);
         }
 
         var fromWest = Domain(1);

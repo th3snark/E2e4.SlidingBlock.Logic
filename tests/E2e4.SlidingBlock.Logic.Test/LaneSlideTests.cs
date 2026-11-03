@@ -18,10 +18,10 @@ public class LaneSlideTests
 
     private const string Symbols = "XBCDEFGH";
 
-    private static LaneSlideDomain<LaneState16, ulong> Rush(int maxStep) =>
+    private static LaneSlideDomain<LaneState16, Bitboard64> Rush(int maxStep) =>
         new(LaneDiagram.Parse(RushHourMap, Symbols), 6, 6, 0, 4, maxStep);
 
-    private static IReadOnlyList<LaneMove> Solve(LaneSlideDomain<LaneState16, ulong> d) => new PuzzleSolver().SolveBfs(d, d.InitialState)!.Moves;
+    private static IReadOnlyList<LaneMove> Solve(LaneSlideDomain<LaneState16, Bitboard64> d) => new PuzzleSolver().SolveBfs(d, d.InitialState).Moves;
 
     [Fact]
     public void ParseReadsLengthBreadthLaneAndOffset()
@@ -99,7 +99,7 @@ public class LaneSlideTests
     [Fact]
     public void ATruckTwoCellsBroadBlocksTheLaneBesideIt()
     {
-        var d = new LaneSlideDomain<LaneState16, ulong>(LaneDiagram.Parse(["TTT", "TTT", "...", "C..", "C.."], "TC"), 3, 5, 1, 0);
+        var d = new LaneSlideDomain<LaneState16, Bitboard64>(LaneDiagram.Parse(["TTT", "TTT", "...", "C..", "C.."], "TC"), 3, 5, 1, 0);
         Assert.Equal(2, d.Vehicles[0].Breadth);
         Assert.True(d.Vehicles[0].IsHorizontal);
         Assert.Equal([2], d.ReachableOffsets(d.InitialState, 1).ToArray());   // the car can slide up one cell and no further: the truck fills rows 0 and 1
@@ -110,7 +110,7 @@ public class LaneSlideTests
     public void ManyVehiclesOnABigBoardFitAndStatesHashAndCompareByPosition()
     {
         var rows = Enumerable.Range(0, 12).Select(r => $"{(char)('a' + r)}{(char)('a' + r)}........").ToArray();
-        var d = new LaneSlideDomain<LaneState64, UInt128>(LaneDiagram.Parse(rows, "abcdefghijkl"), 10, 12, 0, 8);
+        var d = new LaneSlideDomain<LaneState64, Bitboard128>(LaneDiagram.Parse(rows, "abcdefghijkl"), 10, 12, 0, 8);
         var a = d.ApplyMove(d.InitialState, new LaneMove(11, 5));
         var b = d.ApplyMove(a, new LaneMove(11, 0));
         Assert.Equal(d.InitialState, b);
@@ -123,11 +123,11 @@ public class LaneSlideTests
     public void RejectsBadArguments()
     {
         var one = LaneDiagram.Parse(["AA."], "A");
-        Assert.Throws<ArgumentOutOfRangeException>(() => new LaneSlideDomain<LaneState16, ulong>(one, 3, 1, 0, 2));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new LaneSlideDomain<LaneState16, ulong>(one, 3, 1, 0, 1, maxStep: 0));
-        Assert.Throws<ArgumentNullException>(() => new LaneSlideDomain<LaneState16, ulong>(null!, 3, 1, 0, 1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new LaneSlideDomain<LaneState16, ulong>(one, 0, 1, 0, 1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new LaneSlideDomain<LaneState16, ulong>(one, 3, -1, 0, 1));
-        Assert.Throws<ArgumentException>(() => new LaneSlideDomain<LaneState16, ulong>([.. Enumerable.Range(0, 65).Select(i => new LaneVehicle(i, true, 1, 1, 0, 0))], 1, 1, 0, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LaneSlideDomain<LaneState16, Bitboard64>(one, 3, 1, 0, 2));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LaneSlideDomain<LaneState16, Bitboard64>(one, 3, 1, 0, 1, maxStep: 0));
+        Assert.Throws<ArgumentNullException>(() => new LaneSlideDomain<LaneState16, Bitboard64>(null!, 3, 1, 0, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LaneSlideDomain<LaneState16, Bitboard64>(one, 0, 1, 0, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LaneSlideDomain<LaneState16, Bitboard64>(one, 3, -1, 0, 1));
+        Assert.Throws<ArgumentException>(() => new LaneSlideDomain<LaneState16, Bitboard64>([.. Enumerable.Range(0, 65).Select(i => new LaneVehicle(i, true, 1, 1, 0, 0))], 1, 1, 0, 0));
     }
 }

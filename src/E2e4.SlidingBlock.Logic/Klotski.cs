@@ -3,12 +3,6 @@ using System.Runtime.CompilerServices;
 
 namespace E2e4.SlidingBlock.Logic;
 
-[InlineArray(KlotskiState.MaxPieces)]
-internal struct KlotskiAnchorBuffer
-{
-    private byte _element0;
-}
-
 /// <summary>
 /// Klotski position: per-piece anchors (for UI identity), the occupancy bitboard (one bit per cell) and the
 /// canonical shape key (3 bits per cell, class = groupId + 1; 60 bits on the classic 4x5 board). Equality uses the key only, so swapping
@@ -29,7 +23,7 @@ public readonly struct KlotskiState : IEquatable<KlotskiState>
 
     /// <summary>Reads the starting position from the pieces of <paramref name="topology"/>.</summary>
     /// <exception cref="ArgumentException">More than 10 pieces, more than 7 shapes, or more than 21 cells (the key has 3 bits per cell in 64).</exception>
-    public KlotskiState(PuzzleTopology<ulong> topology)
+    public KlotskiState(PuzzleTopology<Bitboard64> topology)
     {
         ArgumentNullException.ThrowIfNull(topology);
         if (topology.Width * topology.Height > MaxCells) throw new ArgumentException($"At most {MaxCells} cells fit the 64-bit shape key.");
@@ -40,7 +34,7 @@ public readonly struct KlotskiState : IEquatable<KlotskiState>
         foreach (var p in topology.PieceTable)
         {
             anchors[p.PieceId] = (byte)p.InitialAnchor;
-            ulong m = topology.GroupTable[p.GroupId].BaseMask << p.InitialAnchor;
+            ulong m = topology.GroupTable[p.GroupId].BaseMask.Value << p.InitialAnchor;
             occ |= m;
             key |= SpreadCells(m) * (ulong)(p.GroupId + 1);
         }
@@ -66,17 +60,17 @@ public readonly struct KlotskiState : IEquatable<KlotskiState>
     public int AnchorOf(int pieceId) => _anchors[pieceId];
 
     /// <summary>Moves a piece (already validated) and updates occupancy and the shape key with XORs.</summary>
-    public KlotskiState WithPieceMoved(PuzzleTopology<ulong> topology, int pieceId, int newAnchor) =>
-        WithPieceMoved(topology, SpreadCells(topology.GroupTable[topology.PieceTable[pieceId].GroupId].BaseMask), pieceId, newAnchor);
+    public KlotskiState WithPieceMoved(PuzzleTopology<Bitboard64> topology, int pieceId, int newAnchor) =>
+        WithPieceMoved(topology, SpreadCells(topology.GroupTable[topology.PieceTable[pieceId].GroupId].BaseMask.Value), pieceId, newAnchor);
 
     /// <summary>
-    /// As <see cref="WithPieceMoved(PuzzleTopology{ulong},int,int)"/> with the spread base mask of the piece's group already at hand:
+    /// As <see cref="WithPieceMoved(PuzzleTopology{Bitboard64},int,int)"/> with the spread base mask of the piece's group already at hand:
     /// spreading a mask moved by a cells equals spreading it and shifting by 3a, so no bit loop is needed.
     /// </summary>
-    internal KlotskiState WithPieceMoved(PuzzleTopology<ulong> topology, ulong spreadBase, int pieceId, int newAnchor)
+    internal KlotskiState WithPieceMoved(PuzzleTopology<Bitboard64> topology, ulong spreadBase, int pieceId, int newAnchor)
     {
         int g = topology.PieceTable[pieceId].GroupId, old = _anchors[pieceId];
-        ulong baseMask = topology.GroupTable[g].BaseMask;
+        ulong baseMask = topology.GroupTable[g].BaseMask.Value;
         var anchors = _anchors;
         anchors[pieceId] = (byte)newAnchor;
         ulong key = CanonicalShapeKey ^ (((spreadBase << (3 * old)) ^ (spreadBase << (3 * newAnchor))) * (ulong)(g + 1));
@@ -89,7 +83,7 @@ public readonly struct KlotskiState : IEquatable<KlotskiState>
         ulong r = 0;
         while (mask != 0)
         {
-            int i = BitOperations.TrailingZeroCount(mask);
+            int i = BitOps.TrailingZeroCount(mask);
             r |= 1UL << (3 * i);
             mask &= mask - 1;
         }
@@ -128,7 +122,7 @@ public sealed class KlotskiDomain : ISlidingBlockDomain<KlotskiState, KlotskiMov
     /// <summary>The puzzle is solved when piece <paramref name="masterPieceId"/> sits on <paramref name="goalAnchor"/>.</summary>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="masterPieceId"/> is not a piece of the topology.</exception>
     /// <exception cref="ArgumentException">The master piece shares its shape with another piece (the position key could not tell them apart).</exception>
-    public KlotskiDomain(PuzzleTopology<ulong> topology, int masterPieceId, int goalAnchor)
+    public KlotskiDomain(PuzzleTopology<Bitboard64> topology, int masterPieceId, int goalAnchor)
     {
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentOutOfRangeException.ThrowIfNegative(masterPieceId);
@@ -142,13 +136,13 @@ public sealed class KlotskiDomain : ISlidingBlockDomain<KlotskiState, KlotskiMov
         GoalAnchor = goalAnchor;
         InitialState = new KlotskiState(topology);
         _spreadBase = new ulong[topology.GroupTable.Length];
-        for (int g = 0; g < _spreadBase.Length; g++) _spreadBase[g] = KlotskiState.SpreadCells(topology.GroupTable[g].BaseMask);
+        for (int g = 0; g < _spreadBase.Length; g++) _spreadBase[g] = KlotskiState.SpreadCells(topology.GroupTable[g].BaseMask.Value);
     }
 
     private readonly ulong[] _spreadBase;
 
     /// <summary>The board and pieces.</summary>
-    public PuzzleTopology<ulong> Topology { get; }
+    public PuzzleTopology<Bitboard64> Topology { get; }
 
     /// <summary>The piece that has to reach <see cref="GoalAnchor"/>.</summary>
     public int MasterPieceId { get; }
@@ -173,7 +167,7 @@ public sealed class KlotskiDomain : ISlidingBlockDomain<KlotskiState, KlotskiMov
         {
             var g = Topology.GroupTable[p.GroupId];
             int a = state.AnchorOf(p.PieceId);
-            ulong other = state.OccupancyMask ^ (g.BaseMask << a);
+            ulong other = state.OccupancyMask ^ (g.BaseMask.Value << a);
             int col = a % w;
             n = TryAdd(moveBuffer, n, p.PieceId, a, a - w, g, other, true);
             n = TryAdd(moveBuffer, n, p.PieceId, a, a + w, g, other, true);
@@ -183,12 +177,12 @@ public sealed class KlotskiDomain : ISlidingBlockDomain<KlotskiState, KlotskiMov
         return n;
     }
 
-    private static int TryAdd(Span<KlotskiMove> buf, int n, int piece, int from, int to, EquivalenceGroup<ulong> g, ulong other, bool edgeOk)
+    private static int TryAdd(Span<KlotskiMove> buf, int n, int piece, int from, int to, EquivalenceGroup<Bitboard64> g, ulong other, bool edgeOk)
     {
         // ValidAnchorsMask replaces sentinel walls; (to >= 0) guards the shift for negative targets.
         if (!edgeOk || to < 0 || to > 63) return n;
         if (((g.ValidAnchorsMask >> to) & 1UL) == 0) return n;
-        if (((g.BaseMask << to) & other) != 0) return n;
+        if (((g.BaseMask.Value << to) & other) != 0) return n;
         buf[n++] = new KlotskiMove((byte)piece, (byte)from, (byte)to);
         return n;
     }

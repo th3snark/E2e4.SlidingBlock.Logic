@@ -27,7 +27,7 @@ public sealed record EquivalenceGroup<TBitboard>(
     TBitboard ValidAnchorsMask,
     AllowedDirections Directions,
     IReadOnlyList<(int dRow, int dCol)> RelativeCells)
-    where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>
+    where TBitboard : unmanaged, IBitboard<TBitboard>
 {
     /// <summary>Bit 0 = ground layer, bit 1 = upper layer, 0b11 = full-height block.</summary>
     public byte ElevationMask { get; init; } = 0b01;

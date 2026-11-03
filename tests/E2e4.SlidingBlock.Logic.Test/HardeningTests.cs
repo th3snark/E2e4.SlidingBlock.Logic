@@ -34,26 +34,17 @@ public class HardeningTests
         var solver = new PuzzleSolver { MaxNodes = 3 };
         var roomy = new PuzzleSolver();
 
-        Assert.NotNull(roomy.SolveBfs(reachable, reachable.InitialState, out var status));
-        Assert.Equal(SolveStatus.Solved, status);
-        Assert.Null(solver.SolveBfs(new Line(9), new Spot(0), out status));
-        Assert.Equal(SolveStatus.NodeLimit, status);
-        Assert.Null(roomy.SolveBfs(unreachable, unreachable.InitialState, out status));
-        Assert.Equal(SolveStatus.Unsolvable, status);
+        Assert.Equal(SolveStatus.Solved, roomy.SolveBfs(reachable, reachable.InitialState).Status);
+        Assert.Equal(SolveStatus.NodeLimit, solver.SolveBfs(new Line(9), new Spot(0)).Status);
+        Assert.Equal(SolveStatus.Unsolvable, roomy.SolveBfs(unreachable, unreachable.InitialState).Status);
 
-        Assert.NotNull(roomy.SolveAStar(reachable, reachable.InitialState, _ => 0, out status));
-        Assert.Equal(SolveStatus.Solved, status);
-        Assert.Null(solver.SolveAStar(new Line(9), new Spot(0), _ => 0, out status));
-        Assert.Equal(SolveStatus.NodeLimit, status);
-        Assert.Null(roomy.SolveAStar(unreachable, unreachable.InitialState, _ => 0, out status));
-        Assert.Equal(SolveStatus.Unsolvable, status);
+        Assert.Equal(SolveStatus.Solved, roomy.SolveAStar(reachable, reachable.InitialState, _ => 0).Status);
+        Assert.Equal(SolveStatus.NodeLimit, solver.SolveAStar(new Line(9), new Spot(0), _ => 0).Status);
+        Assert.Equal(SolveStatus.Unsolvable, roomy.SolveAStar(unreachable, unreachable.InitialState, _ => 0).Status);
 
-        Assert.NotNull(roomy.SolveIdaStar(reachable, reachable.InitialState, _ => 0, out status));
-        Assert.Equal(SolveStatus.Solved, status);
-        Assert.Null(solver.SolveIdaStar(new Line(9), new Spot(0), _ => 0, out status));
-        Assert.Equal(SolveStatus.NodeLimit, status);
-        Assert.Null(roomy.SolveIdaStar(unreachable, unreachable.InitialState, _ => 0, out status));
-        Assert.Equal(SolveStatus.Unsolvable, status);
+        Assert.Equal(SolveStatus.Solved, roomy.SolveIdaStar(reachable, reachable.InitialState, _ => 0).Status);
+        Assert.Equal(SolveStatus.NodeLimit, solver.SolveIdaStar(new Line(9), new Spot(0), _ => 0).Status);
+        Assert.Equal(SolveStatus.Unsolvable, roomy.SolveIdaStar(unreachable, unreachable.InitialState, _ => 0).Status);
     }
 
     [Fact]
@@ -96,7 +87,7 @@ public class HardeningTests
         Assert.Throws<InsufficientExecutionStackException>(() =>
             solver.SolveIdaStar(new Corridor(length), new Spot(0), s => length - s.X));
         var shallow = solver.SolveIdaStar(new Corridor(50), new Spot(0), s => 50 - s.X);
-        Assert.Equal(50, shallow!.Moves.Count);
+        Assert.Equal(50, shallow.Moves.Count);
     }
 
     [Fact]
@@ -104,19 +95,19 @@ public class HardeningTests
     {
         const ulong all9 = (1UL << 9) - 1;
         Span<sbyte> parents = stackalloc sbyte[9];
-        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<ulong>.FindReachableAnchors(-1, 1UL, all9, 0UL, 3));
-        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<ulong>.FindReachableAnchors(64, 1UL, all9, 0UL, 3));
-        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<ulong>.FindReachableAnchors(0, 1UL, all9, 0UL, 0));
-        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<ulong>.ReconstructHookPath(-1, 4, 1UL, all9, 0UL, 3));
-        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<ulong>.ReconstructHookPath(0, 4, 1UL, all9, 0UL, -3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<Bitboard64>.FindReachableAnchors(-1, 1UL, all9, 0UL, 3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<Bitboard64>.FindReachableAnchors(64, 1UL, all9, 0UL, 3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<Bitboard64>.FindReachableAnchors(0, 1UL, all9, 0UL, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<Bitboard64>.ReconstructHookPath(-1, 4, 1UL, all9, 0UL, 3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PolyominoState<Bitboard64>.ReconstructHookPath(0, 4, 1UL, all9, 0UL, -3));
         var tooShort = new sbyte[4];
         try
         {
-            PolyominoState<ulong>.FindReachableAnchors(6, 1UL, all9, 0UL, 3, tooShort, out _, out _);
+            PolyominoState<Bitboard64>.FindReachableAnchors(6, 1UL, all9, 0UL, 3, tooShort, out _, out _);
             Assert.Fail("A parent map shorter than the start anchor must be rejected.");
         }
         catch (ArgumentException ex) { Assert.Equal("parentMap", ex.ParamName); }
-        Assert.NotEqual(0UL, PolyominoState<ulong>.FindReachableAnchors(6, 1UL, all9, 0UL, 3, parents, out _, out _));
+        Assert.NotEqual(0UL, PolyominoState<Bitboard64>.FindReachableAnchors(6, 1UL, all9, 0UL, 3, parents, out _, out _));
     }
 
     [Fact]
@@ -124,16 +115,16 @@ public class HardeningTests
     {
         // The line's goal is nine steps away, so a limit of 9 expansions is not enough to reach it by BFS.
         var line = new Line(9);
-        Assert.Null(new PuzzleSolver { MaxNodes = 8 }.SolveBfs(line, new Spot(0)));
-        Assert.NotNull(new PuzzleSolver { MaxNodes = 10 }.SolveBfs(line, new Spot(0)));
+        Assert.False(new PuzzleSolver { MaxNodes = 8 }.SolveBfs(line, new Spot(0)).IsSolved);
+        Assert.True(new PuzzleSolver { MaxNodes = 10 }.SolveBfs(line, new Spot(0)).IsSolved);
     }
 
     [Fact]
     public void ToBinaryAcceptsNoGrouping()
     {
-        Assert.Equal("0101", 5UL.ToBinary(4, 0));
-        Assert.Equal("01_01", 5UL.ToBinary(4, 2));
-        Assert.Throws<ArgumentOutOfRangeException>(() => 5UL.ToBinary(4, -1));
+        Assert.Equal("0101", new Bitboard64(5).ToBinary(4, 0));
+        Assert.Equal("01_01", new Bitboard64(5).ToBinary(4, 2));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Bitboard64(5).ToBinary(4, -1));
     }
 
     [Fact]
@@ -167,7 +158,7 @@ public class HardeningTests
     [Fact]
     public void KlotskiRejectsBoardsItsKeyCannotHold()
     {
-        var wide = PuzzleTopology<ulong>.CreateBuilder(6, 4);   // 24 cells: the 3-bit-per-cell key holds 21
+        var wide = PuzzleTopology<Bitboard64>.CreateBuilder(6, 4);   // 24 cells: the 3-bit-per-cell key holds 21
         wide.AddPiece(wide.AddGroup("one", [(0, 0)]), "a", 0);
         Assert.Throws<ArgumentException>(() => new KlotskiDomain(wide.Build(), 0, 1));
     }
@@ -175,7 +166,7 @@ public class HardeningTests
     [Fact]
     public void KlotskiChecksItsMasterPiece()
     {
-        var b = PuzzleTopology<ulong>.CreateBuilder(4, 4);
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(4, 4);
         int one = b.AddGroup("one", [(0, 0)]);
         b.AddPiece(one, "a", 0);
         b.AddPiece(one, "b", 1);
@@ -188,23 +179,23 @@ public class HardeningTests
     [Fact]
     public void TopologyBuilderChecksItsArguments()
     {
-        var b = PuzzleTopology<ulong>.CreateBuilder(3, 3);
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(3, 3);
         Assert.Throws<ArgumentOutOfRangeException>(() => b.AddWall(3, 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => b.AddWall(0, -1));
         Assert.Throws<ArgumentOutOfRangeException>(() => b.AddDiode(0, 3, 1));
         Assert.Throws<ArgumentOutOfRangeException>(() => b.AddPiece(0, "a", 0));   // no group yet
         Assert.Throws<ArgumentException>(() => b.AddRotatableGroup("r", []));
-        Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<ulong>.CreateBuilder(100000, 100000));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<Bitboard64>.CreateBuilder(100000, 100000));
     }
 
     [Fact]
     public void TopologyBuilderNamesTheBadBoardDimensionAndChecksLabelsNamesAndPlateMasks()
     {
-        Assert.Equal("width", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<ulong>.CreateBuilder(0, 3)).ParamName);
-        Assert.Equal("height", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<ulong>.CreateBuilder(3, -1)).ParamName);
-        Assert.Equal("height", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<ulong>.CreateBuilder(9, 8)).ParamName);   // 72 cells, 64 bits
+        Assert.Equal("width", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<Bitboard64>.CreateBuilder(0, 3)).ParamName);
+        Assert.Equal("height", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<Bitboard64>.CreateBuilder(3, -1)).ParamName);
+        Assert.Equal("height", Assert.Throws<ArgumentOutOfRangeException>(() => PuzzleTopology<Bitboard64>.CreateBuilder(9, 8)).ParamName);   // 72 cells, 64 bits
 
-        var b = PuzzleTopology<ulong>.CreateBuilder(3, 3);
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(3, 3);
         var one = b.AddGroup("one", [(0, 0)]);
         Assert.Throws<ArgumentNullException>(() => b.AddGroup(null!, [(0, 0)]));
         Assert.Throws<ArgumentNullException>(() => b.AddRotatableGroup(null!, [(0, 0)]));
@@ -218,34 +209,34 @@ public class HardeningTests
     [Fact]
     public void TopologyCollectionsCannotBeWrittenTo()
     {
-        var b = PuzzleTopology<ulong>.CreateBuilder(3, 3);
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(3, 3);
         b.AddPiece(b.AddGroup("one", [(0, 0)]), "a", 0);
         var topology = b.Build();
-        Assert.False(topology.Groups is EquivalenceGroup<ulong>[]);
+        Assert.False(topology.Groups is EquivalenceGroup<Bitboard64>[]);
         Assert.False(topology.Pieces is PieceTemplate[]);
         Assert.False(topology.Diodes is DirectionalDiode[]);
         Assert.False(topology.Partitions is Partition[]);
-        Assert.False(topology.PressurePlates is PressurePlateRule<ulong>[]);
+        Assert.False(topology.PressurePlates is PressurePlateRule<Bitboard64>[]);
     }
 
     [Fact]
     public void LaneSlideChecksItsVehicles()
     {
         LaneVehicle[] ok = [new(0, true, 2, 1, 0, 0), new(1, true, 2, 1, 1, 0)];
-        Assert.NotNull(new LaneSlideDomain<LaneState16, ulong>(ok, 4, 2, 0, 2));
+        Assert.NotNull(new LaneSlideDomain<LaneState16, Bitboard64>(ok, 4, 2, 0, 2));
 
-        Assert.Throws<ArgumentException>(() => new LaneSlideDomain<LaneState16, ulong>([new(1, true, 2, 1, 0, 0)], 4, 2, 0, 2));       // index is not the list position
-        Assert.Throws<ArgumentException>(() => new LaneSlideDomain<LaneState16, ulong>([new(0, true, 0, 1, 0, 0)], 4, 2, 0, 2));       // no length
-        Assert.Throws<ArgumentException>(() => new LaneSlideDomain<LaneState16, ulong>([new(0, true, 2, 1, 5, 0)], 4, 2, 0, 2));       // lane off the board
-        Assert.Throws<ArgumentException>(() => new LaneSlideDomain<LaneState16, ulong>([new(0, true, 2, 1, 0, 3)], 4, 2, 0, 2));       // starts outside its lane
-        Assert.Throws<ArgumentException>(() => new LaneSlideDomain<LaneState16, ulong>([new(0, true, 2, 1, 0, 0), new(1, true, 2, 1, 0, 1)], 4, 2, 0, 2));   // overlap
+        Assert.Throws<ArgumentException>(() => new LaneSlideDomain<LaneState16, Bitboard64>([new(1, true, 2, 1, 0, 0)], 4, 2, 0, 2));       // index is not the list position
+        Assert.Throws<ArgumentException>(() => new LaneSlideDomain<LaneState16, Bitboard64>([new(0, true, 0, 1, 0, 0)], 4, 2, 0, 2));       // no length
+        Assert.Throws<ArgumentException>(() => new LaneSlideDomain<LaneState16, Bitboard64>([new(0, true, 2, 1, 5, 0)], 4, 2, 0, 2));       // lane off the board
+        Assert.Throws<ArgumentException>(() => new LaneSlideDomain<LaneState16, Bitboard64>([new(0, true, 2, 1, 0, 3)], 4, 2, 0, 2));       // starts outside its lane
+        Assert.Throws<ArgumentException>(() => new LaneSlideDomain<LaneState16, Bitboard64>([new(0, true, 2, 1, 0, 0), new(1, true, 2, 1, 0, 1)], 4, 2, 0, 2));   // overlap
     }
 
     [Fact]
     public void LaneSlideKeepsItsOwnCopyOfTheVehicles()
     {
         var list = new List<LaneVehicle> { new(0, true, 2, 1, 0, 0) };
-        var domain = new LaneSlideDomain<LaneState16, ulong>(list, 4, 1, 0, 2);
+        var domain = new LaneSlideDomain<LaneState16, Bitboard64>(list, 4, 1, 0, 2);
         list.Add(new LaneVehicle(1, true, 1, 1, 0, 3));
         Assert.Single(domain.Vehicles);
     }
@@ -265,7 +256,7 @@ public class HardeningTests
         var parsed = PushMap.CreateDomain(["@1.X."], Fixtures.CaseSymbols);
         Assert.Equal(parsed.InitialState, data.InitialState);
         Assert.Equal(parsed.Targets, data.Targets);
-        Assert.Single(new PuzzleSolver().SolveBfs(data, data.InitialState)!.Moves);
+        Assert.Single(new PuzzleSolver().SolveBfs(data, data.InitialState).Moves);
     }
 
     [Fact]
@@ -285,15 +276,15 @@ public class HardeningTests
     [Fact]
     public void CompositeDomainRejectsMissingPartsAndAPushDepthBelowOne()
     {
-        var b = PuzzleTopology<ulong>.CreateBuilder(3, 3);
+        var b = PuzzleTopology<Bitboard64>.CreateBuilder(3, 3);
         b.AddPiece(b.AddGroup("one", Cells.One), "a", 0);
         var topology = b.Build();
-        var goal = new PolyominoGoal<ulong>(0, 8);
-        Assert.Throws<ArgumentNullException>(() => new CompositeDomain<ulong>((PolyominoDomain<ulong>)null!));
-        Assert.Throws<ArgumentNullException>(() => new CompositeDomain<ulong>(null!, goal));
-        Assert.Throws<ArgumentNullException>(() => new CompositeDomain<ulong>(topology, null!));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new CompositeDomain<ulong>(topology, goal, 0));
-        Assert.Equal(1, new CompositeDomain<ulong>(topology, goal).MaxPushDepth);
+        var goal = new PolyominoGoal<Bitboard64>(0, 8);
+        Assert.Throws<ArgumentNullException>(() => new CompositeDomain<Bitboard64>((PolyominoDomain<Bitboard64>)null!));
+        Assert.Throws<ArgumentNullException>(() => new CompositeDomain<Bitboard64>(null!, goal));
+        Assert.Throws<ArgumentNullException>(() => new CompositeDomain<Bitboard64>(topology, null!));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new CompositeDomain<Bitboard64>(topology, goal, 0));
+        Assert.Equal(1, new CompositeDomain<Bitboard64>(topology, goal).MaxPushDepth);
     }
 
     [Fact]

@@ -4,7 +4,7 @@ Guidance for AI coding assistants working in this repository. People: see [CONTR
 
 ## Project
 
-`E2e4.SlidingBlock.Logic` is a dependency-free sliding block puzzle engine for .NET (`net10.0`, MIT): bitboard state structs and generic BFS, A*,
+`E2e4.SlidingBlock.Logic` is a sliding block puzzle engine for .NET (`net10.0;net8.0;netstandard2.0`, MIT): bitboard state structs and generic BFS, A*,
 IDA*, Dijkstra and weighted A* solvers for the N-puzzle, Klotski, lane-sliding (Rush Hour), Soko pushing, railway shunting and polyominoes.
 
 - `src/E2e4.SlidingBlock.Logic/`: the NuGet package.
@@ -28,11 +28,12 @@ The tree must build with 0 warnings (warnings are errors). Run the tests before 
 
 - The engine knows how pieces move and how to search, never which puzzle is played: no layouts, goal positions or colours in the domains. Goals are
   constructor data. Reading a diagram is the one exception and lives in `E2e4.SlidingBlock.Logic.Text`, with the symbols as parameters.
-- No package dependencies, no WPF/WinForms, no I/O in the library.
+- No package dependencies on `net8.0`/`net10.0`; `netstandard2.0` may depend only on `System.Memory` (`scripts/check.ps1` enforces it). No WPF/WinForms, no I/O in the library.
+- Multi-targeting: `net10.0` is the primary target; write for it and keep the older builds working. Every `#if` and polyfill lives in `src/E2e4.SlidingBlock.Logic/Compat/` (`Polyfills.cs`, `PriorityQueue.cs`, `BitOps.cs`, `InlineBuffers.cs`; `[InlineArray]` only on `net8.0`+), the rest of the library has none. Bitboards go through `IBitboard<T>` (`mask.And(x)`, `.ShiftLeft(n)`, `Bit<T>.One`) with `Bitboard64` / `Bitboard128` as the type arguments, because netstandard has no static abstract members. Tests run on `net10.0`, `net8.0` and (Windows only) `net48`; `E2e4.SlidingBlock.Logic.Test.NetStandard` runs the same tests against the `netstandard2.0` build on any OS.
 - State types are structs and move generation writes into a caller-supplied `Span<TMove>`: keep hot paths allocation-free (`PushDomain`'s heap
   position is the documented exception).
 - Public API has XML documentation (a missing comment is a build error in the library) and validates its arguments (`ArgumentException` family).
-- There are no short aliases for the `ulong` types: write `PolyominoDomain<ulong>`.
+- There are no short aliases for the bitboard types: write `PolyominoDomain<Bitboard64>`.
 - Tests own their fixtures; do not link source from the Labs or benchmarks. The values in `GoldenTests` change only with a reason in the commit message.
 
 ## Style

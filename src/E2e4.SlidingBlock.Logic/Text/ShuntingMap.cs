@@ -13,7 +13,7 @@ public sealed record ShuntingLayout(ShuntingTrack Track, IReadOnlyList<ShuntingG
     /// <summary>The rules of this puzzle.</summary>
     /// <param name="metric">How moves are counted.</param>
     public ShuntingDomain<TBitboard> CreateDomain<TBitboard>(ShuntingMetric metric = ShuntingMetric.EngineReversals)
-        where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard> =>
+        where TBitboard : unmanaged, IBitboard<TBitboard> =>
         new(Track, Groups, Goal, metric, StartAlignments);
 }
 
@@ -62,7 +62,7 @@ public static class ShuntingMap
             if (line.Length == 0 || line[0] == ';') continue;
             try
             {
-                reader.Read(line.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                reader.Read(line.Split([' '], StringSplitOptions.RemoveEmptyEntries).Select(w => w.Trim()).Where(w => w.Length > 0).ToArray());
             }
             catch (ArgumentException ex)
             {
@@ -86,7 +86,7 @@ public static class ShuntingMap
     /// <param name="metric">How moves are counted.</param>
     public static ShuntingDomain<TBitboard> CreateDomain<TBitboard>(IReadOnlyList<string> lines, string symbols, string engines = "",
         ShuntingMetric metric = ShuntingMetric.EngineReversals)
-        where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard> =>
+        where TBitboard : unmanaged, IBitboard<TBitboard> =>
         Parse(lines, symbols, engines).CreateDomain<TBitboard>(metric);
 
     private sealed class Reader(string symbols, string engines, char empty)
@@ -130,7 +130,7 @@ public static class ShuntingMap
                         break;
                     }
                     if (words[3][0] != '@') throw new ArgumentException("The third word must look like @turntable.alignment.");
-                    var (turntable, alignment) = End(words[3][1..]);
+                    var (turntable, alignment) = End(words[3].Substring(1));
                     _track!.ConnectWhen(turntable, alignment, sa, ea, sb, eb);
                     break;
                 case "foul":
@@ -212,7 +212,7 @@ public static class ShuntingMap
             var goals = new List<ShuntingGroupGoal>();
             for (int g = 0; g < symbols.Length; g++)
             {
-                int[] at = [.. _goals.SelectMany(goal => Slots(goal, symbols[g])).Distinct().Order()];
+                int[] at = [.. _goals.SelectMany(goal => Slots(goal, symbols[g])).Distinct().OrderBy(slot => slot)];
                 if (at.Length > 0) goals.Add(new ShuntingGroupGoal(g, at));
             }
             return new ShuntingLayout(_track.Build(), groups, new ShuntingGoal(goals) { Fronts = _faces }, _align);

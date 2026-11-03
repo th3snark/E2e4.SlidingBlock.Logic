@@ -88,7 +88,7 @@ internal static class DrawHelpers
         Color.FromRgb((byte)(c.R + (255 - c.R) * f), (byte)(c.G + (255 - c.G) * f), (byte)(c.B + (255 - c.B) * f));
 
     /// <summary>Merged outline of a polyomino with its anchor cell at the local origin, cells of <paramref name="cell"/> pixels inset only on exposed sides.</summary>
-    public static Geometry FootprintGeometry(EquivalenceGroup<ulong> g, double cell, double inset = 2)
+    public static Geometry FootprintGeometry(EquivalenceGroup<Bitboard64> g, double cell, double inset = 2)
     {
         var set = g.RelativeCells.ToHashSet();
         Geometry? union = null;

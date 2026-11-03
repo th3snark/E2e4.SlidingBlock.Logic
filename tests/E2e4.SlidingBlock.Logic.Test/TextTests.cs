@@ -14,8 +14,8 @@ public class TextTests
     [Fact]
     public void TopologyMapTakesItsWallAndEmptySymbolsFromTheCaller()
     {
-        var plain = TopologyMap.Parse<ulong>(["#a.", "#a.", "..b"], Legend);
-        var custom = TopologyMap.Parse<ulong>(["~a_", "~a_", "__b"], Legend, wall: '~', empty: '_');
+        var plain = TopologyMap.Parse<Bitboard64>(["#a.", "#a.", "..b"], Legend);
+        var custom = TopologyMap.Parse<Bitboard64>(["~a_", "~a_", "__b"], Legend, wall: '~', empty: '_');
         Assert.Equal(plain.StaticWallsMask, custom.StaticWallsMask);
         Assert.Equal(2, custom.Pieces.Count);
         Assert.Equal(plain.Groups.Select(g => g.Name), custom.Groups.Select(g => g.Name));
@@ -25,7 +25,7 @@ public class TextTests
     [Fact]
     public void TopologyMapGroupsPiecesByShapeAndKey()
     {
-        var topology = TopologyMap.Parse<ulong>(["ab", "ab"], [('a', new PieceKind("Bar", Key: "bar")), ('b', new PieceKind("Bar again", Key: "bar"))]);
+        var topology = TopologyMap.Parse<Bitboard64>(["ab", "ab"], [('a', new PieceKind("Bar", Key: "bar")), ('b', new PieceKind("Bar again", Key: "bar"))]);
         Assert.Single(topology.Groups);   // the name is not part of the identity
         Assert.Equal(2, topology.Pieces.Count);
     }
@@ -33,9 +33,9 @@ public class TextTests
     [Fact]
     public void TopologyMapRejectsBadDiagrams()
     {
-        Assert.Throws<ArgumentException>(() => TopologyMap.Parse<ulong>([], Legend));
-        Assert.Throws<ArgumentException>(() => TopologyMap.Parse<ulong>(["a.", "a"], Legend));
-        Assert.Throws<ArgumentException>(() => TopologyMap.Parse<ulong>(["ac", ".."], Legend));   // 'c' is not in the legend
+        Assert.Throws<ArgumentException>(() => TopologyMap.Parse<Bitboard64>([], Legend));
+        Assert.Throws<ArgumentException>(() => TopologyMap.Parse<Bitboard64>(["a.", "a"], Legend));
+        Assert.Throws<ArgumentException>(() => TopologyMap.Parse<Bitboard64>(["ac", ".."], Legend));   // 'c' is not in the legend
     }
 
     [Fact]
@@ -61,8 +61,8 @@ public class TextTests
         // The same lines as the README, so the sample cannot drift from the API.
         string[] diagram = ["CCH..F", "..HB.F", ".XXB..", "D..B..", "DGG...", "..EEE."];
         var vehicles = LaneDiagram.Parse(diagram, LaneDiagram.SymbolsOf(diagram, leadingLabels: "X"));
-        var rushHour = new LaneSlideDomain<LaneState16, ulong>(vehicles, columns: 6, rows: 6, goalVehicle: 0, goalOffset: 4, maxStep: 1);
-        Assert.NotNull(new PuzzleSolver().SolveBfs(rushHour, rushHour.InitialState)?.Moves.Count);
+        var rushHour = new LaneSlideDomain<LaneState16, Bitboard64>(vehicles, columns: 6, rows: 6, goalVehicle: 0, goalOffset: 4, maxStep: 1);
+        Assert.True(new PuzzleSolver().SolveBfs(rushHour, rushHour.InitialState).IsSolved);
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public class TextTests
         Assert.Equal([8], layout.Targets);
         Assert.Equal([7], layout.Cases);
         Assert.Equal(6, layout.Player);
-        Assert.Single(new PuzzleSolver().SolveBfs(layout.CreateDomain(), layout.CreateDomain().InitialState)!.Moves);
+        Assert.Single(new PuzzleSolver().SolveBfs(layout.CreateDomain(), layout.CreateDomain().InitialState).Moves);
     }
 
     [Fact]

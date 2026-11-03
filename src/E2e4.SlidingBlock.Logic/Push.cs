@@ -237,7 +237,7 @@ public sealed class PushDomain : ISlidingBlockDomain<PushState, PushMove>
     public int GenerateMoves(in PushState state, Span<PushMove> moveBuffer)
     {
         int n = 0;
-        for (int id = 0; id < state.CaseCount; id++) n += Pushes(state, id, moveBuffer[n..], PruneDeadSquares);
+        for (int id = 0; id < state.CaseCount; id++) n += Pushes(state, id, moveBuffer.Slice(n), PruneDeadSquares);
         return n;
     }
 

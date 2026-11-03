@@ -51,10 +51,28 @@ jobs:
           fi
       - name: Pack
         run: dotnet pack src/E2e4.SlidingBlock.Logic/E2e4.SlidingBlock.Logic.csproj --configuration Release --no-build --output artifacts
-      - name: No package dependencies (and so no GPL) in the package
+      - name: Only System.Memory (netstandard2.0) as a dependency
         if: runner.os == 'Linux'
+        shell: pwsh
         run: |
-          if unzip -p artifacts/E2e4.SlidingBlock.Logic.*.nupkg E2e4.SlidingBlock.Logic.nuspec | grep '<dependency '; then
-            echo "The library must have no package dependencies."
-            exit 1
-          fi
+          # The same rule as scripts/check.ps1: net8.0 and net10.0 take nothing, netstandard2.0 takes System.Memory for Span<T>.
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $nupkg = Get-ChildItem artifacts -Filter 'E2e4.SlidingBlock.Logic.*.nupkg' | Where-Object Name -notlike '*.symbols.*' | Select-Object -First 1
+          $zip = [IO.Compression.ZipFile]::OpenRead($nupkg.FullName)
+          try {
+              $entry = $zip.Entries | Where-Object FullName -eq 'E2e4.SlidingBlock.Logic.nuspec'
+              $reader = [IO.StreamReader]::new($entry.Open())
+              $nuspec = $reader.ReadToEnd()
+              $reader.Dispose()
+          }
+          finally { $zip.Dispose() }
+          $allowed = 'System.Memory'
+          $unexpected = ([xml] $nuspec).package.metadata.dependencies.group | ForEach-Object {
+              $group = $_
+              @($group.dependency) | Where-Object { $_ -and ($group.targetFramework -notlike '.NETStandard*' -or $_.id -notin $allowed) } |
+                  ForEach-Object { "$($group.targetFramework): $($_.id)" }
+          }
+          if ($unexpected) {
+              Write-Host "Unexpected package dependencies: $($unexpected -join ', ')"
+              exit 1
+          }

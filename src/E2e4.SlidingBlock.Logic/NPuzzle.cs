@@ -31,7 +31,7 @@ public readonly struct NPuzzleState : IEquatable<NPuzzleState>
     public int TileAt(int square) => (int)((PackedNibbles >> (square << 2)) & 0xF);
 
     /// <summary>Square of the blank: lowest zero nibble via the classic has-zero-nibble trick + tzcnt.</summary>
-    public int BlankIndex => BitOperations.TrailingZeroCount((PackedNibbles - Ones) & ~PackedNibbles & Highs) >> 2;
+    public int BlankIndex => BitOps.TrailingZeroCount((PackedNibbles - Ones) & ~PackedNibbles & Highs) >> 2;
 
     /// <summary>Branchless swap of the blank with the tile on <paramref name="tileSquare"/>.</summary>
     public NPuzzleState SlideTileIntoBlank(int tileSquare)

@@ -25,7 +25,7 @@ CI (`.github/workflows/ci.yml`) runs only when started by hand (`gh workflow run
 
 ## Rules
 
-- No package dependencies, no WPF or WinForms in the library, no I/O. CI fails if the library gains a dependency.
+- No package dependencies on `net8.0` and `net10.0`; `netstandard2.0` may depend only on `System.Memory`. No WPF or WinForms in the library, no I/O. The library targets `net10.0;net8.0;netstandard2.0`: `net10.0` is the primary target, and every `#if` or polyfill for the older ones lives in `src/E2e4.SlidingBlock.Logic/Compat/`. Bitboards go through `IBitboard<T>`, not generic-math operators.
 - State types are structs on purpose and move generation writes into caller-supplied `Span<TMove>` buffers: keep the hot paths allocation-free.
 - Public API needs XML documentation (a missing comment is a build error in the library project) and argument checks that throw `ArgumentException`
   and its subclasses, never `IndexOutOfRangeException` or `NullReferenceException`.

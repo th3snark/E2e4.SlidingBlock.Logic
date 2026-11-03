@@ -35,7 +35,7 @@ public readonly record struct ShuntingMove(byte Mover, byte Lead, byte FrontLeng
 /// remembers the sense each engine last drove in. Pieces of one group are interchangeable.
 /// </summary>
 public struct ShuntingState<TBitboard> : IEquatable<ShuntingState<TBitboard>>
-    where TBitboard : unmanaged, IBinaryInteger<TBitboard>, IUnsignedNumber<TBitboard>
+    where TBitboard : unmanaged, IBitboard<TBitboard>
 {
     /// <summary>The most groups a position can hold.</summary>
     public const int MaxGroups = GroupAnchorBuffer<TBitboard>.Length;
@@ -45,7 +45,9 @@ public struct ShuntingState<TBitboard> : IEquatable<ShuntingState<TBitboard>>
 
     internal const byte NoEngine = ShuntingMove.TurnMover;
 
+#pragma warning disable CS0649 // filled through the buffer's indexer
     internal GroupAnchorBuffer<TBitboard> Anchors;
+#pragma warning restore CS0649
     internal TBitboard OccupancyBits;
     internal TBitboard HeadingBits;
     internal ulong Alignments;
@@ -76,10 +78,10 @@ public struct ShuntingState<TBitboard> : IEquatable<ShuntingState<TBitboard>>
     public readonly bool Equals(ShuntingState<TBitboard> other)
     {
         if (Hash != other.Hash || Engine != other.Engine || SenseBit != other.SenseBit || EngineSenses != other.EngineSenses || Alignments != other.Alignments) return false;
-        if (HeadingBits != other.HeadingBits || OccupancyBits != other.OccupancyBits) return false;
+        if (!HeadingBits.Equals(other.HeadingBits) || !OccupancyBits.Equals(other.OccupancyBits)) return false;
         for (int g = 0; g < MaxGroups; g++)
         {
-            if (Anchors[g] != other.Anchors[g]) return false;
+            if (!Anchors[g].Equals(other.Anchors[g])) return false;
         }
         return true;
     }
