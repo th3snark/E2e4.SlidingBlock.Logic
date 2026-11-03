@@ -27,16 +27,20 @@ public enum SolveStatus
 
     /// <summary>The search stopped at <see cref="PuzzleSolver.MaxNodes"/> before it found a goal or ran out of positions.</summary>
     NodeLimit,
+
+    /// <summary>The search stopped at <see cref="PuzzleSolver.MaxStoredStates"/> before it found a goal or ran out of positions.</summary>
+    StateLimit,
 }
 
 /// <summary>
 /// Generic BFS / A* / IDA* solvers over any <see cref="ISlidingBlockDomain{TState,TMove}"/>. The solver holds no state between calls, so one instance
 /// can serve several threads as long as the domain does. Each method returns a <see cref="SolveResult{TMove}"/> whose
-/// <see cref="SolveResult{TMove}.Status"/> says whether a solution was found, the puzzle is unsolvable or the node limit was hit. Cancelling through the token throws.
+/// <see cref="SolveResult{TMove}.Status"/> says whether a solution was found, the puzzle is unsolvable or a limit was hit. Cancelling through the token throws.
 /// </summary>
 public sealed class PuzzleSolver
 {
     private long _maxNodes = 5_000_000;
+    private int _maxStoredStates = int.MaxValue;
 
     /// <summary>The most nodes a search may expand before it gives up with <see cref="SolveStatus.NodeLimit"/>. Must be positive.</summary>
     public long MaxNodes
@@ -46,6 +50,21 @@ public sealed class PuzzleSolver
         {
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
             _maxNodes = value;
+        }
+    }
+
+    /// <summary>
+    /// The most positions BFS, A*, Dijkstra and weighted A* may store before they give up with <see cref="SolveStatus.StateLimit"/>. They keep
+    /// every position they meet, so this bounds their memory where <see cref="MaxNodes"/> bounds their time. No limit by default; must be
+    /// positive. IDA* keeps only its current path and ignores it.
+    /// </summary>
+    public int MaxStoredStates
+    {
+        get => _maxStoredStates;
+        init
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
+            _maxStoredStates = value;
         }
     }
 
@@ -69,6 +88,7 @@ public sealed class PuzzleSolver
                 TState next = domain.ApplyMove(cur, buffer[i]);
                 ulong hash = domain.GetHashCode64(next);
                 if (graph.Find(next, hash, out _)) continue;
+                if (graph.Count >= MaxStoredStates) return Failure<TMove>(SolveStatus.StateLimit, head + 1);
                 int added = graph.Add(next, hash, head, buffer[i]);
                 if (domain.IsGoal(next)) return new SolveResult<TMove>(SolveStatus.Solved, graph.Trace(added), head + 1);
             }
@@ -105,6 +125,7 @@ public sealed class PuzzleSolver
                 ulong hash = domain.GetHashCode64(next);
                 int ng = g[idx] + 1;
                 if (graph.Find(next, hash, out int old) && g[old] <= ng) continue;
+                if (graph.Count >= MaxStoredStates) return Failure<TMove>(SolveStatus.StateLimit, expanded);
                 int added = graph.Add(next, hash, idx, buffer[i]);
                 g.Add(ng);
                 int h = heuristic(next);
@@ -117,6 +138,13 @@ public sealed class PuzzleSolver
     private static SolveResult<TMove> Failure<TMove>(SolveStatus status, long nodes) => new(status, [], nodes);
 
     private static long Priority(int f, int h) => ((long)f << 32) | (uint)h;
+
+    /// <summary>
+    /// The slot of a hash in a table of 2^<paramref name="bits"/> entries: the hash is folded and multiplied (Fibonacci hashing), and the top
+    /// bits of the product pick the slot, so a domain whose <see cref="ISlidingBlockDomain{TState,TMove}.GetHashCode64"/> varies only in a
+    /// few bits still spreads over the table.
+    /// </summary>
+    internal static int TableSlot(ulong hash, int bits) => (int)(((hash ^ (hash >> 32)) * 0x9E3779B97F4A7C15UL) >> (64 - bits));
 
     /// <summary>Dijkstra: the cheapest solution under <see cref="IWeightedDomain{TState,TMove}.MoveCost"/>.</summary>
     public SolveResult<TMove> SolveDijkstra<TState, TMove>(IWeightedDomain<TState, TMove> domain, TState start, CancellationToken ct = default)
@@ -155,6 +183,7 @@ public sealed class PuzzleSolver
                 ulong hash = domain.GetHashCode64(next);
                 long ng = g[idx] + cost;
                 if (graph.Find(next, hash, out int old) && g[old] <= ng) continue;
+                if (graph.Count >= MaxStoredStates) return Failure<TMove>(SolveStatus.StateLimit, expanded);
                 int added = graph.Add(next, hash, idx, buffer[i]);
                 g.Add(ng);
                 long h = heuristic(next);
@@ -242,8 +271,9 @@ public sealed class PuzzleSolver
         private int _count;
         private readonly List<int> _parent = [];
         private readonly List<TMove> _move = [];
-        private int[] _slots = new int[1024];   // node index + 1; 0 = empty
-        private ulong[] _hashes = new ulong[1024];
+        private int[] _slots = new int[1 << 10];   // node index + 1; 0 = empty
+        private ulong[] _hashes = new ulong[1 << 10];
+        private int _bits = 10;
         private int _filled;
 
         public SearchGraph(TState start, ulong hash)
@@ -260,7 +290,7 @@ public sealed class PuzzleSolver
         {
             int mask = _slots.Length - 1;
             var states = _states;
-            for (int i = (int)(hash >> 32) & mask; ; i = (i + 1) & mask)
+            for (int i = TableSlot(hash, _bits); ; i = (i + 1) & mask)
             {
                 int v = _slots[i];
                 if (v == 0) { node = -1; return false; }
@@ -279,7 +309,7 @@ public sealed class PuzzleSolver
             if ((_filled + 1) * 2 > _slots.Length) Grow();
             int mask = _slots.Length - 1;
             var states = _states;
-            int i = (int)(hash >> 32) & mask;
+            int i = TableSlot(hash, _bits);
             for (; _slots[i] != 0; i = (i + 1) & mask)
             {
                 if (_hashes[i] == hash && states[_slots[i] - 1].Equals(state))
@@ -298,17 +328,18 @@ public sealed class PuzzleSolver
         {
             var slots = new int[_slots.Length * 2];
             var hashes = new ulong[slots.Length];
-            int mask = slots.Length - 1;
+            int mask = slots.Length - 1, bits = _bits + 1;
             for (int s = 0; s < _slots.Length; s++)
             {
                 if (_slots[s] == 0) continue;
-                int i = (int)(_hashes[s] >> 32) & mask;
+                int i = TableSlot(_hashes[s], bits);
                 while (slots[i] != 0) i = (i + 1) & mask;
                 slots[i] = _slots[s];
                 hashes[i] = _hashes[s];
             }
             _slots = slots;
             _hashes = hashes;
+            _bits = bits;
         }
 
         public TMove[] Trace(int node)

@@ -9,6 +9,7 @@ follows [Semantic Versioning](https://semver.org/). While the version is below 1
 
 - Multi-targeting: the library now builds for `net10.0`, `net8.0` and `netstandard2.0` (it was `net10.0` only), like E2e4.Chess.Logic. `netstandard2.0` depends on `System.Memory`; the others have no dependencies. The tests run on `net10.0`, `net8.0` and (on Windows) `net48`, and a second test project runs them against the `netstandard2.0` build on any OS.
 - `IBitboard<TSelf>` with the structs `Bitboard64` (64 cells) and `Bitboard128` (128 cells, two `ulong` words, so no `UInt128` is needed on any target). They have the bitwise and shift operators and convert implicitly from `ulong`.
+- `PuzzleSolver.MaxStoredStates` and `SolveStatus.StateLimit`: BFS, A*, Dijkstra and weighted A* stop once they hold that many positions, which bounds their memory. No limit by default; IDA* ignores it.
 
 ### Changed
 
@@ -37,6 +38,7 @@ follows [Semantic Versioning](https://semver.org/). While the version is below 1
 
 ### Fixed
 
+- `PuzzleSolver` mixes each `GetHashCode64` (fold, multiply, top bits) before it picks a table slot. It used the upper 32 bits as they were, so a domain whose hash varies only in its low bits, such as `(ulong)index`, put every position in one cluster and made the search quadratic.
 - `LaneSlideDomain` throws `ArgumentNullException` for a null vehicle list and `ArgumentOutOfRangeException` for a board of fewer than one column or row.
 - `CompositeDomain` rejects null arguments and a `maxPushDepth` below 1 (which silently turned pushing off).
 - `PushDomain.IsFloor`, `IsTarget`, `IsAlive` and `PushDistance` throw `ArgumentOutOfRangeException` for a cell off the warehouse, and the cell-count error names its parameter.
