@@ -59,7 +59,7 @@ public struct PolyominoState<TBitboard> : IEquatable<PolyominoState<TBitboard>>
     /// The Zobrist hash computed from scratch from the pieces. <see cref="ZobristHash"/> is kept up to date incrementally; the two agree
     /// for every position, which makes this the check for the incremental updates.
     /// </summary>
-    public readonly ulong ComputeZobrist(PuzzleTopology<TBitboard> topology)
+    internal readonly ulong ComputeZobrist(PuzzleTopology<TBitboard> topology)
     {
         ulong h = 0;
         foreach (var p in topology.PieceTable) h ^= topology.ZobristTable[_pieceGroups[p.PieceId], _pieceAnchors[p.PieceId]];

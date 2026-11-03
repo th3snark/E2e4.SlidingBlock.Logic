@@ -42,7 +42,7 @@ public readonly struct NPuzzleState : IEquatable<NPuzzleState>
     }
 
     /// <summary>XOR mask applied by <see cref="SlideTileIntoBlank"/>.</summary>
-    public ulong SlideMask(int tileSquare)
+    internal ulong SlideMask(int tileSquare)
     {
         ulong tile = (PackedNibbles >> (tileSquare << 2)) & 0xF;
         return (tile << (BlankIndex << 2)) ^ (tile << (tileSquare << 2));

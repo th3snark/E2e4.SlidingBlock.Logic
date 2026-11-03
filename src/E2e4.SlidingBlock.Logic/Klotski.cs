@@ -54,7 +54,7 @@ public readonly struct KlotskiState : IEquatable<KlotskiState>
     public ulong OccupancyMask { get; }
 
     /// <summary>Three bits per cell holding the shape class of the piece on it, so equal keys mean the same position up to swapping identical pieces.</summary>
-    public ulong CanonicalShapeKey { get; }
+    internal ulong CanonicalShapeKey { get; }
 
     /// <summary>The anchor cell of piece <paramref name="pieceId"/>.</summary>
     public int AnchorOf(int pieceId) => _anchors[pieceId];
@@ -78,7 +78,7 @@ public readonly struct KlotskiState : IEquatable<KlotskiState>
     }
 
     /// <summary>Maps bit i to bit 3i so multiplying by a class id (1..7) writes it into 3-bit cell fields.</summary>
-    public static ulong SpreadCells(ulong mask)
+    internal static ulong SpreadCells(ulong mask)
     {
         ulong r = 0;
         while (mask != 0)
@@ -96,7 +96,7 @@ public readonly struct KlotskiState : IEquatable<KlotskiState>
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is KlotskiState s && Equals(s);
 
-    /// <summary>True if both positions have the same canonical shape key.</summary>
+    /// <summary>True if both positions have the same shape on every cell, whichever identical piece is where.</summary>
     public static bool operator ==(KlotskiState left, KlotskiState right) => left.Equals(right);
 
     /// <summary>True if the positions differ.</summary>
