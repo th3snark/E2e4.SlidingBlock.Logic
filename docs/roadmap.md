@@ -97,7 +97,7 @@ as long as it follows these rules.
 - **Packed representations stay internal.** The Klotski shape key, the N-puzzle slide mask and the from-scratch Zobrist check are internal, so a
   wider packing breaks no one.
 
-`PackageValidationBaselineVersion` names the last published version (1.0.0), so `dotnet pack` catches a breaking change. Raise it after each release.
+`PackageValidationBaselineVersion` names the last published version (1.1.0), so `dotnet pack` catches a breaking change. Raise it after each release.
 
 ### Settled before 1.0
 
