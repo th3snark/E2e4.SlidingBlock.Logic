@@ -112,7 +112,7 @@ as long as it follows these rules.
   `EquivalenceGroup` that only the builder makes.
 - Argument checks on `PolyominoGoal`, `PolyominoDomain`, `CompositeDomain`, `LaneSlideDomain.ReachableOffsets` and the topology's direction
   queries.
-- `IsAotCompatible` is on for net8.0 and net10.0, and its analyzers run in every warning-free build.
+- `IsAotCompatible` is on for net8.0, net10.0 and net11.0, and its analyzers run in every warning-free build.
 - **Tried and not worth it (measured, October 2026):** one generic best-first core for `SolveAStar` and `SolveWeightedAStar` (15 to 25% slower A*, because the
   unit-cost version packs f and h into one `long` priority); `[InlineArray]` scratch buffers in place of the `stackalloc` spans in `ShuntingDomain`
   (about 25% slower `ApplyMove`); and `[InlineArray]` words in `LaneState64` (about 30% slower `GenerateMoves`). The duplication and the `Unsafe` layout stay

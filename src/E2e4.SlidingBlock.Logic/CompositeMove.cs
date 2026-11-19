@@ -263,7 +263,7 @@ public sealed class CompositeDomain<TBitboard> : ISlidingBlockDomain<PolyominoSt
         return true;
     }
 
-    private static bool Contains(Span<int> members, int count, int value)
+    private static bool Contains(ReadOnlySpan<int> members, int count, int value)
     {
         for (int i = 0; i < count; i++)
             if (members[i] == value) return true;
