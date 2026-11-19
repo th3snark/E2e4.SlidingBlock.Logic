@@ -99,6 +99,24 @@ as long as it follows these rules.
 
 `PackageValidationBaselineVersion` names the last published version (1.1.0), so `dotnet pack` catches a breaking change. Raise it after each release.
 
+### Open question: drop the net8.0 target?
+
+.NET 8 left Microsoft support on 10 November 2026, but 1.1.0 still targets `net8.0` beside `net10.0`, `net11.0` and `netstandard2.0`; the owner chose
+to keep it for that release and decide separately. The case each way:
+
+- **For dropping it.** No .NET 8 runtime gets security fixes any more, so apps on it are expected to move. Every target costs build and test time:
+  the main tests run on `net8.0` as well, and so does the `netstandard2.0` test project (its host is `net8.0`, which would move to `net10.0`).
+- **What it would not save.** No code: the `Compat/` switches test `NET8_0_OR_GREATER` and `NET`, which `net10.0` and `net11.0` also satisfy, so
+  `[InlineArray]` and the hardware bit operations stay.
+- **Against, or at least not silently.** A `net8.0` app would not fail to restore: it would fall back to the `netstandard2.0` build, which brings
+  the `System.Memory` dependency and loses the inline buffers and intrinsics, so it runs slower with no warning. `EnablePackageValidation` should
+  show whether dropping a target counts as breaking against the baseline; see what it reports before choosing the version.
+- **Version.** Dropping a target framework is commonly treated as a breaking change (a 2.0), though many libraries drop an out-of-support target
+  in a minor release and say so in the release notes. Either way it needs a CHANGELOG line and a note in the README's targets.
+
+The question for the owner: drop `net8.0` in the next release, and if so as a 1.x minor or with 2.0, or keep it until .NET 8 usage of the package
+falls away?
+
 ### Settled before 1.0
 
 - Members tied to a packing are internal: `KlotskiState.CanonicalShapeKey` and `SpreadCells`, `NPuzzle4x4State.SlideMask` and
