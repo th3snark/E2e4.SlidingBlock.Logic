@@ -3,7 +3,7 @@
 <img src="assets/icon.png" alt="E2e4.SlidingBlock.Logic icon" width="96" height="96" align="right">
 
 A small sliding block puzzle engine for .NET: bitboard-driven state structs with allocation-free move generation, and generic
-solvers, for the N-puzzle, Klotski, Rush Hour, Soko-style pushing and general polyominoes. It targets `net10.0`, `net8.0` and `netstandard2.0`, so it runs on every current .NET on Windows, Linux and macOS, and through the `netstandard2.0` build on .NET Framework 4.6.1 and later, Mono and Unity. The `net10.0` and `net8.0` builds have no dependencies; `netstandard2.0` depends on `System.Memory` for `Span<T>`. Install from NuGet:
+solvers, for the N-puzzle, Klotski, Rush Hour, Soko-style pushing and general polyominoes. It targets `net10.0`, `net11.0`, `net8.0` and `netstandard2.0`, so it runs on every current .NET on Windows, Linux and macOS, and through the `netstandard2.0` build on .NET Framework 4.6.1 and later, Mono and Unity. The `net10.0`, `net11.0` and `net8.0` builds have no dependencies; `netstandard2.0` depends on `System.Memory` for `Span<T>`. Install from NuGet:
 `E2e4.SlidingBlock.Logic`.
 
 Every puzzle is an `ISlidingBlockDomain<TState, TMove>` (initial state, goal test, move generation, move application and a 64-bit state hash),
@@ -65,4 +65,4 @@ See [CONTRIBUTING.md](https://github.com/th3snark/E2e4.SlidingBlock.Logic/blob/m
 
 ## Licence
 
-MIT, see [LICENSE](https://github.com/th3snark/E2e4.SlidingBlock.Logic/blob/master/LICENSE). No dependencies on `net10.0` and `net8.0`; `netstandard2.0` needs only `System.Memory`.
+MIT, see [LICENSE](https://github.com/th3snark/E2e4.SlidingBlock.Logic/blob/master/LICENSE). No dependencies on `net10.0`, `net11.0` and `net8.0`; `netstandard2.0` needs only `System.Memory`.

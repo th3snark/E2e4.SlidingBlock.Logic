@@ -63,7 +63,7 @@ try {
                 $reader.Dispose()
             }
             finally { $zip.Dispose() }
-            # netstandard2.0 takes the one System package that gives it Span<T>; net8.0 and net10.0 take nothing.
+            # netstandard2.0 takes the one System package that gives it Span<T>; net8.0, net10.0 and net11.0 take nothing.
             $allowed = 'System.Memory'
             $unexpected = ([xml] $nuspec).package.metadata.dependencies.group | ForEach-Object {
                 $group = $_

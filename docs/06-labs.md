@@ -1,6 +1,6 @@
 # 6. The WPF laboratories
 
-`E2e4.SlidingBlock.Logic.Labs.Wpf` is a private, unpacked desktop app (Windows, `net10.0-windows`) that makes the bitboards
+`E2e4.SlidingBlock.Logic.Labs.Wpf` is a private, unpacked desktop app (Windows, `net11.0-windows`) that makes the bitboards
 visible. It uses the library only through its public types. The puzzle layouts, goals and group colours it plays are defined in the Lab itself (`LabPuzzles.cs`), not in the library.
 
 ## Lab 1: standard architectures
